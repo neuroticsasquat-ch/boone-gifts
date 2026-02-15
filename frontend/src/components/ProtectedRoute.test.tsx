@@ -9,7 +9,7 @@ function renderWithAuth(user: AuthContextType["user"], initialPath = "/") {
     user,
     isLoading: false,
     login: async () => {},
-    logout: () => {},
+    logout: async () => {},
   };
 
   return render(

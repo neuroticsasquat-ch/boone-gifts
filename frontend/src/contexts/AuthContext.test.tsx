@@ -30,21 +30,27 @@ const fakeAccessToken = [
 ].join(".");
 
 describe("AuthContext", () => {
-  it("starts with no user", () => {
+  it("starts with no user after silent refresh fails", async () => {
     render(
       <AuthProvider>
         <AuthConsumer />
       </AuthProvider>
     );
-    expect(screen.getByTestId("user")).toHaveTextContent("none");
+
+    // Starts loading while silent refresh runs
+    expect(screen.getByText("Loading...")).toBeInTheDocument();
+
+    // After refresh fails (default handler returns 401), shows no user
+    await waitFor(() => {
+      expect(screen.getByTestId("user")).toHaveTextContent("none");
+    });
   });
 
-  it("login stores user from JWT", async () => {
+  it("restores session when silent refresh succeeds", async () => {
     server.use(
-      http.post("https://boone-gifts-api.localhost/auth/login", () => {
+      http.post("https://boone-gifts-api.localhost/auth/refresh", () => {
         return HttpResponse.json({
           access_token: fakeAccessToken,
-          refresh_token: "fake-refresh",
           token_type: "bearer",
         });
       })
@@ -55,6 +61,32 @@ describe("AuthContext", () => {
         <AuthConsumer />
       </AuthProvider>
     );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("user")).toHaveTextContent("test@test.com");
+    });
+  });
+
+  it("login stores user from JWT", async () => {
+    server.use(
+      http.post("https://boone-gifts-api.localhost/auth/login", () => {
+        return HttpResponse.json({
+          access_token: fakeAccessToken,
+          token_type: "bearer",
+        });
+      })
+    );
+
+    render(
+      <AuthProvider>
+        <AuthConsumer />
+      </AuthProvider>
+    );
+
+    // Wait for silent refresh to complete first
+    await waitFor(() => {
+      expect(screen.getByTestId("user")).toHaveTextContent("none");
+    });
 
     await userEvent.click(screen.getByText("Login"));
 
@@ -68,9 +100,11 @@ describe("AuthContext", () => {
       http.post("https://boone-gifts-api.localhost/auth/login", () => {
         return HttpResponse.json({
           access_token: fakeAccessToken,
-          refresh_token: "fake-refresh",
           token_type: "bearer",
         });
+      }),
+      http.post("https://boone-gifts-api.localhost/auth/logout", () => {
+        return new HttpResponse(null, { status: 204 });
       })
     );
 
@@ -80,12 +114,19 @@ describe("AuthContext", () => {
       </AuthProvider>
     );
 
+    // Wait for silent refresh to complete
+    await waitFor(() => {
+      expect(screen.getByTestId("user")).toHaveTextContent("none");
+    });
+
     await userEvent.click(screen.getByText("Login"));
     await waitFor(() => {
       expect(screen.getByTestId("user")).toHaveTextContent("test@test.com");
     });
 
     await userEvent.click(screen.getByText("Logout"));
-    expect(screen.getByTestId("user")).toHaveTextContent("none");
+    await waitFor(() => {
+      expect(screen.getByTestId("user")).toHaveTextContent("none");
+    });
   });
 });

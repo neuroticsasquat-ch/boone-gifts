@@ -1,28 +1,22 @@
 import axios from "axios";
 
 let accessToken: string | null = null;
-let refreshToken: string | null = null;
 
-export function setTokens(access: string, refresh: string): void {
-  accessToken = access;
-  refreshToken = refresh;
-}
-
-export function getTokens(): { accessToken: string | null; refreshToken: string | null } {
-  return { accessToken, refreshToken };
-}
-
-export function clearTokens(): void {
-  accessToken = null;
-  refreshToken = null;
-}
-
-export function updateAccessToken(token: string): void {
+export function setAccessToken(token: string): void {
   accessToken = token;
+}
+
+export function getAccessToken(): string | null {
+  return accessToken;
+}
+
+export function clearAccessToken(): void {
+  accessToken = null;
 }
 
 export const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? "https://boone-gifts-api.localhost",
+  withCredentials: true,
 });
 
 // Attach access token to every request
@@ -60,8 +54,9 @@ apiClient.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    if (!refreshToken) {
-      clearTokens();
+    // Don't attempt refresh for auth endpoints (prevents infinite loops)
+    const url: string = originalRequest.url ?? "";
+    if (url.startsWith("/auth/")) {
       return Promise.reject(error);
     }
 
@@ -78,17 +73,14 @@ apiClient.interceptors.response.use(
     isRefreshing = true;
 
     try {
-      const response = await axios.post(
-        `${apiClient.defaults.baseURL}/auth/refresh`,
-        { refresh_token: refreshToken }
-      );
+      const response = await apiClient.post("/auth/refresh");
       const newAccessToken: string = response.data.access_token;
-      updateAccessToken(newAccessToken);
+      setAccessToken(newAccessToken);
       processQueue(null);
       originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
       return apiClient(originalRequest);
     } catch (refreshError) {
-      clearTokens();
+      clearAccessToken();
       processQueue(refreshError);
       return Promise.reject(refreshError);
     } finally {

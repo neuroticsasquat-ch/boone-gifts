@@ -1,15 +1,15 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { http, HttpResponse } from "msw";
 import { server } from "../test/mocks/server";
-import { apiClient, setTokens, getTokens, clearTokens } from "../api/client";
+import { apiClient, setAccessToken, getAccessToken, clearAccessToken } from "../api/client";
 
 describe("apiClient", () => {
   beforeEach(() => {
-    clearTokens();
+    clearAccessToken();
   });
 
   it("attaches the access token to requests", async () => {
-    setTokens("test-access-token", "test-refresh-token");
+    setAccessToken("test-access-token");
 
     let capturedAuth = "";
     server.use(
@@ -37,7 +37,7 @@ describe("apiClient", () => {
   });
 
   it("refreshes the token on 401 and retries", async () => {
-    setTokens("expired-token", "valid-refresh-token");
+    setAccessToken("expired-token");
 
     let attempt = 0;
     server.use(
@@ -58,11 +58,11 @@ describe("apiClient", () => {
 
     const response = await apiClient.get("/test");
     expect(response.data).toEqual({ ok: true });
-    expect(getTokens().accessToken).toBe("new-access-token");
+    expect(getAccessToken()).toBe("new-access-token");
   });
 
   it("clears tokens when refresh fails", async () => {
-    setTokens("expired-token", "expired-refresh-token");
+    setAccessToken("expired-token");
 
     server.use(
       http.get("https://boone-gifts-api.localhost/test", () => {
@@ -74,6 +74,6 @@ describe("apiClient", () => {
     );
 
     await expect(apiClient.get("/test")).rejects.toThrow();
-    expect(getTokens().accessToken).toBeNull();
+    expect(getAccessToken()).toBeNull();
   });
 });
