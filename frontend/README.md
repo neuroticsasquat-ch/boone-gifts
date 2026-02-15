@@ -48,4 +48,5 @@ task test-file -- <path>  # Run a specific test file
 task test-watch      # Run tests in watch mode
 task add -- <pkg>    # Install a package
 task remove -- <pkg> # Remove a package
+task install         # Reinstall deps from lock file (after pulling updates)
 ```

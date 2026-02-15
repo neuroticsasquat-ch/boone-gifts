@@ -29,6 +29,7 @@ task down            # Stop and remove container
 ```
 task add -- <package>      # Install a package
 task remove -- <package>   # Remove a package
+task install               # Reinstall deps from lock file (use after pulling dependency updates)
 ```
 
 ## Project Structure

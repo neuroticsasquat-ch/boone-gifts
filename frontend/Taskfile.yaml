@@ -21,6 +21,10 @@ tasks:
     desc: Restart the app container
     cmd: docker compose restart app
 
+  install:
+    desc: Reinstall dependencies from lock file (use after pulling dependency updates)
+    cmd: docker compose exec app npm ci
+
   build:
     desc: Build for production
     cmd: docker compose exec app npx vite build
