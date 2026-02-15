@@ -28,6 +28,7 @@ export interface GiftList {
   name: string;
   description: string | null;
   owner_id: number;
+  owner_name: string;
   created_at: string;
   updated_at: string;
 }

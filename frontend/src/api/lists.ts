@@ -1,8 +1,9 @@
 import { apiClient } from "./client";
 import type { GiftList, GiftListDetailOwner, GiftListDetailViewer } from "../types";
 
-export async function getLists(): Promise<GiftList[]> {
-  const response = await apiClient.get<GiftList[]>("/lists");
+export async function getLists(filter?: "owned" | "shared"): Promise<GiftList[]> {
+  const params = filter ? { filter } : undefined;
+  const response = await apiClient.get<GiftList[]>("/lists", { params });
   return response.data;
 }
 
