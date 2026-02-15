@@ -13,5 +13,6 @@ dist/
 .DS_Store
 Thumbs.db
 
+# Claude (only ignore local settings, not CLAUDE.md)
 .claude/settings.local.json
 docs/plans
