@@ -31,13 +31,7 @@ React SPA for the Boone Gifts platform — a gift list and wishlist app where us
 3. Build and start the container:
 
    ```
-   task app:up
-   ```
-
-4. Start the dev server:
-
-   ```
-   task app:run
+   task up
    ```
 
 The app is available at `https://boone-gifts.localhost` (via Traefik).
@@ -45,12 +39,13 @@ The app is available at `https://boone-gifts.localhost` (via Traefik).
 ## Development
 
 ```
-task app:up              # Build image and start container
-task app:run             # Start Vite dev server
-task app:build           # Production build
-task app:test            # Run test suite
-task app:test-file -- <path>  # Run a specific test file
-task app:test-watch      # Run tests in watch mode
-task app:add -- <pkg>    # Install a package
-task app:remove -- <pkg> # Remove a package
+task up              # Build image and start container (runs Vite)
+task logs            # Follow container logs
+task restart         # Restart the container
+task build           # Production build
+task test            # Run test suite
+task test-file -- <path>  # Run a specific test file
+task test-watch      # Run tests in watch mode
+task add -- <pkg>    # Install a package
+task remove -- <pkg> # Remove a package
 ```
