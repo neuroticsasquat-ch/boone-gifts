@@ -7,4 +7,4 @@ RUN npm ci
 
 COPY . .
 
-CMD ["sleep", "infinity"]
+CMD ["npx", "vite"]

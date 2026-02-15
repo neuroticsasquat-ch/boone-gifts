@@ -1,42 +1,46 @@
 version: "3"
 
 tasks:
-  app:up:
+  up:
     desc: Build and start containers in detached mode
     cmd: docker compose up -d --build
 
-  app:down:
+  down:
     desc: Stop and remove containers
     cmd: docker compose down
 
-  app:stop:
+  stop:
     desc: Stop containers without removing them
     cmd: docker compose stop
 
-  app:run:
-    desc: Start the Vite dev server
-    cmd: docker compose exec app npx vite
+  logs:
+    desc: Follow the app container logs
+    cmd: docker compose logs -f app
 
-  app:build:
+  restart:
+    desc: Restart the app container
+    cmd: docker compose restart app
+
+  build:
     desc: Build for production
     cmd: docker compose exec app npx vite build
 
-  app:test:
+  test:
     desc: Run tests
     cmd: docker compose exec app npx vitest run
 
-  app:test-watch:
+  test-watch:
     desc: Run tests in watch mode
     cmd: docker compose exec app npx vitest
 
-  app:test-file:
-    desc: "Run a specific test file (usage: task app:test-file -- src/path/to/file.test.tsx)"
+  test-file:
+    desc: "Run a specific test file (usage: task test-file -- src/path/to/file.test.tsx)"
     cmd: docker compose exec app npx vitest run {{.CLI_ARGS}}
 
-  app:add:
-    desc: "Add a package (usage: task app:add -- <package>)"
+  add:
+    desc: "Add a package (usage: task add -- <package>)"
     cmd: docker compose exec app npm install {{.CLI_ARGS}}
 
-  app:remove:
-    desc: "Remove a package (usage: task app:remove -- <package>)"
+  remove:
+    desc: "Remove a package (usage: task remove -- <package>)"
     cmd: docker compose exec app npm uninstall {{.CLI_ARGS}}

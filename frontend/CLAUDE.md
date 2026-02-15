@@ -14,20 +14,21 @@ React SPA frontend for the Boone Gifts platform. TypeScript, runs entirely in Do
 
 ## Development Workflow
 ```
-task app:up          # Build image and start container (detached, idle)
-task app:run         # Start Vite dev server
-task app:build       # Production build
-task app:test        # Run test suite (Vitest)
-task app:test-file -- <path>  # Run a specific test file
-task app:test-watch  # Run tests in watch mode
-task app:stop        # Stop container without removing
-task app:down        # Stop and remove container
+task up              # Build image and start container (detached, runs Vite)
+task logs            # Follow the app container logs
+task restart         # Restart the app container
+task build           # Production build
+task test            # Run test suite (Vitest)
+task test-file -- <path>  # Run a specific test file
+task test-watch      # Run tests in watch mode
+task stop            # Stop container without removing
+task down            # Stop and remove container
 ```
 
 ## Dependency Management
 ```
-task app:add -- <package>      # Install a package
-task app:remove -- <package>   # Remove a package
+task add -- <package>      # Install a package
+task remove -- <package>   # Remove a package
 ```
 
 ## Project Structure
@@ -83,9 +84,10 @@ src/
 
 ## Testing
 - 10 tests: 1 App smoke + 4 API client + 3 AuthContext + 2 ProtectedRoute
-- Tests run inside the Docker container via `task app:test`
+- Tests run inside the Docker container via `task test`
 
 ## Key Design Decisions
+- Container runs Vite dev server directly on `app:up` — no separate `app:run` needed
 - **`node_modules` in a named Docker volume** — survives the bind mount (`.:/app`)
 - **JWT tokens in memory only** — not in localStorage (XSS protection). Closing the tab logs you out.
 - **Axios interceptors handle token refresh** — 401 triggers silent refresh and request retry. Failed queue mechanism handles concurrent requests during refresh.
