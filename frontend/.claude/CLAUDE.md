@@ -52,6 +52,7 @@ src/
     connections.ts   # Connections API functions
     shares.ts        # Shares API functions
     collections.ts   # Collections API functions
+    meta.ts          # URL metadata fetching function
   contexts/
     AuthContext.tsx   # Auth state provider (access token in memory, silent refresh on mount, async logout)
   hooks/
@@ -63,11 +64,12 @@ src/
     Login.tsx        # Login form
     Register.tsx     # Registration form (invite token required)
     Dashboard.tsx    # Home page (summary cards, connection requests, shared lists)
-    Lists.tsx        # Gift lists page (placeholder)
-    ListDetail.tsx   # Single list view (placeholder)
-    Connections.tsx  # Connections page (placeholder)
-    Collections.tsx  # Collections page (placeholder)
-    CollectionDetail.tsx  # Single collection view (placeholder)
+    CreateList.tsx      # Create new gift list form
+    Lists.tsx        # Gift lists page (owned + shared sections)
+    ListDetail.tsx   # Single list view (owner editing, viewer claiming, sharing, URL auto-populate)
+    Connections.tsx  # Connections management (send requests, accept/decline, remove)
+    Collections.tsx  # Collections management (create, list, delete)
+    CollectionDetail.tsx  # Single collection view (edit, manage lists)
   types/
     index.ts         # TypeScript types matching backend Pydantic schemas
   test/
@@ -84,7 +86,7 @@ src/
 | `VITE_API_URL` | Backend API base URL (e.g., `https://boone-gifts-api.localhost`) |
 
 ## Testing
-- 15 tests: 1 App smoke + 4 API client + 4 AuthContext + 2 ProtectedRoute + 4 Dashboard
+- 37 tests: 1 App smoke + 4 API client + 4 AuthContext + 2 ProtectedRoute + 4 Dashboard + 5 Connections + 4 Collections + 5 CollectionDetail + 8 ListDetail
 - Tests run inside the Docker container via `task test`
 
 ## Key Design Decisions
