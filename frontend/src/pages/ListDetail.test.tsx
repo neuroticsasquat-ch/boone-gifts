@@ -176,3 +176,95 @@ describe("ListDetail Sharing Section", () => {
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
   });
 });
+
+describe("AddGiftForm URL Auto-Populate", () => {
+  async function openAddGiftForm() {
+    await waitFor(() => {
+      expect(screen.getByText("Add a gift")).toBeInTheDocument();
+    });
+    await userEvent.click(screen.getByText("Add a gift"));
+  }
+
+  it("populates fields from URL metadata", async () => {
+    server.use(
+      http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
+      http.get(`${API}/meta`, () =>
+        HttpResponse.json({
+          title: "Cool Gadget",
+          description: "A very cool gadget",
+          price: "29.99",
+          image: null,
+        })
+      ),
+    );
+
+    renderListDetail(ownerToken);
+    await openAddGiftForm();
+
+    await userEvent.type(screen.getByLabelText("URL"), "https://example.com/product");
+
+    // Wait for debounce (500ms) + fetch to populate fields
+    await waitFor(() => {
+      expect(screen.getByLabelText("Name *")).toHaveValue("Cool Gadget");
+    }, { timeout: 3000 });
+    expect(screen.getByLabelText("Description")).toHaveValue("A very cool gadget");
+    expect(screen.getByLabelText("Price")).toHaveValue("29.99");
+  });
+
+  it("does not overwrite user-entered values", async () => {
+    server.use(
+      http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
+      http.get(`${API}/meta`, () =>
+        HttpResponse.json({
+          title: "From Meta",
+          description: "Meta description",
+          price: "9.99",
+          image: null,
+        })
+      ),
+    );
+
+    renderListDetail(ownerToken);
+    await openAddGiftForm();
+
+    // User types a name first
+    await userEvent.type(screen.getByLabelText("Name *"), "My Custom Name");
+
+    // Then enters a URL
+    await userEvent.type(screen.getByLabelText("URL"), "https://example.com/product");
+
+    // Wait for debounce + fetch
+    await waitFor(() => {
+      expect(screen.getByLabelText("Description")).toHaveValue("Meta description");
+    }, { timeout: 3000 });
+
+    // Name should NOT be overwritten
+    expect(screen.getByLabelText("Name *")).toHaveValue("My Custom Name");
+  });
+
+  it("handles fetch failure gracefully", async () => {
+    server.use(
+      http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
+      http.get(`${API}/meta`, () => HttpResponse.error()),
+    );
+
+    renderListDetail(ownerToken);
+    await openAddGiftForm();
+
+    await userEvent.type(screen.getByLabelText("URL"), "https://example.com/broken");
+
+    // Wait for the fetch to complete (indicator disappears)
+    await waitFor(() => {
+      expect(screen.queryByText("Fetching details…")).not.toBeInTheDocument();
+    }, { timeout: 3000 });
+
+    // Fields should remain empty — no error shown
+    expect(screen.getByLabelText("Name *")).toHaveValue("");
+  });
+});

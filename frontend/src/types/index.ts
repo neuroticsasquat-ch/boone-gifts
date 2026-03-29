@@ -119,3 +119,11 @@ export interface CollectionDetail {
   created_at: string;
   updated_at: string;
 }
+
+// URL Metadata
+export interface UrlMeta {
+  title: string | null;
+  description: string | null;
+  price: string | null;
+  image: string | null;
+}

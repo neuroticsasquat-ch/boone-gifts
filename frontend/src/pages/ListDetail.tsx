@@ -1,9 +1,10 @@
-import { useState, type FormEvent } from "react";
+import { useState, useRef, useEffect, type FormEvent } from "react";
 import { useParams, useNavigate, Link } from "react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getList, updateList, deleteList } from "../api/lists";
 import { createGift, updateGift, deleteGift, claimGift, unclaimGift } from "../api/gifts";
 import { useAuth } from "../hooks/useAuth";
+import { fetchUrlMeta } from "../api/meta";
 import { getShares, createShare, deleteShare } from "../api/shares";
 import { getConnections } from "../api/connections";
 import type { GiftListDetailOwner, GiftListDetailViewer, GiftOwnerView, Gift } from "../types";
@@ -240,10 +241,17 @@ function AddGiftForm({
   listId: number;
   queryClient: ReturnType<typeof useQueryClient>;
 }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [url, setUrl] = useState("");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [url, setUrl] = useState("");
   const [price, setPrice] = useState("");
+  const [isFetching, setIsFetching] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fetchIdRef = useRef(0);
+  const nameRef = useRef("");
+  const descriptionRef = useRef("");
+  const priceRef = useRef("");
 
   const mutation = useMutation({
     mutationFn: (data: { name: string; description?: string; url?: string; price?: string }) =>
@@ -251,12 +259,62 @@ function AddGiftForm({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["list", listId] });
       queryClient.invalidateQueries({ queryKey: ["lists"] });
+      setUrl("");
       setName("");
       setDescription("");
-      setUrl("");
       setPrice("");
+      nameRef.current = "";
+      descriptionRef.current = "";
+      priceRef.current = "";
+      setIsOpen(false);
     },
   });
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
+  function updateName(value: string) {
+    setName(value);
+    nameRef.current = value;
+  }
+
+  function updateDescription(value: string) {
+    setDescription(value);
+    descriptionRef.current = value;
+  }
+
+  function updatePrice(value: string) {
+    setPrice(value);
+    priceRef.current = value;
+  }
+
+  function handleUrlChange(value: string) {
+    setUrl(value);
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    if (!value.startsWith("http://") && !value.startsWith("https://")) return;
+
+    const currentFetchId = ++fetchIdRef.current;
+
+    debounceRef.current = setTimeout(async () => {
+      setIsFetching(true);
+      try {
+        const meta = await fetchUrlMeta(value);
+        if (fetchIdRef.current !== currentFetchId) return;
+        if (meta.title && !nameRef.current) updateName(meta.title);
+        if (meta.description && !descriptionRef.current) updateDescription(meta.description);
+        if (meta.price && !priceRef.current) updatePrice(meta.price);
+      } catch {
+        // Best-effort — ignore failures
+      } finally {
+        if (fetchIdRef.current === currentFetchId) setIsFetching(false);
+      }
+    }, 500);
+  }
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -268,51 +326,102 @@ function AddGiftForm({
     });
   }
 
+  function handleClear() {
+    setUrl("");
+    updateName("");
+    updateDescription("");
+    updatePrice("");
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    setIsFetching(false);
+  }
+
   return (
-    <form onSubmit={handleSubmit} className="rounded-lg bg-white p-4 shadow">
-      <h2 className="text-sm font-semibold text-gray-700 mb-3">Add a gift</h2>
-      {mutation.isError && <p className="text-sm text-red-600 mb-2">Failed to add gift.</p>}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <input
-          type="text"
-          placeholder="Name *"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="rounded border border-gray-300 px-3 py-2 text-sm"
-          required
-        />
-        <input
-          type="text"
-          placeholder="Description"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          className="rounded border border-gray-300 px-3 py-2 text-sm"
-        />
-        <input
-          type="url"
-          placeholder="URL"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          className="rounded border border-gray-300 px-3 py-2 text-sm"
-        />
-        <div className="flex gap-2">
-          <input
-            type="text"
-            placeholder="Price"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            className="rounded border border-gray-300 px-3 py-2 text-sm flex-1"
-          />
-          <button
-            type="submit"
-            disabled={mutation.isPending}
-            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
-          >
-            {mutation.isPending ? "Adding…" : "Add"}
-          </button>
-        </div>
-      </div>
-    </form>
+    <div className="space-y-3">
+      <button
+        type="button"
+        onClick={() => { if (isOpen) handleClear(); setIsOpen(!isOpen); }}
+        className={`flex items-center justify-between w-full rounded px-4 py-2 text-base font-bold text-white uppercase tracking-wide ${isOpen ? "bg-gray-500 hover:bg-gray-600" : "bg-blue-600 hover:bg-blue-700"}`}
+      >
+        Add a gift
+        <span className="ml-2">{isOpen ? "\u25B2" : "\u25BC"}</span>
+      </button>
+
+      {isOpen && (
+        <form onSubmit={handleSubmit} className="rounded-lg bg-white p-4 shadow space-y-3">
+          {mutation.isError && <p className="text-sm text-red-600">Failed to add gift.</p>}
+
+          {/* Row 1: URL + Price */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_auto]">
+            <label htmlFor="add-gift-url" className="block">
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">URL</span>
+              <input
+                id="add-gift-url"
+                type="url"
+                placeholder="https://..."
+                value={url}
+                onChange={(e) => handleUrlChange(e.target.value)}
+                className="mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              />
+            </label>
+            <label htmlFor="add-gift-price" className="block">
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Price</span>
+              <input
+                id="add-gift-price"
+                type="text"
+                placeholder={isFetching ? "Loading…" : ""}
+                value={price}
+                onChange={(e) => updatePrice(e.target.value)}
+                className={`mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm sm:w-28${isFetching ? " animate-pulse bg-gray-50" : ""}`}
+              />
+            </label>
+          </div>
+          {isFetching && <p className="text-xs text-blue-500 -mt-2">Fetching details…</p>}
+
+          {/* Row 2: Name (full width) */}
+          <label className="block">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Name *</span>
+            <input
+              type="text"
+              placeholder={isFetching ? "Loading…" : ""}
+              value={name}
+              onChange={(e) => updateName(e.target.value)}
+              className={`mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm${isFetching ? " animate-pulse bg-gray-50" : ""}`}
+              required
+            />
+          </label>
+
+          {/* Row 3: Description textarea (full width) */}
+          <label className="block">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Description</span>
+            <textarea
+              placeholder={isFetching ? "Loading…" : ""}
+              value={description}
+              onChange={(e) => updateDescription(e.target.value)}
+              rows={2}
+              className={`mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm${isFetching ? " animate-pulse bg-gray-50" : ""}`}
+            />
+          </label>
+
+          {/* Row 4: Buttons */}
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={mutation.isPending}
+              className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              {mutation.isPending ? "Adding…" : "Add"}
+            </button>
+            <button
+              type="button"
+              onClick={handleClear}
+              className="rounded bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
+            >
+              Clear
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
   );
 }
 
@@ -349,17 +458,18 @@ function OwnerGiftRow({
 
 function GiftInfo({ name, description, url, price }: { name: string; description: string | null; url: string | null; price: string | null }) {
   return (
-    <div className="min-w-0">
-      <p className="font-medium text-gray-900">{name}</p>
-      {description && <p className="text-sm text-gray-500 truncate">{description}</p>}
-      <div className="flex gap-3 mt-0.5">
-        {url && (
-          <a href={url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline truncate">
-            {url}
+    <div className="min-w-0 flex-1">
+      <div className="flex items-baseline justify-between gap-3">
+        {url ? (
+          <a href={url} target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-600 hover:underline truncate">
+            {name}
           </a>
+        ) : (
+          <p className="font-semibold text-gray-900">{name}</p>
         )}
-        {price && <span className="text-sm text-gray-500">${price}</span>}
+        {price && <span className="text-sm text-gray-500 shrink-0">${price}</span>}
       </div>
+      {description && <p className="text-sm text-gray-500 truncate">{description}</p>}
     </div>
   );
 }
@@ -615,6 +725,8 @@ function SharingSection({
 
   const sharedUserIds = new Set((shares.data ?? []).map((s) => s.user_id));
   const availableConnections = (connections.data ?? []).filter((c) => !sharedUserIds.has(c.user.id));
+  const hasShares = (shares.data ?? []).length > 0;
+  const hasAvailable = availableConnections.length > 0;
 
   // Build a lookup from user_id to connection user info for displaying share names
   const connectionsByUserId = new Map((connections.data ?? []).map((c) => [c.user.id, c.user]));
@@ -626,12 +738,14 @@ function SharingSection({
     }
   }
 
+  if (!hasShares && !hasAvailable) return null;
+
   return (
     <>
       <hr className="border-gray-200" />
       <h2 className="text-lg font-semibold text-gray-900">Sharing</h2>
 
-      {availableConnections.length > 0 && (
+      {hasAvailable && (
         <form onSubmit={handleAddShare} className="rounded-lg bg-white p-4 shadow">
           {addShareMutation.isError && <p className="text-sm text-red-600 mb-2">Failed to share list.</p>}
           <div className="flex gap-2">
