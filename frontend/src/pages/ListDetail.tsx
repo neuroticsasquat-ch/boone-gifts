@@ -4,6 +4,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getList, updateList, deleteList } from "../api/lists";
 import { createGift, updateGift, deleteGift, claimGift, unclaimGift } from "../api/gifts";
 import { useAuth } from "../hooks/useAuth";
+import { getShares, createShare, deleteShare } from "../api/shares";
+import { getConnections } from "../api/connections";
 import type { GiftListDetailOwner, GiftListDetailViewer, GiftOwnerView, Gift } from "../types";
 
 function isOwnerView(list: GiftListDetailOwner | GiftListDetailViewer, userId: number): list is GiftListDetailOwner {
@@ -82,6 +84,8 @@ function OwnerView({
           ))}
         </ul>
       )}
+
+      <SharingSection listId={listId} queryClient={queryClient} />
     </>
   );
 }
@@ -573,5 +577,110 @@ function ViewerGiftRow({
       <GiftInfo name={gift.name} description={gift.description} url={gift.url} price={gift.price} />
       <div className="shrink-0 ml-4">{claimButton}</div>
     </li>
+  );
+}
+
+// --- Sharing Section (Owner Only) ---
+
+function SharingSection({
+  listId,
+  queryClient,
+}: {
+  listId: number;
+  queryClient: ReturnType<typeof useQueryClient>;
+}) {
+  const [selectedUserId, setSelectedUserId] = useState("");
+
+  const shares = useQuery({ queryKey: ["shares", listId], queryFn: () => getShares(listId) });
+  const connections = useQuery({ queryKey: ["connections"], queryFn: getConnections });
+
+  const addShareMutation = useMutation({
+    mutationFn: (userId: number) => createShare(listId, userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["shares", listId] });
+      queryClient.invalidateQueries({ queryKey: ["list", listId] });
+      queryClient.invalidateQueries({ queryKey: ["lists"] });
+      setSelectedUserId("");
+    },
+  });
+
+  const removeShareMutation = useMutation({
+    mutationFn: (userId: number) => deleteShare(listId, userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["shares", listId] });
+      queryClient.invalidateQueries({ queryKey: ["list", listId] });
+      queryClient.invalidateQueries({ queryKey: ["lists"] });
+    },
+  });
+
+  const sharedUserIds = new Set((shares.data ?? []).map((s) => s.user_id));
+  const availableConnections = (connections.data ?? []).filter((c) => !sharedUserIds.has(c.user.id));
+
+  // Build a lookup from user_id to connection user info for displaying share names
+  const connectionsByUserId = new Map((connections.data ?? []).map((c) => [c.user.id, c.user]));
+
+  function handleAddShare(e: FormEvent) {
+    e.preventDefault();
+    if (selectedUserId) {
+      addShareMutation.mutate(Number(selectedUserId));
+    }
+  }
+
+  return (
+    <>
+      <hr className="border-gray-200" />
+      <h2 className="text-lg font-semibold text-gray-900">Sharing</h2>
+
+      {availableConnections.length > 0 && (
+        <form onSubmit={handleAddShare} className="rounded-lg bg-white p-4 shadow">
+          {addShareMutation.isError && <p className="text-sm text-red-600 mb-2">Failed to share list.</p>}
+          <div className="flex gap-2">
+            <select
+              value={selectedUserId}
+              onChange={(e) => setSelectedUserId(e.target.value)}
+              className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm"
+              required
+            >
+              <option value="">Share with…</option>
+              {availableConnections.map((conn) => (
+                <option key={conn.user.id} value={conn.user.id}>
+                  {conn.user.name} ({conn.user.email})
+                </option>
+              ))}
+            </select>
+            <button
+              type="submit"
+              disabled={addShareMutation.isPending || !selectedUserId}
+              className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              {addShareMutation.isPending ? "Sharing…" : "Share"}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {shares.data && shares.data.length > 0 && (
+        <ul className="divide-y divide-gray-200 rounded-lg bg-white shadow">
+          {shares.data.map((share) => {
+            const user = connectionsByUserId.get(share.user_id);
+            return (
+              <li key={share.id} className="flex items-center justify-between px-4 py-3">
+                <div>
+                  <p className="font-medium text-gray-900">{user?.name ?? `User ${share.user_id}`}</p>
+                  {user?.email && <p className="text-sm text-gray-500">{user.email}</p>}
+                </div>
+                <button
+                  onClick={() => removeShareMutation.mutate(share.user_id)}
+                  disabled={removeShareMutation.isPending}
+                  className="rounded bg-red-600 px-3 py-1 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                >
+                  Remove
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </>
   );
 }
