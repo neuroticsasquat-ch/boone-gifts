@@ -60,6 +60,7 @@ export interface GiftListDetailOwner {
   name: string;
   description: string | null;
   owner_id: number;
+  owner_name: string;
   gifts: GiftOwnerView[];
   created_at: string;
   updated_at: string;
@@ -70,6 +71,7 @@ export interface GiftListDetailViewer {
   name: string;
   description: string | null;
   owner_id: number;
+  owner_name: string;
   gifts: Gift[];
   created_at: string;
   updated_at: string;

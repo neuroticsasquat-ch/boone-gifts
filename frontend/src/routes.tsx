@@ -5,6 +5,7 @@ import { Login } from "./pages/Login";
 import { Register } from "./pages/Register";
 import { Dashboard } from "./pages/Dashboard";
 import { Lists } from "./pages/Lists";
+import { CreateList } from "./pages/CreateList";
 import { ListDetail } from "./pages/ListDetail";
 import { Connections } from "./pages/Connections";
 import { Collections } from "./pages/Collections";
@@ -27,6 +28,7 @@ export const routes: RouteObject[] = [
         children: [
           { index: true, element: <Dashboard /> },
           { path: "lists", element: <Lists /> },
+          { path: "lists/new", element: <CreateList /> },
           { path: "lists/:id", element: <ListDetail /> },
           { path: "connections", element: <Connections /> },
           { path: "collections", element: <Collections /> },

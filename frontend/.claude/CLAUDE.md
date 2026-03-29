@@ -8,7 +8,7 @@ React SPA frontend for the Boone Gifts platform. TypeScript, runs entirely in Do
 - **Styling**: Tailwind CSS v4
 - **Routing**: React Router v7 (library/SPA mode)
 - **Data fetching**: TanStack Query v5 + Axios
-- **Auth**: JWT tokens stored in memory (React context), Axios interceptors handle token refresh
+- **Auth**: Access token in memory (React context), refresh token in HttpOnly cookie (managed by backend). Silent refresh on page load restores sessions.
 - **Task runner**: Taskfile.yaml
 - **Testing**: Vitest + React Testing Library + MSW
 
@@ -45,15 +45,15 @@ src/
   index.css          # Tailwind import
   routes.tsx         # Route definitions
   api/
-    client.ts        # Axios instance with JWT interceptors
-    auth.ts          # Auth API functions (login, register, refresh)
+    client.ts        # Axios instance with withCredentials, JWT interceptors (setAccessToken/getAccessToken/clearAccessToken)
+    auth.ts          # Auth API functions (login, register, refresh, logout)
     lists.ts         # Gift list API functions
     gifts.ts         # Gift API functions (CRUD + claim/unclaim)
     connections.ts   # Connections API functions
     shares.ts        # Shares API functions
     collections.ts   # Collections API functions
   contexts/
-    AuthContext.tsx   # Auth state provider (tokens + user in memory)
+    AuthContext.tsx   # Auth state provider (access token in memory, silent refresh on mount, async logout)
   hooks/
     useAuth.ts       # Auth context hook
   components/
@@ -62,7 +62,7 @@ src/
   pages/
     Login.tsx        # Login form
     Register.tsx     # Registration form (invite token required)
-    Dashboard.tsx    # Home page (placeholder)
+    Dashboard.tsx    # Home page (summary cards, connection requests, shared lists)
     Lists.tsx        # Gift lists page (placeholder)
     ListDetail.tsx   # Single list view (placeholder)
     Connections.tsx  # Connections page (placeholder)
@@ -73,7 +73,7 @@ src/
   test/
     setup.ts         # Vitest setup (Testing Library + MSW)
     mocks/
-      handlers.ts    # MSW default handlers
+      handlers.ts    # MSW default handlers (includes /auth/refresh → 401)
       server.ts      # MSW server instance
 ```
 
@@ -84,13 +84,14 @@ src/
 | `VITE_API_URL` | Backend API base URL (e.g., `https://boone-gifts-api.localhost`) |
 
 ## Testing
-- 10 tests: 1 App smoke + 4 API client + 3 AuthContext + 2 ProtectedRoute
+- 15 tests: 1 App smoke + 4 API client + 4 AuthContext + 2 ProtectedRoute + 4 Dashboard
 - Tests run inside the Docker container via `task test`
 
 ## Key Design Decisions
 - Container runs Vite dev server directly on `app:up` — no separate `app:run` needed
 - **`node_modules` in a named Docker volume** — survives the bind mount (`.:/app`)
-- **JWT tokens in memory only** — not in localStorage (XSS protection). Closing the tab logs you out.
-- **Axios interceptors handle token refresh** — 401 triggers silent refresh and request retry. Failed queue mechanism handles concurrent requests during refresh.
+- **Access token in memory, refresh token in HttpOnly cookie** — access token never in localStorage (XSS protection), refresh token invisible to JS. Sessions survive page refreshes via silent refresh on mount.
+- **Axios `withCredentials: true`** — sends cookies cross-origin to the backend
+- **Axios interceptors handle token refresh** — 401 triggers silent refresh and request retry (skips `/auth/` URLs to prevent loops). Failed queue mechanism handles concurrent requests during refresh.
 - **API functions are plain async functions** — no custom hooks wrapping each query (YAGNI). TanStack Query calls them directly in queryFn/mutationFn.
 - **Vite HMR configured for Traefik** — WebSocket connects via wss on port 443 (clientPort)
