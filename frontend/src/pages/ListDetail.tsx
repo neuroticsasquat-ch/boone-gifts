@@ -441,16 +441,19 @@ function OwnerGiftRow({
   }
 
   return (
-    <li className="flex items-center justify-between px-4 py-3">
+    <li className="flex flex-col gap-2 px-4 py-3 md:flex-row md:items-center md:justify-between">
       <GiftInfo name={gift.name} description={gift.description} url={gift.url} price={gift.price} />
-      <div className="flex gap-2 shrink-0 ml-4">
-        <button
-          onClick={() => setEditing(true)}
-          className="rounded bg-gray-200 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-300"
-        >
-          Edit
-        </button>
-        <DeleteGiftButton giftId={gift.id} listId={listId} queryClient={queryClient} />
+      <div className="flex items-center justify-between md:justify-end gap-2 shrink-0 md:ml-4">
+        {gift.price && <span className="text-sm text-gray-500 md:hidden">${gift.price}</span>}
+        <div className="flex gap-2 ml-auto md:ml-0">
+          <button
+            onClick={() => setEditing(true)}
+            className="rounded bg-gray-200 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-300"
+          >
+            Edit
+          </button>
+          <DeleteGiftButton giftId={gift.id} listId={listId} queryClient={queryClient} />
+        </div>
       </div>
     </li>
   );
@@ -458,18 +461,18 @@ function OwnerGiftRow({
 
 function GiftInfo({ name, description, url, price }: { name: string; description: string | null; url: string | null; price: string | null }) {
   return (
-    <div className="min-w-0 flex-1">
+    <div className="min-w-0 md:flex-1">
       <div className="flex items-baseline justify-between gap-3">
         {url ? (
-          <a href={url} target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-600 hover:underline truncate">
+          <a href={url} target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-600 hover:underline break-words">
             {name}
           </a>
         ) : (
-          <p className="font-semibold text-gray-900">{name}</p>
+          <p className="font-semibold text-gray-900 break-words">{name}</p>
         )}
-        {price && <span className="text-sm text-gray-500 shrink-0">${price}</span>}
+        {price && <span className="hidden md:inline text-sm text-gray-500 shrink-0">${price}</span>}
       </div>
-      {description && <p className="text-sm text-gray-500 truncate">{description}</p>}
+      {description && <p className="text-sm text-gray-500 break-words">{description}</p>}
     </div>
   );
 }
@@ -512,51 +515,68 @@ function EditGiftRow({
 
   return (
     <li className="px-4 py-3">
-      <form onSubmit={handleSubmit} className="space-y-2">
+      <form onSubmit={handleSubmit} className="rounded-lg bg-white p-4 shadow space-y-3">
         {mutation.isError && <p className="text-sm text-red-600">Failed to update gift.</p>}
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+
+        {/* Row 1: URL + Price */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_auto]">
+          <label className="block">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">URL</span>
+            <input
+              type="url"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="https://..."
+              className="mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="block">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Price</span>
+            <input
+              type="text"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              className="mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm sm:w-28"
+            />
+          </label>
+        </div>
+
+        {/* Row 2: Name (full width) */}
+        <label className="block">
+          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Name *</span>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="rounded border border-gray-300 px-3 py-1.5 text-sm"
-            placeholder="Name *"
+            className="mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm"
             required
           />
-          <input
-            type="text"
+        </label>
+
+        {/* Row 3: Description textarea (full width) */}
+        <label className="block">
+          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Description</span>
+          <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            className="rounded border border-gray-300 px-3 py-1.5 text-sm"
-            placeholder="Description"
+            rows={2}
+            className="mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm"
           />
-          <input
-            type="url"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            className="rounded border border-gray-300 px-3 py-1.5 text-sm"
-            placeholder="URL"
-          />
-          <input
-            type="text"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            className="rounded border border-gray-300 px-3 py-1.5 text-sm"
-            placeholder="Price"
-          />
-        </div>
+        </label>
+
+        {/* Row 4: Buttons */}
         <div className="flex gap-2">
           <button
             type="submit"
             disabled={mutation.isPending}
-            className="rounded bg-blue-600 px-3 py-1 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
           >
             {mutation.isPending ? "Saving…" : "Save"}
           </button>
           <button
             type="button"
             onClick={onDone}
-            className="rounded bg-gray-200 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-300"
+            className="rounded bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
           >
             Cancel
           </button>
@@ -683,9 +703,12 @@ function ViewerGiftRow({
   }
 
   return (
-    <li className="flex items-center justify-between px-4 py-3">
+    <li className="flex flex-col gap-2 px-4 py-3 md:flex-row md:items-center md:justify-between">
       <GiftInfo name={gift.name} description={gift.description} url={gift.url} price={gift.price} />
-      <div className="shrink-0 ml-4">{claimButton}</div>
+      <div className="flex items-center justify-between md:justify-end gap-2 shrink-0 md:ml-4">
+        {gift.price && <span className="text-sm text-gray-500 md:hidden">${gift.price}</span>}
+        <div className="ml-auto md:ml-0">{claimButton}</div>
+      </div>
     </li>
   );
 }

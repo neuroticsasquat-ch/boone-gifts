@@ -268,3 +268,85 @@ describe("AddGiftForm URL Auto-Populate", () => {
     expect(screen.getByLabelText("Name *")).toHaveValue("");
   });
 });
+
+describe("Gift list item responsive layout", () => {
+  const ownerListWithGift = {
+    ...ownerListDetail,
+    gifts: [
+      { id: 10, name: "Test Gift", description: "A long description that should wrap", url: "https://example.com", price: "29.99" },
+    ],
+  };
+
+  const viewerListWithGift = {
+    ...viewerListDetail,
+    gifts: [
+      { id: 10, name: "Viewer Gift", description: "Viewer description", url: null, price: "15.00", claimed_by_id: null },
+    ],
+  };
+
+  it("renders gift name without truncate class", async () => {
+    server.use(
+      http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListWithGift)),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
+    );
+
+    renderListDetail(ownerToken);
+
+    const link = await screen.findByText("Test Gift");
+    expect(link.className).not.toContain("truncate");
+    expect(link.className).toContain("break-words");
+  });
+
+  it("renders gift name without URL using break-words", async () => {
+    server.use(
+      http.get(`${API}/lists/1`, () => HttpResponse.json(viewerListWithGift)),
+    );
+
+    renderListDetail(viewerToken);
+
+    const name = await screen.findByText("Viewer Gift");
+    expect(name.tagName).toBe("P");
+    expect(name.className).toContain("break-words");
+  });
+
+  it("renders gift description without truncate class", async () => {
+    server.use(
+      http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListWithGift)),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
+    );
+
+    renderListDetail(ownerToken);
+
+    const desc = await screen.findByText("A long description that should wrap");
+    expect(desc.className).not.toContain("truncate");
+    expect(desc.className).toContain("break-words");
+  });
+
+  it("renders duplicate price in owner gift row for mobile", async () => {
+    server.use(
+      http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListWithGift)),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
+    );
+
+    renderListDetail(ownerToken);
+
+    // Price appears twice (once in GiftInfo for desktop, once in row for mobile)
+    const prices = await screen.findAllByText("$29.99");
+    expect(prices.length).toBe(2);
+  });
+
+  it("renders duplicate price in viewer gift row for mobile", async () => {
+    server.use(
+      http.get(`${API}/lists/1`, () => HttpResponse.json(viewerListWithGift)),
+    );
+
+    renderListDetail(viewerToken);
+
+    // Price appears twice (once in GiftInfo for desktop, once in row for mobile)
+    const prices = await screen.findAllByText("$15.00");
+    expect(prices.length).toBe(2);
+  });
+});
