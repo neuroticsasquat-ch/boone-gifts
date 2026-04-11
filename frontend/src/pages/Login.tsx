@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { useNavigate, useLocation, Link } from "react-router";
+import { useNavigate, useLocation } from "react-router";
 import { useAuth } from "../hooks/useAuth";
 import { useTitle } from "../hooks/useTitle";
 
@@ -56,12 +56,6 @@ export function Login() {
           >
             Log in
           </button>
-          <p className="text-sm text-center mt-4 text-gray-600">
-            Have an invite?{" "}
-            <Link to="/register" className="text-blue-600 hover:underline">
-              Register
-            </Link>
-          </p>
         </form>
       </div>
     </div>
