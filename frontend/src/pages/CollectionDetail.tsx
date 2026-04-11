@@ -10,6 +10,7 @@ import {
 } from "../api/collections";
 import { getLists } from "../api/lists";
 import type { CollectionDetail as CollectionDetailType } from "../types";
+import { useTitle } from "../hooks/useTitle";
 
 export function CollectionDetail() {
   const { id } = useParams();
@@ -22,6 +23,8 @@ export function CollectionDetail() {
     queryFn: () => getCollection(collectionId),
     enabled: !!id,
   });
+
+  useTitle(collection?.name ?? "Collection");
 
   if (isLoading) return <p className="text-gray-500">Loading…</p>;
   if (error || !collection) return <p className="text-red-600">Failed to load collection.</p>;

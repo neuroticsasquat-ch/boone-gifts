@@ -2,8 +2,10 @@ import { useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getCollections, createCollection, deleteCollection } from "../api/collections";
+import { useTitle } from "../hooks/useTitle";
 
 export function Collections() {
+  useTitle("Collections");
   const queryClient = useQueryClient();
 
   const collections = useQuery({ queryKey: ["collections"], queryFn: getCollections });

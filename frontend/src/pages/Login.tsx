@@ -1,8 +1,10 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate, useLocation, Link } from "react-router";
 import { useAuth } from "../hooks/useAuth";
+import { useTitle } from "../hooks/useTitle";
 
 export function Login() {
+  useTitle("Log In");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");

@@ -1,8 +1,10 @@
 import { Link } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { getLists } from "../api/lists";
+import { useTitle } from "../hooks/useTitle";
 
 export function Lists() {
+  useTitle("Lists");
   const ownedLists = useQuery({ queryKey: ["lists", "owned"], queryFn: () => getLists("owned") });
   const sharedLists = useQuery({ queryKey: ["lists", "shared"], queryFn: () => getLists("shared") });
 

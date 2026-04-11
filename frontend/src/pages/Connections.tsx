@@ -8,8 +8,10 @@ import {
   deleteConnection,
 } from "../api/connections";
 import { isAxiosError } from "axios";
+import { useTitle } from "../hooks/useTitle";
 
 export function Connections() {
+  useTitle("Connections");
   const queryClient = useQueryClient();
 
   const connections = useQuery({ queryKey: ["connections"], queryFn: getConnections });

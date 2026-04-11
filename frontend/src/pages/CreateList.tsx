@@ -1,8 +1,10 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate, Link } from "react-router";
 import { createList } from "../api/lists";
+import { useTitle } from "../hooks/useTitle";
 
 export function CreateList() {
+  useTitle("New List");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [error, setError] = useState("");

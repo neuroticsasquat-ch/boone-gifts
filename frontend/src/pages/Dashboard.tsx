@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getLists } from "../api/lists";
 import { getConnectionRequests, acceptConnection, deleteConnection } from "../api/connections";
 import { getCollections } from "../api/collections";
+import { useTitle } from "../hooks/useTitle";
 
 function SummaryCard({ title, count, to }: { title: string; count: number | undefined; to: string }) {
   return (
@@ -14,6 +15,7 @@ function SummaryCard({ title, count, to }: { title: string; count: number | unde
 }
 
 export function Dashboard() {
+  useTitle("Dashboard");
   const queryClient = useQueryClient();
 
   const ownedLists = useQuery({ queryKey: ["lists", "owned"], queryFn: () => getLists("owned") });

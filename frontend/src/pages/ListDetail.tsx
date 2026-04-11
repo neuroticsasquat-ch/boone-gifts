@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getList, updateList, deleteList } from "../api/lists";
 import { createGift, updateGift, deleteGift, claimGift, unclaimGift } from "../api/gifts";
 import { useAuth } from "../hooks/useAuth";
+import { useTitle } from "../hooks/useTitle";
 import { fetchUrlMeta } from "../api/meta";
 import { getShares, createShare, deleteShare } from "../api/shares";
 import { getConnections } from "../api/connections";
@@ -25,6 +26,8 @@ export function ListDetail() {
     queryFn: () => getList(listId),
     enabled: !!id,
   });
+
+  useTitle(list?.name ?? "List");
 
   if (isLoading) return <p className="text-gray-500">Loading…</p>;
   if (error || !list) return <p className="text-red-600">Failed to load list.</p>;

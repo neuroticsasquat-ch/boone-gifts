@@ -1,8 +1,10 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router";
 import { register } from "../api/auth";
+import { useTitle } from "../hooks/useTitle";
 
 export function Register() {
+  useTitle("Register");
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token") ?? "";
   const [name, setName] = useState("");
