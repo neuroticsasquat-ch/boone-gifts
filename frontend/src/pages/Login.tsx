@@ -34,6 +34,7 @@ export function Login() {
             <span className="text-sm font-medium text-gray-700">Email</span>
             <input
               type="email"
+              autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="mt-1 block w-full rounded border border-gray-300 px-3 py-2"
@@ -44,6 +45,7 @@ export function Login() {
             <span className="text-sm font-medium text-gray-700">Password</span>
             <input
               type="password"
+              autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="mt-1 block w-full rounded border border-gray-300 px-3 py-2"
