@@ -1,16 +1,11 @@
 import { useState, useEffect } from "react";
-import { Link, Outlet, useLocation } from "react-router";
+import { Link, Outlet } from "react-router";
 import { useAuth } from "../hooks/useAuth";
 
 export function Layout() {
   const { user, logout } = useAuth();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const location = useLocation();
-
-  // Close drawer on navigation
-  useEffect(() => {
-    setDrawerOpen(false);
-  }, [location.pathname]);
+  const closeDrawer = () => setDrawerOpen(false);
 
   // Close drawer on Escape key
   useEffect(() => {
@@ -90,19 +85,22 @@ export function Layout() {
           </button>
         </div>
         <div className="flex flex-col px-4 py-4 gap-4">
-          <Link to="/lists" className="text-gray-600 hover:text-gray-900 py-2">
+          <Link to="/lists" onClick={closeDrawer} className="text-gray-600 hover:text-gray-900 py-2">
             Lists
           </Link>
-          <Link to="/connections" className="text-gray-600 hover:text-gray-900 py-2">
+          <Link to="/connections" onClick={closeDrawer} className="text-gray-600 hover:text-gray-900 py-2">
             Connections
           </Link>
-          <Link to="/collections" className="text-gray-600 hover:text-gray-900 py-2">
+          <Link to="/collections" onClick={closeDrawer} className="text-gray-600 hover:text-gray-900 py-2">
             Collections
           </Link>
           <hr className="border-gray-200" />
           <span className="text-sm text-gray-600">{user?.email}</span>
           <button
-            onClick={logout}
+            onClick={() => {
+              closeDrawer();
+              logout();
+            }}
             className="text-left text-sm text-gray-600 hover:text-gray-900"
           >
             Logout
