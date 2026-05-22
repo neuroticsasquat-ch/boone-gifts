@@ -12,6 +12,7 @@ import { ListDetail } from "./pages/ListDetail";
 import { Connections } from "./pages/Connections";
 import { Collections } from "./pages/Collections";
 import { CollectionDetail } from "./pages/CollectionDetail";
+import { Account } from "./pages/Account";
 
 export const routes: RouteObject[] = [
   {
@@ -43,6 +44,7 @@ export const routes: RouteObject[] = [
           { path: "connections", element: <Connections /> },
           { path: "collections", element: <Collections /> },
           { path: "collections/:id", element: <CollectionDetail /> },
+          { path: "account", element: <Account /> },
         ],
       },
     ],
