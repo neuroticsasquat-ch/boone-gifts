@@ -15,4 +15,5 @@ Thumbs.db
 
 # Claude (only ignore local settings, not CLAUDE.md)
 .claude/settings.local.json
-docs/plans
+docs/plans/
+docs/superpowers/
