@@ -3,6 +3,8 @@ import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Login } from "./pages/Login";
 import { Register } from "./pages/Register";
+import { ForgotPassword } from "./pages/ForgotPassword";
+import { ResetPassword } from "./pages/ResetPassword";
 import { Dashboard } from "./pages/Dashboard";
 import { Lists } from "./pages/Lists";
 import { CreateList } from "./pages/CreateList";
@@ -10,6 +12,7 @@ import { ListDetail } from "./pages/ListDetail";
 import { Connections } from "./pages/Connections";
 import { Collections } from "./pages/Collections";
 import { CollectionDetail } from "./pages/CollectionDetail";
+import { Account } from "./pages/Account";
 
 export const routes: RouteObject[] = [
   {
@@ -19,6 +22,14 @@ export const routes: RouteObject[] = [
   {
     path: "/register",
     element: <Register />,
+  },
+  {
+    path: "/forgot-password",
+    element: <ForgotPassword />,
+  },
+  {
+    path: "/reset-password",
+    element: <ResetPassword />,
   },
   {
     element: <ProtectedRoute />,
@@ -33,6 +44,7 @@ export const routes: RouteObject[] = [
           { path: "connections", element: <Connections /> },
           { path: "collections", element: <Collections /> },
           { path: "collections/:id", element: <CollectionDetail /> },
+          { path: "account", element: <Account /> },
         ],
       },
     ],

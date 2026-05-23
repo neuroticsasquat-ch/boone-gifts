@@ -36,7 +36,9 @@ export function Layout() {
             </Link>
           </div>
           <div className="hidden md:flex items-center gap-4">
-            <span className="text-sm text-gray-600">{user?.email}</span>
+            <Link to="/account" className="text-sm text-gray-600 hover:text-gray-900">
+              {user?.email}
+            </Link>
             <button
               onClick={logout}
               className="text-sm text-gray-600 hover:text-gray-900"
@@ -95,7 +97,9 @@ export function Layout() {
             Collections
           </Link>
           <hr className="border-gray-200" />
-          <span className="text-sm text-gray-600">{user?.email}</span>
+          <Link to="/account" onClick={closeDrawer} className="text-sm text-gray-600 hover:text-gray-900 py-2">
+            {user?.email}
+          </Link>
           <button
             onClick={() => {
               closeDrawer();

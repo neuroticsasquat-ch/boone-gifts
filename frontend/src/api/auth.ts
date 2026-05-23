@@ -18,3 +18,22 @@ export async function refresh(): Promise<AccessTokenResponse> {
 export async function logout(): Promise<void> {
   await apiClient.post("/auth/logout");
 }
+
+export async function forgotPassword(email: string): Promise<void> {
+  await apiClient.post("/auth/forgot-password", { email });
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<void> {
+  await apiClient.post("/auth/reset-password", { token, new_password: newPassword });
+}
+
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string
+): Promise<AccessTokenResponse> {
+  const response = await apiClient.post<AccessTokenResponse>("/auth/change-password", {
+    current_password: currentPassword,
+    new_password: newPassword,
+  });
+  return response.data;
+}
