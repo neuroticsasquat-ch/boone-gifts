@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useState, useCallback, useEffect, type ReactNode } from "react";
 import { apiClient, setAccessToken, clearAccessToken } from "../api/client";
-import { logout as apiLogout } from "../api/auth";
+import { logout as apiLogout, changePassword as apiChangePassword } from "../api/auth";
 import type { AuthUser, AccessTokenResponse } from "../types";
 
 export interface AuthContextType {
@@ -9,6 +9,7 @@ export interface AuthContextType {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null);
@@ -70,8 +71,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  const changePassword = useCallback(
+    async (currentPassword: string, newPassword: string) => {
+      const { access_token } = await apiChangePassword(currentPassword, newPassword);
+      setAccessToken(access_token);
+      setUser(decodePayload(access_token));
+    },
+    []
+  );
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, login, logout, changePassword }}>
       {children}
     </AuthContext.Provider>
   );

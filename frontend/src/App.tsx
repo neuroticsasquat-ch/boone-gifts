@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/react";
 import { createBrowserRouter, RouterProvider } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider } from "./contexts/AuthContext";
@@ -18,7 +19,9 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <RouterProvider router={router} />
+        <Sentry.ErrorBoundary fallback={<p>Something went wrong.</p>}>
+          <RouterProvider router={router} />
+        </Sentry.ErrorBoundary>
       </AuthProvider>
     </QueryClientProvider>
   );
