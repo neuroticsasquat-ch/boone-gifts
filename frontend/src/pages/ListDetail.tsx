@@ -750,22 +750,26 @@ function ViewerGiftRow({
           disabled={isPending}
           className="rounded bg-green-600 px-3 py-1 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
         >
-          {claimMutation.isPending ? "Claiming…" : "Claim"}
+          {claimMutation.isPending ? "Saving…" : "I'll get this"}
         </button>
       );
     } else if (gift.claimed_by_id === userId) {
       claimButton = (
         <button
-          onClick={() => unclaimMutation.mutate()}
+          onClick={() => {
+            if (window.confirm("Are you sure you no longer want to get this gift?")) {
+              unclaimMutation.mutate();
+            }
+          }}
           disabled={isPending}
           className="rounded bg-yellow-600 px-3 py-1 text-sm font-medium text-white hover:bg-yellow-700 disabled:opacity-50"
         >
-          {unclaimMutation.isPending ? "Unclaiming…" : "Unclaim"}
+          {unclaimMutation.isPending ? "Saving…" : "Never mind"}
         </button>
       );
     } else {
       claimButton = (
-        <span className="rounded bg-gray-200 px-3 py-1 text-sm font-medium text-gray-500">Claimed</span>
+        <span className="rounded bg-gray-200 px-3 py-1 text-sm font-medium text-gray-500">Someone's getting this</span>
       );
     }
   }

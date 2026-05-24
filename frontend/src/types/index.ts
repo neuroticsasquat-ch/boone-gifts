@@ -30,6 +30,8 @@ export interface GiftList {
   owner_id: number;
   owner_name: string;
   is_archived: boolean;
+  gift_count: number;
+  claimed_count: number;
   created_at: string;
   updated_at: string;
 }

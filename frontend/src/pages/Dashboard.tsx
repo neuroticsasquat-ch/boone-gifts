@@ -94,6 +94,9 @@ export function Dashboard() {
                   <div>
                     <p className="font-medium text-gray-900">{list.name}</p>
                     <p className="text-sm text-gray-500">from {list.owner_name}</p>
+                    <p className="text-xs text-gray-400">
+                      {list.claimed_count} of {list.gift_count} claimed
+                    </p>
                   </div>
                 </Link>
               </li>

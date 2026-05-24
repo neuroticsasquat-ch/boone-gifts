@@ -42,6 +42,10 @@ export function Collections() {
     <div className="space-y-8">
       <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900"><FolderOpenIcon className="h-6 w-6" /> Collections</h1>
 
+      <p className="text-sm text-gray-500">
+        Collections let you group gift lists together for easy access — for example, all the lists for Christmas 2026.
+      </p>
+
       {!showArchived && <CreateCollectionForm queryClient={queryClient} />}
 
       <section>
