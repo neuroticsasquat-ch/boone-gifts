@@ -92,7 +92,7 @@ export function ListDetail() {
       {/* Tab content */}
       {activeTab === "gifts" && <GiftsTab list={list} listId={listId} isOwner={isOwner} userId={user!.id} queryClient={queryClient} />}
       {activeTab === "collections" && <CollectionsTab listId={listId} queryClient={queryClient} />}
-      {activeTab === "shared" && <SharedWithTab listId={listId} isOwner={isOwner} queryClient={queryClient} />}
+      {activeTab === "shared" && <SharedWithTab listId={listId} isOwner={isOwner} ownerName={list.owner_name} queryClient={queryClient} />}
     </div>
   );
 }

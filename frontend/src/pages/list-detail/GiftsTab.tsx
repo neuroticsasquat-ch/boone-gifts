@@ -572,20 +572,17 @@ function ViewerGiftRow({
 
   const isPending = claimMutation.isPending || unclaimMutation.isPending;
 
-  let claimButton: React.ReactNode = null;
-  if (!isArchived) {
-    if (gift.claimed_by_id === null) {
-      claimButton = (
-        <button
-          onClick={() => claimMutation.mutate()}
-          disabled={isPending}
-          className="rounded bg-green-600 px-3 py-1 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
-        >
-          {claimMutation.isPending ? "Saving…" : "I'll get this"}
-        </button>
-      );
-    } else if (gift.claimed_by_id === userId) {
-      claimButton = (
+  const isMine = gift.claimed_by_id === userId;
+  const isTaken = gift.claimed_by_id !== null && !isMine;
+  const isAvailable = gift.claimed_by_id === null;
+
+  let rowStyle = "";
+  let actionButton: React.ReactNode = null;
+
+  if (isMine) {
+    rowStyle = "border-l-4 border-green-500 bg-green-50";
+    if (!isArchived) {
+      actionButton = (
         <button
           onClick={() => {
             if (window.confirm("Are you sure you no longer want to get this gift?")) {
@@ -593,25 +590,39 @@ function ViewerGiftRow({
             }
           }}
           disabled={isPending}
-          className="rounded bg-yellow-600 px-3 py-1 text-sm font-medium text-white hover:bg-yellow-700 disabled:opacity-50"
+          className="rounded bg-yellow-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-yellow-700 disabled:opacity-50"
         >
           {unclaimMutation.isPending ? "Saving…" : "Never mind"}
         </button>
       );
-    } else {
-      claimButton = (
-        <span className="rounded bg-gray-200 px-3 py-1 text-sm font-medium text-gray-500">Someone's getting this</span>
-      );
     }
+  } else if (isTaken) {
+    rowStyle = "bg-gray-50 opacity-50";
+  } else if (isAvailable && !isArchived) {
+    actionButton = (
+      <button
+        onClick={() => claimMutation.mutate()}
+        disabled={isPending}
+        className="rounded bg-green-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+      >
+        {claimMutation.isPending ? "Saving…" : "I'll get this"}
+      </button>
+    );
   }
 
   return (
-    <li className="flex flex-col gap-2 px-4 py-3 md:flex-row md:items-center md:justify-between">
-      <GiftInfo name={gift.name} description={gift.description} url={gift.url} price={gift.price} />
-      <div className="flex items-center justify-between md:justify-end gap-2 shrink-0 md:ml-4">
-        {gift.price && <span className="text-sm text-gray-500 md:hidden">${gift.price}</span>}
-        {claimButton && <div className="ml-auto md:ml-0">{claimButton}</div>}
+    <li className={`px-4 py-2 ${rowStyle}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <GiftInfo name={gift.name} description={gift.description} url={gift.url} price={gift.price} />
+        </div>
+        <div className="flex items-center gap-2 shrink-0 pt-0.5">
+          {isMine && <span className="text-xs text-green-700">✓ Yours</span>}
+          {isTaken && <span className="text-xs text-gray-400">Taken</span>}
+          {actionButton}
+        </div>
       </div>
+      {gift.price && <p className="text-xs text-gray-400 mt-0.5">${gift.price}</p>}
     </li>
   );
 }

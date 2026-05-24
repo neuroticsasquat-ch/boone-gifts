@@ -7,14 +7,15 @@ import toast from "react-hot-toast";
 interface SharedWithTabProps {
   listId: number;
   isOwner: boolean;
+  ownerName: string;
   queryClient: ReturnType<typeof useQueryClient>;
 }
 
-export function SharedWithTab({ listId, isOwner, queryClient }: SharedWithTabProps) {
+export function SharedWithTab({ listId, isOwner, ownerName, queryClient }: SharedWithTabProps) {
   if (isOwner) {
     return <OwnerSharing listId={listId} queryClient={queryClient} />;
   }
-  return <ViewerSharing listId={listId} />;
+  return <ViewerSharing listId={listId} ownerName={ownerName} />;
 }
 
 // --- Owner: full sharing management ---
@@ -73,6 +74,8 @@ function OwnerSharing({
 
   return (
     <div className="space-y-3">
+      <p className="text-sm text-gray-500">You've shared this list with:</p>
+
       {hasAvailable && (
         <form onSubmit={handleAddShare} className="rounded-lg bg-white p-4 shadow">
           <div className="flex gap-2">
@@ -128,7 +131,7 @@ function OwnerSharing({
 
 // --- Viewer: read-only shared users list ---
 
-function ViewerSharing({ listId }: { listId: number }) {
+function ViewerSharing({ listId, ownerName }: { listId: number; ownerName: string }) {
   const sharedUsers = useQuery({
     queryKey: ["shared-users", listId],
     queryFn: () => getSharedUsers(listId),
@@ -143,10 +146,12 @@ function ViewerSharing({ listId }: { listId: number }) {
   }
 
   if (!sharedUsers.data || sharedUsers.data.length === 0) {
-    return <p className="text-sm text-gray-500">This list hasn't been shared with anyone else.</p>;
+    return <p className="text-sm text-gray-500">{ownerName} hasn't shared this list with anyone else.</p>;
   }
 
   return (
+    <div className="space-y-3">
+    <p className="text-sm text-gray-500">{ownerName} has shared this list with:</p>
     <ul className="divide-y divide-gray-200 rounded-lg bg-white shadow">
       {sharedUsers.data.map((user) => (
         <li key={user.id} className="px-4 py-3">
@@ -155,5 +160,6 @@ function ViewerSharing({ listId }: { listId: number }) {
         </li>
       ))}
     </ul>
+    </div>
   );
 }

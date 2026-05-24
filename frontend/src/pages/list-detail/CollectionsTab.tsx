@@ -64,8 +64,14 @@ export function CollectionsTab({ listId, queryClient }: CollectionsTabProps) {
 
   return (
     <div className="space-y-4">
+      <p className="text-sm text-gray-500">
+        Your personal collections that include this list. Collections are private — only you can see them.
+      </p>
+
       {/* Current collections containing this list */}
       {containingCollections.length > 0 && (
+        <>
+        <h3 className="text-sm font-semibold text-gray-700">In your collections</h3>
         <ul className="divide-y divide-gray-200 rounded-lg bg-white shadow">
           {containingCollections.map((coll) => (
             <li key={coll.id} className="flex items-center justify-between px-4 py-3">
@@ -82,6 +88,11 @@ export function CollectionsTab({ listId, queryClient }: CollectionsTabProps) {
             </li>
           ))}
         </ul>
+        </>
+      )}
+
+      {containingCollections.length === 0 && (
+        <p className="text-sm text-gray-400 italic">Not in any of your collections yet.</p>
       )}
 
       {/* Add to collection dropdown */}
