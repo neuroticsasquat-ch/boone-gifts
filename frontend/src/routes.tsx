@@ -15,6 +15,7 @@ import { Collections } from "./pages/Collections";
 import { CollectionDetail } from "./pages/CollectionDetail";
 import { Account } from "./pages/Account";
 import { AdminInvites } from "./pages/AdminInvites";
+import { AdminUsers } from "./pages/AdminUsers";
 
 export const routes: RouteObject[] = [
   {
@@ -53,6 +54,7 @@ export const routes: RouteObject[] = [
             children: [
               { index: true, element: <div>Admin Dashboard</div> },
               { path: "invites", element: <AdminInvites /> },
+              { path: "users", element: <AdminUsers /> },
             ],
           },
         ],
