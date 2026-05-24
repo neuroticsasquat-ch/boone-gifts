@@ -14,6 +14,7 @@ import { Connections } from "./pages/Connections";
 import { Collections } from "./pages/Collections";
 import { CollectionDetail } from "./pages/CollectionDetail";
 import { Account } from "./pages/Account";
+import { AdminInvites } from "./pages/AdminInvites";
 
 export const routes: RouteObject[] = [
   {
@@ -51,6 +52,7 @@ export const routes: RouteObject[] = [
             element: <AdminRoute />,
             children: [
               { index: true, element: <div>Admin Dashboard</div> },
+              { path: "invites", element: <AdminInvites /> },
             ],
           },
         ],

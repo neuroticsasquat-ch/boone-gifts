@@ -127,3 +127,16 @@ export interface UrlMeta {
   price: string | null;
   image: string | null;
 }
+
+// Invites (admin)
+export interface Invite {
+  id: number;
+  token: string;
+  email: string;
+  role: string;
+  status: "pending" | "used" | "expired";
+  expires_at: string;
+  used_at: string | null;
+  invited_by_id: number;
+  created_at: string;
+}
