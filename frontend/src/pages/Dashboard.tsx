@@ -4,6 +4,8 @@ import { getLists } from "../api/lists";
 import { getConnectionRequests, acceptConnection, deleteConnection } from "../api/connections";
 import { getCollections } from "../api/collections";
 import { useTitle } from "../hooks/useTitle";
+import toast from "react-hot-toast";
+import { Spinner } from "../components/Spinner";
 
 function SummaryCard({ title, count, to }: { title: string; count: number | undefined; to: string }) {
   return (
@@ -29,6 +31,7 @@ export function Dashboard() {
       queryClient.invalidateQueries({ queryKey: ["connectionRequests"] });
       queryClient.invalidateQueries({ queryKey: ["connections"] });
     },
+    onError: () => toast.error("Failed to accept request."),
   });
 
   const declineMutation = useMutation({
@@ -36,7 +39,16 @@ export function Dashboard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["connectionRequests"] });
     },
+    onError: () => toast.error("Failed to decline request."),
   });
+
+  const anyLoading = ownedLists.isPending || sharedLists.isPending || requests.isPending || collections.isPending;
+  if (anyLoading) return (
+    <div className="space-y-8">
+      <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+      <Spinner />
+    </div>
+  );
 
   return (
     <div className="space-y-8">
@@ -98,6 +110,16 @@ export function Dashboard() {
               </li>
             ))}
           </ul>
+        </section>
+      )}
+
+      {sharedLists.data && sharedLists.data.length === 0 && (
+        <section>
+          <h2 className="text-lg font-semibold text-gray-900">Shared with Me</h2>
+          <p className="mt-3 text-gray-500">
+            No one has shared a list with you yet.{" "}
+            <Link to="/connections" className="text-blue-600 hover:underline">Add a connection</Link> to get started.
+          </p>
         </section>
       )}
     </div>

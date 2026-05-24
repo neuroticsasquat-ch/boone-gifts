@@ -9,6 +9,8 @@ import {
 } from "../api/connections";
 import { isAxiosError } from "axios";
 import { useTitle } from "../hooks/useTitle";
+import toast from "react-hot-toast";
+import { Spinner } from "../components/Spinner";
 
 export function Connections() {
   useTitle("Connections");
@@ -27,17 +29,27 @@ export function Connections() {
   const acceptMutation = useMutation({
     mutationFn: acceptConnection,
     onSuccess: invalidateAll,
+    onError: () => toast.error("Failed to accept request."),
   });
 
   const declineMutation = useMutation({
     mutationFn: deleteConnection,
     onSuccess: invalidateAll,
+    onError: () => toast.error("Failed to decline request."),
   });
 
   const removeMutation = useMutation({
     mutationFn: deleteConnection,
     onSuccess: invalidateAll,
+    onError: () => toast.error("Failed to remove connection."),
   });
+
+  if (connections.isPending || requests.isPending) return (
+    <div className="space-y-8">
+      <h1 className="text-2xl font-bold text-gray-900">Connections</h1>
+      <Spinner />
+    </div>
+  );
 
   return (
     <div className="space-y-8">
@@ -80,7 +92,9 @@ export function Connections() {
       <section>
         <h2 className="text-lg font-semibold text-gray-900">My Connections</h2>
         {connections.data && connections.data.length === 0 && (
-          <p className="mt-3 text-gray-500">No connections yet.</p>
+          <p className="mt-3 text-gray-500">
+            You don't have any connections yet. Use the form above to send a request.
+          </p>
         )}
         {connections.data && connections.data.length > 0 && (
           <ul className="mt-3 divide-y divide-gray-200 rounded-lg bg-white shadow">

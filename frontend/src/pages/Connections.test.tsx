@@ -120,7 +120,7 @@ describe("Connections", () => {
     renderConnections();
 
     await waitFor(() => {
-      expect(screen.getByText("No connections yet.")).toBeInTheDocument();
+      expect(screen.getByText("You don't have any connections yet. Use the form above to send a request.")).toBeInTheDocument();
     });
     expect(screen.queryByText("Pending Requests")).not.toBeInTheDocument();
   });

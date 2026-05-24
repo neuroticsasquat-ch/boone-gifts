@@ -11,6 +11,8 @@ import {
 import { getLists } from "../api/lists";
 import type { CollectionDetail as CollectionDetailType } from "../types";
 import { useTitle } from "../hooks/useTitle";
+import toast from "react-hot-toast";
+import { Spinner } from "../components/Spinner";
 
 export function CollectionDetail() {
   const { id } = useParams();
@@ -18,7 +20,7 @@ export function CollectionDetail() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const { data: collection, isLoading, error } = useQuery({
+  const { data: collection, isLoading, error, refetch } = useQuery({
     queryKey: ["collection", collectionId],
     queryFn: () => getCollection(collectionId),
     enabled: !!id,
@@ -26,8 +28,13 @@ export function CollectionDetail() {
 
   useTitle(collection?.name ?? "Collection");
 
-  if (isLoading) return <p className="text-gray-500">Loading…</p>;
-  if (error || !collection) return <p className="text-red-600">Failed to load collection.</p>;
+  if (isLoading) return <Spinner />;
+  if (error || !collection) return (
+    <div className="text-center py-12">
+      <p className="text-red-600">Failed to load collection.</p>
+      <button onClick={() => refetch()} className="mt-2 text-sm text-blue-600 hover:underline">Try again</button>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -70,6 +77,7 @@ function CollectionHeader({
       queryClient.invalidateQueries({ queryKey: ["collections"] });
       setEditing(false);
     },
+    onError: () => toast.error("Failed to update collection."),
   });
 
   const deleteMutation = useMutation({
@@ -78,6 +86,7 @@ function CollectionHeader({
       queryClient.invalidateQueries({ queryKey: ["collections"] });
       navigate("/collections", { replace: true });
     },
+    onError: () => toast.error("Failed to delete collection."),
   });
 
   function handleSave(e: FormEvent) {
@@ -94,7 +103,7 @@ function CollectionHeader({
   if (editing) {
     return (
       <form onSubmit={handleSave} className="rounded-lg bg-white p-6 shadow space-y-4">
-        {updateMutation.isError && <p className="text-sm text-red-600">Failed to update collection.</p>}
+
         <label className="block">
           <span className="text-sm font-medium text-gray-700">Name</span>
           <input
@@ -176,6 +185,7 @@ function CollectionLists({
       queryClient.invalidateQueries({ queryKey: ["collection", collectionId] });
       queryClient.invalidateQueries({ queryKey: ["collections"] });
     },
+    onError: () => toast.error("Failed to remove list."),
   });
 
   if (collection.lists.length === 0) {
@@ -223,6 +233,7 @@ function AddListForm({
       queryClient.invalidateQueries({ queryKey: ["collections"] });
       setSelectedListId("");
     },
+    onError: () => toast.error("Failed to add list."),
   });
 
   const existingListIds = new Set(collection.lists.map((l) => l.id));
@@ -240,7 +251,7 @@ function AddListForm({
   return (
     <form onSubmit={handleSubmit} className="rounded-lg bg-white p-4 shadow">
       <h2 className="text-sm font-semibold text-gray-700 mb-3">Add a List</h2>
-      {addMutation.isError && <p className="text-sm text-red-600 mb-2">Failed to add list.</p>}
+
       <div className="flex gap-2">
         <select
           value={selectedListId}

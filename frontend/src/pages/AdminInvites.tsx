@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getInvites, createInvite, deleteInvite } from "../api/invites";
 import { useTitle } from "../hooks/useTitle";
 import type { Invite } from "../types";
+import toast from "react-hot-toast";
 
 const STATUS_STYLES: Record<Invite["status"], string> = {
   pending: "bg-yellow-100 text-yellow-800",
@@ -22,6 +23,7 @@ export function AdminInvites() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["invites"] });
     },
+    onError: () => toast.error("Failed to revoke invite."),
   });
 
   function handleRevoke(id: number) {
@@ -120,6 +122,7 @@ function CreateInviteForm({
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     },
+    onError: () => toast.error("Failed to send invite."),
   });
 
   function handleSubmit(e: FormEvent) {
@@ -131,7 +134,7 @@ function CreateInviteForm({
   return (
     <form onSubmit={handleSubmit} className="rounded-lg bg-white p-4 shadow">
       <h2 className="text-sm font-semibold text-gray-700 mb-3">Send an Invite</h2>
-      {mutation.isError && <p className="text-sm text-red-600 mb-2">Failed to send invite.</p>}
+
       {success && (
         <p className="text-green-700 bg-green-50 border border-green-200 rounded p-3 text-sm mb-2">
           Invite sent!

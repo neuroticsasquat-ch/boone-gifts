@@ -3,6 +3,8 @@ import { Link } from "react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getCollections, createCollection, deleteCollection } from "../api/collections";
 import { useTitle } from "../hooks/useTitle";
+import toast from "react-hot-toast";
+import { Spinner } from "../components/Spinner";
 
 export function Collections() {
   useTitle("Collections");
@@ -15,6 +17,7 @@ export function Collections() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["collections"] });
     },
+    onError: () => toast.error("Failed to delete collection."),
   });
 
   function handleDelete(id: number) {
@@ -22,6 +25,13 @@ export function Collections() {
       deleteMutation.mutate(id);
     }
   }
+
+  if (collections.isPending) return (
+    <div className="space-y-8">
+      <h1 className="text-2xl font-bold text-gray-900">Collections</h1>
+      <Spinner />
+    </div>
+  );
 
   return (
     <div className="space-y-8">
@@ -74,6 +84,7 @@ function CreateCollectionForm({
       setName("");
       setDescription("");
     },
+    onError: () => toast.error("Failed to create collection."),
   });
 
   function handleSubmit(e: FormEvent) {
@@ -84,7 +95,7 @@ function CreateCollectionForm({
   return (
     <form onSubmit={handleSubmit} className="rounded-lg bg-white p-4 shadow">
       <h2 className="text-sm font-semibold text-gray-700 mb-3">Create a Collection</h2>
-      {mutation.isError && <p className="text-sm text-red-600 mb-2">Failed to create collection.</p>}
+
       <div className="flex gap-2">
         <input
           type="text"

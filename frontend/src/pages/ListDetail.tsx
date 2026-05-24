@@ -9,6 +9,8 @@ import { fetchUrlMeta } from "../api/meta";
 import { getShares, createShare, deleteShare } from "../api/shares";
 import { getConnections } from "../api/connections";
 import type { GiftListDetailOwner, GiftListDetailViewer, GiftOwnerView, Gift } from "../types";
+import toast from "react-hot-toast";
+import { Spinner } from "../components/Spinner";
 
 function isOwnerView(list: GiftListDetailOwner | GiftListDetailViewer, userId: number): list is GiftListDetailOwner {
   return list.owner_id === userId;
@@ -21,7 +23,7 @@ export function ListDetail() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
-  const { data: list, isLoading, error } = useQuery({
+  const { data: list, isLoading, error, refetch } = useQuery({
     queryKey: ["list", listId],
     queryFn: () => getList(listId),
     enabled: !!id,
@@ -29,8 +31,13 @@ export function ListDetail() {
 
   useTitle(list?.name ?? "List");
 
-  if (isLoading) return <p className="text-gray-500">Loading…</p>;
-  if (error || !list) return <p className="text-red-600">Failed to load list.</p>;
+  if (isLoading) return <Spinner />;
+  if (error || !list) return (
+    <div className="text-center py-12">
+      <p className="text-red-600">Failed to load list.</p>
+      <button onClick={() => refetch()} className="mt-2 text-sm text-blue-600 hover:underline">Try again</button>
+    </div>
+  );
 
   const isOwner = user !== null && isOwnerView(list, user.id);
 
@@ -218,6 +225,7 @@ function DeleteListButton({
       queryClient.invalidateQueries({ queryKey: ["lists"] });
       navigate("/lists", { replace: true });
     },
+    onError: () => toast.error("Failed to delete list."),
   });
 
   function handleDelete() {
@@ -604,6 +612,7 @@ function DeleteGiftButton({
       queryClient.invalidateQueries({ queryKey: ["list", listId] });
       queryClient.invalidateQueries({ queryKey: ["lists"] });
     },
+    onError: () => toast.error("Failed to delete gift."),
   });
 
   return (
@@ -667,6 +676,7 @@ function ViewerGiftRow({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["list", listId] });
     },
+    onError: () => toast.error("Failed to claim gift."),
   });
 
   const unclaimMutation = useMutation({
@@ -674,6 +684,7 @@ function ViewerGiftRow({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["list", listId] });
     },
+    onError: () => toast.error("Failed to unclaim gift."),
   });
 
   const isPending = claimMutation.isPending || unclaimMutation.isPending;
@@ -738,6 +749,7 @@ function SharingSection({
       queryClient.invalidateQueries({ queryKey: ["lists"] });
       setSelectedUserId("");
     },
+    onError: () => toast.error("Failed to share list."),
   });
 
   const removeShareMutation = useMutation({
@@ -747,6 +759,7 @@ function SharingSection({
       queryClient.invalidateQueries({ queryKey: ["list", listId] });
       queryClient.invalidateQueries({ queryKey: ["lists"] });
     },
+    onError: () => toast.error("Failed to remove share."),
   });
 
   const sharedUserIds = new Set((shares.data ?? []).map((s) => s.user_id));
@@ -773,7 +786,6 @@ function SharingSection({
 
       {hasAvailable && (
         <form onSubmit={handleAddShare} className="rounded-lg bg-white p-4 shadow">
-          {addShareMutation.isError && <p className="text-sm text-red-600 mb-2">Failed to share list.</p>}
           <div className="flex gap-2">
             <select
               value={selectedUserId}

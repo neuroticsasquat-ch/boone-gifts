@@ -103,6 +103,7 @@ describe("Dashboard", () => {
       expect(screen.getAllByText("0")).toHaveLength(3);
     });
     expect(screen.queryByText("Pending Connection Requests")).not.toBeInTheDocument();
-    expect(screen.queryByText("Shared with Me")).not.toBeInTheDocument();
+    expect(screen.getByText("Shared with Me")).toBeInTheDocument();
+    expect(screen.getByText(/No one has shared a list with you yet/)).toBeInTheDocument();
   });
 });

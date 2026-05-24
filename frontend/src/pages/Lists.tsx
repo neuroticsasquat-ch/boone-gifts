@@ -2,11 +2,19 @@ import { Link } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { getLists } from "../api/lists";
 import { useTitle } from "../hooks/useTitle";
+import { Spinner } from "../components/Spinner";
 
 export function Lists() {
   useTitle("Lists");
   const ownedLists = useQuery({ queryKey: ["lists", "owned"], queryFn: () => getLists("owned") });
   const sharedLists = useQuery({ queryKey: ["lists", "shared"], queryFn: () => getLists("shared") });
+
+  if (ownedLists.isPending || sharedLists.isPending) return (
+    <div className="space-y-8">
+      <h1 className="text-2xl font-bold text-gray-900">My Lists</h1>
+      <Spinner />
+    </div>
+  );
 
   return (
     <div className="space-y-8">
@@ -23,7 +31,10 @@ export function Lists() {
         </div>
 
         {ownedLists.data && ownedLists.data.length === 0 && (
-          <p className="mt-4 text-gray-500">You haven't created any lists yet.</p>
+          <p className="mt-4 text-gray-500">
+            You haven't created any lists yet.{" "}
+            <Link to="/lists/new" className="text-blue-600 hover:underline">Create your first list</Link>.
+          </p>
         )}
 
         {ownedLists.data && ownedLists.data.length > 0 && (
@@ -58,6 +69,16 @@ export function Lists() {
               </li>
             ))}
           </ul>
+        </section>
+      )}
+
+      {sharedLists.data && sharedLists.data.length === 0 && (
+        <section>
+          <h2 className="text-lg font-semibold text-gray-900">Shared with Me</h2>
+          <p className="mt-3 text-gray-500">
+            No one has shared a list with you yet.{" "}
+            <Link to="/connections" className="text-blue-600 hover:underline">Add a connection</Link> to get started.
+          </p>
         </section>
       )}
     </div>

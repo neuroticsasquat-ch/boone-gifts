@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getUsers, updateUser } from "../api/users";
 import { useAuth } from "../hooks/useAuth";
 import { useTitle } from "../hooks/useTitle";
+import toast from "react-hot-toast";
 
 export function AdminUsers() {
   useTitle("Users");
@@ -16,6 +17,7 @@ export function AdminUsers() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-users"] });
     },
+    onError: () => toast.error("Failed to update user."),
   });
 
   function handleToggle(id: number, currentlyActive: boolean) {
@@ -29,9 +31,6 @@ export function AdminUsers() {
     <div className="space-y-8">
       <h1 className="text-2xl font-bold text-gray-900">Users</h1>
 
-      {toggleMutation.isError && (
-        <p className="text-sm text-red-600">Failed to update user.</p>
-      )}
 
       <section>
         {users.data && users.data.length === 0 && (
