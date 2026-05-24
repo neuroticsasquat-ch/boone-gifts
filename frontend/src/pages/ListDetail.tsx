@@ -145,7 +145,7 @@ function ListHeader({
 }: {
   name: string;
   description: string | null;
-  subtitle?: string;
+  subtitle?: React.ReactNode;
   isArchived?: boolean;
   onEdit?: () => void;
   onDelete?: React.ReactNode;
@@ -682,12 +682,21 @@ function ViewerView({
   queryClient: ReturnType<typeof useQueryClient>;
   userId: number;
 }) {
+  const connections = useQuery({ queryKey: ["connections"], queryFn: getConnections });
+  const connectionId = connections.data?.find((c) => c.user.id === list.owner_id)?.id;
+
+  const ownerLink = connectionId ? (
+    <Link to={`/connections/${connectionId}`} className="text-blue-600 hover:underline">{list.owner_name}</Link>
+  ) : (
+    list.owner_name
+  );
+
   return (
     <>
       <ListHeader
         name={list.name}
         description={list.description}
-        subtitle={`from ${list.owner_name}`}
+        subtitle={<>from {ownerLink}</>}
         isArchived={list.is_archived}
       />
 

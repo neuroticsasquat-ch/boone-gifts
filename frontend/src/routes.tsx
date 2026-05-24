@@ -11,6 +11,7 @@ import { Lists } from "./pages/Lists";
 import { CreateList } from "./pages/CreateList";
 import { ListDetail } from "./pages/ListDetail";
 import { Connections } from "./pages/Connections";
+import { ConnectionProfile } from "./pages/ConnectionProfile";
 import { Collections } from "./pages/Collections";
 import { CollectionDetail } from "./pages/CollectionDetail";
 import { Account } from "./pages/Account";
@@ -45,6 +46,7 @@ export const routes: RouteObject[] = [
           { path: "lists/new", element: <CreateList /> },
           { path: "lists/:id", element: <ListDetail /> },
           { path: "connections", element: <Connections /> },
+          { path: "connections/:id", element: <ConnectionProfile /> },
           { path: "collections", element: <Collections /> },
           { path: "collections/:id", element: <CollectionDetail /> },
           { path: "account", element: <Account /> },

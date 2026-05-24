@@ -1,7 +1,7 @@
 import { Link } from "react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getLists } from "../api/lists";
-import { getConnectionRequests, acceptConnection, deleteConnection } from "../api/connections";
+import { getConnections, getConnectionRequests, acceptConnection, deleteConnection } from "../api/connections";
 import { useTitle } from "../hooks/useTitle";
 import toast from "react-hot-toast";
 import { Spinner } from "../components/Spinner";
@@ -14,6 +14,10 @@ export function Dashboard() {
   const ownedLists = useQuery({ queryKey: ["lists", "owned"], queryFn: () => getLists("owned") });
   const sharedLists = useQuery({ queryKey: ["lists", "shared"], queryFn: () => getLists("shared") });
   const requests = useQuery({ queryKey: ["connectionRequests"], queryFn: getConnectionRequests });
+  const connections = useQuery({ queryKey: ["connections"], queryFn: getConnections });
+
+  const findConnectionId = (ownerId: number) =>
+    connections.data?.find((c) => c.user.id === ownerId)?.id;
 
   const acceptMutation = useMutation({
     mutationFn: acceptConnection,
@@ -32,7 +36,7 @@ export function Dashboard() {
     onError: () => toast.error("Failed to decline request."),
   });
 
-  const anyLoading = ownedLists.isPending || sharedLists.isPending || requests.isPending;
+  const anyLoading = ownedLists.isPending || sharedLists.isPending || requests.isPending || connections.isPending;
   if (anyLoading) return (
     <div className="space-y-8">
       <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
@@ -93,7 +97,17 @@ export function Dashboard() {
                 <Link to={`/lists/${list.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50">
                   <div>
                     <p className="font-medium text-gray-900">{list.name}</p>
-                    <p className="text-sm text-gray-500">from {list.owner_name}</p>
+                    <p className="text-sm text-gray-500">
+                      from{" "}
+                      {(() => {
+                        const connId = findConnectionId(list.owner_id);
+                        return connId ? (
+                          <Link to={`/connections/${connId}`} className="text-blue-600 hover:underline">{list.owner_name}</Link>
+                        ) : (
+                          list.owner_name
+                        );
+                      })()}
+                    </p>
                     <p className="text-xs text-gray-400">
                       {list.claimed_count} of {list.gift_count} claimed
                     </p>

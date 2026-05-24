@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { Link } from "react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getConnections,
@@ -102,7 +103,7 @@ export function Connections() {
             {connections.data.map((conn) => (
               <li key={conn.id} className="flex items-center justify-between px-4 py-3">
                 <div>
-                  <p className="font-medium text-gray-900">{conn.user.name}</p>
+                  <Link to={`/connections/${conn.id}`} className="font-medium text-blue-600 hover:underline">{conn.user.name}</Link>
                   <p className="text-sm text-gray-500">{conn.user.email}</p>
                 </div>
                 <button
