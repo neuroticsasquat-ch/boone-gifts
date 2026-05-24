@@ -1,6 +1,7 @@
 import type { RouteObject } from "react-router";
 import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { AdminRoute } from "./components/AdminRoute";
 import { Login } from "./pages/Login";
 import { Register } from "./pages/Register";
 import { ForgotPassword } from "./pages/ForgotPassword";
@@ -45,6 +46,13 @@ export const routes: RouteObject[] = [
           { path: "collections", element: <Collections /> },
           { path: "collections/:id", element: <CollectionDetail /> },
           { path: "account", element: <Account /> },
+          {
+            path: "admin",
+            element: <AdminRoute />,
+            children: [
+              { index: true, element: <div>Admin Dashboard</div> },
+            ],
+          },
         ],
       },
     ],
