@@ -31,6 +31,12 @@ export function ListDetail() {
 
   useTitle(list?.name ?? "List");
 
+  useEffect(() => {
+    if (list && user && list.owner_id !== user.id) {
+      queryClient.invalidateQueries({ queryKey: ["unseen-shares"] });
+    }
+  }, [list, user, queryClient]);
+
   if (isLoading) return <Spinner />;
   if (error || !list) return (
     <div className="text-center py-12">

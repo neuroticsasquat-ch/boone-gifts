@@ -30,3 +30,8 @@ export async function updateList(
 export async function deleteList(id: number): Promise<void> {
   await apiClient.delete(`/lists/${id}`);
 }
+
+export async function getUnseenShareCount(): Promise<number> {
+  const response = await apiClient.get<{ count: number }>("/lists/unseen-count");
+  return response.data.count;
+}

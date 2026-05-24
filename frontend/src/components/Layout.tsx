@@ -1,7 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, Outlet, useLocation } from "react-router";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../hooks/useAuth";
 import { GiftIcon } from "./Icons";
+import { getConnectionRequests } from "../api/connections";
+import { getUnseenShareCount } from "../api/lists";
+import { Badge } from "./Badge";
 
 function HomeIcon({ className }: { className?: string }) {
   return (
@@ -56,6 +60,12 @@ export function Layout() {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
+  const requests = useQuery({ queryKey: ["connectionRequests"], queryFn: getConnectionRequests });
+  const unseenShares = useQuery({ queryKey: ["unseen-shares"], queryFn: getUnseenShareCount });
+
+  const requestCount = requests.data?.length ?? 0;
+  const unseenCount = unseenShares.data ?? 0;
+
   useEffect(() => {
     if (!menuOpen) return;
     const handler = (e: MouseEvent) => {
@@ -76,11 +86,21 @@ export function Layout() {
             <Link to="/" className="flex items-center gap-1.5 text-xl font-bold text-gray-900">
               <GiftIcon className="h-6 w-6" /> Boone Gifts
             </Link>
-            <Link to="/lists" className="hidden md:inline text-gray-600 hover:text-gray-900">
+            <Link to="/lists" className="hidden md:inline relative text-gray-600 hover:text-gray-900">
               Lists
+              {unseenCount > 0 && (
+                <span className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+                  {unseenCount > 9 ? "9+" : unseenCount}
+                </span>
+              )}
             </Link>
-            <Link to="/connections" className="hidden md:inline text-gray-600 hover:text-gray-900">
+            <Link to="/connections" className="hidden md:inline relative text-gray-600 hover:text-gray-900">
               Connections
+              {requestCount > 0 && (
+                <span className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+                  {requestCount > 9 ? "9+" : requestCount}
+                </span>
+              )}
             </Link>
             <Link to="/collections" className="hidden md:inline text-gray-600 hover:text-gray-900">
               Collections
@@ -142,6 +162,9 @@ export function Layout() {
         <div className="flex justify-around">
           {TABS.map(({ to, label, Icon, match }) => {
             const active = match(location.pathname);
+            let badgeCount = 0;
+            if (to === "/connections") badgeCount = requestCount;
+            if (to === "/lists") badgeCount = unseenCount;
             return (
               <Link
                 key={to}
@@ -150,7 +173,10 @@ export function Layout() {
                   active ? "text-blue-600" : "text-gray-500"
                 }`}
               >
-                <Icon className="h-6 w-6" />
+                <span className="relative">
+                  <Icon className="h-6 w-6" />
+                  <Badge count={badgeCount} />
+                </span>
                 <span className="mt-0.5">{label}</span>
               </Link>
             );
