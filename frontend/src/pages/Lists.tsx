@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { getLists } from "../api/lists";
@@ -7,8 +8,16 @@ import { ClipboardIcon, HandshakeIcon } from "../components/Icons";
 
 export function Lists() {
   useTitle("Lists");
-  const ownedLists = useQuery({ queryKey: ["lists", "owned"], queryFn: () => getLists("owned") });
-  const sharedLists = useQuery({ queryKey: ["lists", "shared"], queryFn: () => getLists("shared") });
+  const [showArchived, setShowArchived] = useState(false);
+
+  const ownedLists = useQuery({
+    queryKey: ["lists", "owned", { archived: showArchived }],
+    queryFn: () => getLists("owned", showArchived || undefined),
+  });
+  const sharedLists = useQuery({
+    queryKey: ["lists", "shared", { archived: showArchived }],
+    queryFn: () => getLists("shared", showArchived || undefined),
+  });
 
   if (ownedLists.isPending || sharedLists.isPending) return (
     <div className="space-y-8">
@@ -23,25 +32,40 @@ export function Lists() {
       <section>
         <div className="flex items-center justify-between">
           <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900"><ClipboardIcon className="h-6 w-6" /> My Lists</h1>
-          <Link
-            to="/lists/new"
-            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-          >
-            New List
-          </Link>
+          {!showArchived && (
+            <Link
+              to="/lists/new"
+              className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              New List
+            </Link>
+          )}
         </div>
 
-        {ownedLists.data && ownedLists.data.length === 0 && (
+        <div className="mt-2">
+          <button
+            onClick={() => setShowArchived(!showArchived)}
+            className="text-sm text-blue-600 hover:underline"
+          >
+            {showArchived ? "View active lists" : "View archived lists"}
+          </button>
+        </div>
+
+        {ownedLists.data && ownedLists.data.length === 0 && !showArchived && (
           <p className="mt-4 text-gray-500">
             You haven't created any lists yet.{" "}
             <Link to="/lists/new" className="text-blue-600 hover:underline">Create your first list</Link>.
           </p>
         )}
 
+        {ownedLists.data && ownedLists.data.length === 0 && showArchived && (
+          <p className="mt-4 text-gray-500">No archived lists.</p>
+        )}
+
         {ownedLists.data && ownedLists.data.length > 0 && (
           <ul className="mt-4 divide-y divide-gray-200 rounded-lg bg-white shadow">
             {ownedLists.data.map((list) => (
-              <li key={list.id}>
+              <li key={list.id} className={showArchived ? "opacity-60" : undefined}>
                 <Link to={`/lists/${list.id}`} className="block px-4 py-3 hover:bg-gray-50">
                   <p className="font-medium text-gray-900">{list.name}</p>
                   {list.description && (
@@ -60,7 +84,7 @@ export function Lists() {
           <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900"><HandshakeIcon className="h-5 w-5" /> Shared with Me</h2>
           <ul className="mt-3 divide-y divide-gray-200 rounded-lg bg-white shadow">
             {sharedLists.data.map((list) => (
-              <li key={list.id}>
+              <li key={list.id} className={showArchived ? "opacity-60" : undefined}>
                 <Link to={`/lists/${list.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50">
                   <div>
                     <p className="font-medium text-gray-900">{list.name}</p>
@@ -73,7 +97,7 @@ export function Lists() {
         </section>
       )}
 
-      {sharedLists.data && sharedLists.data.length === 0 && (
+      {sharedLists.data && sharedLists.data.length === 0 && !showArchived && (
         <section>
           <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900"><HandshakeIcon className="h-5 w-5" /> Shared with Me</h2>
           <p className="mt-3 text-gray-500">

@@ -80,6 +80,15 @@ function CollectionHeader({
     onError: () => toast.error("Failed to update collection."),
   });
 
+  const archiveMutation = useMutation({
+    mutationFn: () => updateCollection(collectionId, { is_archived: !collection.is_archived }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["collection", collectionId] });
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+    },
+    onError: () => toast.error("Failed to update collection."),
+  });
+
   const deleteMutation = useMutation({
     mutationFn: () => deleteCollection(collectionId),
     onSuccess: () => {
@@ -97,6 +106,14 @@ function CollectionHeader({
   function handleDelete() {
     if (window.confirm("Delete this collection? This cannot be undone.")) {
       deleteMutation.mutate();
+    }
+  }
+
+  function handleArchiveToggle() {
+    if (collection.is_archived) {
+      archiveMutation.mutate();
+    } else if (window.confirm("Archive this collection?")) {
+      archiveMutation.mutate();
     }
   }
 
@@ -147,10 +164,22 @@ function CollectionHeader({
     <div className="rounded-lg bg-white p-6 shadow">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{collection.name}</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-gray-900">{collection.name}</h1>
+            {collection.is_archived && (
+              <span className="inline-block rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600">Archived</span>
+            )}
+          </div>
           {collection.description && <p className="mt-2 text-gray-600">{collection.description}</p>}
         </div>
         <div className="flex gap-2">
+          <button
+            onClick={handleArchiveToggle}
+            disabled={archiveMutation.isPending}
+            className={`rounded px-3 py-1 text-sm font-medium text-white disabled:opacity-50 ${collection.is_archived ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700"}`}
+          >
+            {archiveMutation.isPending ? "…" : collection.is_archived ? "Unarchive" : "Archive"}
+          </button>
           <button
             onClick={() => setEditing(true)}
             className="rounded bg-gray-200 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-300"

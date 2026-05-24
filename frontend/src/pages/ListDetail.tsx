@@ -69,6 +69,23 @@ function OwnerView({
 }) {
   const [editing, setEditing] = useState(false);
 
+  const archiveMutation = useMutation({
+    mutationFn: () => updateList(listId, { is_archived: !list.is_archived }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["list", listId] });
+      queryClient.invalidateQueries({ queryKey: ["lists"] });
+    },
+    onError: () => toast.error("Failed to update list."),
+  });
+
+  function handleArchiveToggle() {
+    if (list.is_archived) {
+      archiveMutation.mutate();
+    } else if (window.confirm("Archive this list?")) {
+      archiveMutation.mutate();
+    }
+  }
+
   return (
     <>
       {editing ? (
@@ -77,9 +94,19 @@ function OwnerView({
         <ListHeader
           name={list.name}
           description={list.description}
+          isArchived={list.is_archived}
           onEdit={() => setEditing(true)}
           onDelete={
             <DeleteListButton listId={listId} queryClient={queryClient} navigate={navigate} />
+          }
+          onArchive={
+            <button
+              onClick={handleArchiveToggle}
+              disabled={archiveMutation.isPending}
+              className={`rounded px-3 py-1 text-sm font-medium text-white disabled:opacity-50 ${list.is_archived ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700"}`}
+            >
+              {archiveMutation.isPending ? "…" : list.is_archived ? "Unarchive" : "Archive"}
+            </button>
           }
         />
       )}
@@ -105,25 +132,35 @@ function ListHeader({
   name,
   description,
   subtitle,
+  isArchived,
   onEdit,
   onDelete,
+  onArchive,
 }: {
   name: string;
   description: string | null;
   subtitle?: string;
+  isArchived?: boolean;
   onEdit?: () => void;
   onDelete?: React.ReactNode;
+  onArchive?: React.ReactNode;
 }) {
   return (
     <div className="rounded-lg bg-white p-6 shadow">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{name}</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-gray-900">{name}</h1>
+            {isArchived && (
+              <span className="inline-block rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600">Archived</span>
+            )}
+          </div>
           {subtitle && <p className="mt-1 text-sm text-gray-500">{subtitle}</p>}
           {description && <p className="mt-2 text-gray-600">{description}</p>}
         </div>
-        {(onEdit || onDelete) && (
+        {(onEdit || onDelete || onArchive) && (
           <div className="flex gap-2">
+            {onArchive}
             {onEdit && (
               <button
                 onClick={onEdit}
@@ -645,14 +682,21 @@ function ViewerView({
         name={list.name}
         description={list.description}
         subtitle={`from ${list.owner_name}`}
+        isArchived={list.is_archived}
       />
+
+      {list.is_archived && (
+        <p className="rounded-lg bg-yellow-50 px-4 py-3 text-sm text-yellow-800 border border-yellow-200">
+          This list has been archived.
+        </p>
+      )}
 
       {list.gifts.length === 0 ? (
         <p className="text-gray-500">No gifts on this list yet.</p>
       ) : (
         <ul className="divide-y divide-gray-200 rounded-lg bg-white shadow">
           {list.gifts.map((gift) => (
-            <ViewerGiftRow key={gift.id} gift={gift} listId={listId} queryClient={queryClient} userId={userId} />
+            <ViewerGiftRow key={gift.id} gift={gift} listId={listId} queryClient={queryClient} userId={userId} isArchived={list.is_archived} />
           ))}
         </ul>
       )}
@@ -665,11 +709,13 @@ function ViewerGiftRow({
   listId,
   queryClient,
   userId,
+  isArchived,
 }: {
   gift: Gift;
   listId: number;
   queryClient: ReturnType<typeof useQueryClient>;
   userId: number;
+  isArchived: boolean;
 }) {
   const claimMutation = useMutation({
     mutationFn: () => claimGift(listId, gift.id),
@@ -689,31 +735,33 @@ function ViewerGiftRow({
 
   const isPending = claimMutation.isPending || unclaimMutation.isPending;
 
-  let claimButton: React.ReactNode;
-  if (gift.claimed_by_id === null) {
-    claimButton = (
-      <button
-        onClick={() => claimMutation.mutate()}
-        disabled={isPending}
-        className="rounded bg-green-600 px-3 py-1 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
-      >
-        {claimMutation.isPending ? "Claiming…" : "Claim"}
-      </button>
-    );
-  } else if (gift.claimed_by_id === userId) {
-    claimButton = (
-      <button
-        onClick={() => unclaimMutation.mutate()}
-        disabled={isPending}
-        className="rounded bg-yellow-600 px-3 py-1 text-sm font-medium text-white hover:bg-yellow-700 disabled:opacity-50"
-      >
-        {unclaimMutation.isPending ? "Unclaiming…" : "Unclaim"}
-      </button>
-    );
-  } else {
-    claimButton = (
-      <span className="rounded bg-gray-200 px-3 py-1 text-sm font-medium text-gray-500">Claimed</span>
-    );
+  let claimButton: React.ReactNode = null;
+  if (!isArchived) {
+    if (gift.claimed_by_id === null) {
+      claimButton = (
+        <button
+          onClick={() => claimMutation.mutate()}
+          disabled={isPending}
+          className="rounded bg-green-600 px-3 py-1 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+        >
+          {claimMutation.isPending ? "Claiming…" : "Claim"}
+        </button>
+      );
+    } else if (gift.claimed_by_id === userId) {
+      claimButton = (
+        <button
+          onClick={() => unclaimMutation.mutate()}
+          disabled={isPending}
+          className="rounded bg-yellow-600 px-3 py-1 text-sm font-medium text-white hover:bg-yellow-700 disabled:opacity-50"
+        >
+          {unclaimMutation.isPending ? "Unclaiming…" : "Unclaim"}
+        </button>
+      );
+    } else {
+      claimButton = (
+        <span className="rounded bg-gray-200 px-3 py-1 text-sm font-medium text-gray-500">Claimed</span>
+      );
+    }
   }
 
   return (
@@ -721,7 +769,7 @@ function ViewerGiftRow({
       <GiftInfo name={gift.name} description={gift.description} url={gift.url} price={gift.price} />
       <div className="flex items-center justify-between md:justify-end gap-2 shrink-0 md:ml-4">
         {gift.price && <span className="text-sm text-gray-500 md:hidden">${gift.price}</span>}
-        <div className="ml-auto md:ml-0">{claimButton}</div>
+        {claimButton && <div className="ml-auto md:ml-0">{claimButton}</div>}
       </div>
     </li>
   );

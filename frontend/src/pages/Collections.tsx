@@ -10,8 +10,12 @@ import { FolderOpenIcon } from "../components/Icons";
 export function Collections() {
   useTitle("Collections");
   const queryClient = useQueryClient();
+  const [showArchived, setShowArchived] = useState(false);
 
-  const collections = useQuery({ queryKey: ["collections"], queryFn: getCollections });
+  const collections = useQuery({
+    queryKey: ["collections", { archived: showArchived }],
+    queryFn: () => getCollections(showArchived || undefined),
+  });
 
   const deleteMutation = useMutation({
     mutationFn: deleteCollection,
@@ -38,29 +42,43 @@ export function Collections() {
     <div className="space-y-8">
       <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900"><FolderOpenIcon className="h-6 w-6" /> Collections</h1>
 
-      <CreateCollectionForm queryClient={queryClient} />
+      {!showArchived && <CreateCollectionForm queryClient={queryClient} />}
 
       <section>
-        {collections.data && collections.data.length === 0 && (
+        <div className="mb-3">
+          <button
+            onClick={() => setShowArchived(!showArchived)}
+            className="text-sm text-blue-600 hover:underline"
+          >
+            {showArchived ? "View active collections" : "View archived collections"}
+          </button>
+        </div>
+
+        {collections.data && collections.data.length === 0 && !showArchived && (
           <p className="text-gray-500">No collections yet.</p>
+        )}
+        {collections.data && collections.data.length === 0 && showArchived && (
+          <p className="text-gray-500">No archived collections.</p>
         )}
         {collections.data && collections.data.length > 0 && (
           <ul className="divide-y divide-gray-200 rounded-lg bg-white shadow">
             {collections.data.map((coll) => (
-              <li key={coll.id} className="flex items-center justify-between px-4 py-3">
+              <li key={coll.id} className={`flex items-center justify-between px-4 py-3${showArchived ? " opacity-60" : ""}`}>
                 <Link to={`/collections/${coll.id}`} className="min-w-0 flex-1 hover:opacity-75">
                   <p className="font-medium text-gray-900">{coll.name}</p>
                   {coll.description && (
                     <p className="text-sm text-gray-500 truncate">{coll.description}</p>
                   )}
                 </Link>
-                <button
-                  onClick={() => handleDelete(coll.id)}
-                  disabled={deleteMutation.isPending}
-                  className="ml-4 shrink-0 rounded bg-red-600 px-3 py-1 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
-                >
-                  Delete
-                </button>
+                {!showArchived && (
+                  <button
+                    onClick={() => handleDelete(coll.id)}
+                    disabled={deleteMutation.isPending}
+                    className="ml-4 shrink-0 rounded bg-red-600 px-3 py-1 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                  >
+                    Delete
+                  </button>
+                )}
               </li>
             ))}
           </ul>

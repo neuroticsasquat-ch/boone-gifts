@@ -1,8 +1,9 @@
 import { apiClient } from "./client";
 import type { Collection, CollectionDetail } from "../types";
 
-export async function getCollections(): Promise<Collection[]> {
-  const response = await apiClient.get<Collection[]>("/collections");
+export async function getCollections(archived?: boolean): Promise<Collection[]> {
+  const params = archived !== undefined ? { archived: String(archived) } : undefined;
+  const response = await apiClient.get<Collection[]>("/collections", { params });
   return response.data;
 }
 
@@ -16,7 +17,10 @@ export async function createCollection(data: { name: string; description?: strin
   return response.data;
 }
 
-export async function updateCollection(id: number, data: { name?: string; description?: string }): Promise<Collection> {
+export async function updateCollection(
+  id: number,
+  data: { name?: string; description?: string; is_archived?: boolean },
+): Promise<Collection> {
   const response = await apiClient.put<Collection>(`/collections/${id}`, data);
   return response.data;
 }

@@ -29,6 +29,7 @@ export interface GiftList {
   description: string | null;
   owner_id: number;
   owner_name: string;
+  is_archived: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -61,6 +62,7 @@ export interface GiftListDetailOwner {
   description: string | null;
   owner_id: number;
   owner_name: string;
+  is_archived: boolean;
   gifts: GiftOwnerView[];
   created_at: string;
   updated_at: string;
@@ -72,6 +74,7 @@ export interface GiftListDetailViewer {
   description: string | null;
   owner_id: number;
   owner_name: string;
+  is_archived: boolean;
   gifts: Gift[];
   created_at: string;
   updated_at: string;
@@ -106,6 +109,7 @@ export interface Collection {
   name: string;
   description: string | null;
   owner_id: number;
+  is_archived: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -115,6 +119,7 @@ export interface CollectionDetail {
   name: string;
   description: string | null;
   owner_id: number;
+  is_archived: boolean;
   lists: GiftList[];
   created_at: string;
   updated_at: string;
