@@ -162,8 +162,8 @@ function CollectionHeader({
 
   return (
     <div className="rounded-lg bg-white p-6 shadow">
-      <div className="flex items-start justify-between">
-        <div>
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0">
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold text-gray-900">{collection.name}</h1>
             {collection.is_archived && (
@@ -172,7 +172,7 @@ function CollectionHeader({
           </div>
           {collection.description && <p className="mt-2 text-gray-600">{collection.description}</p>}
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 shrink-0">
           <button
             onClick={handleArchiveToggle}
             disabled={archiveMutation.isPending}

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, type FormEvent } from "react";
+import { useState, useRef, useEffect, useMemo, type FormEvent } from "react";
 import { useParams, useNavigate, Link } from "react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getList, updateList, deleteList } from "../api/lists";
@@ -8,6 +8,7 @@ import { useTitle } from "../hooks/useTitle";
 import { fetchUrlMeta } from "../api/meta";
 import { getShares, createShare, deleteShare } from "../api/shares";
 import { getConnections } from "../api/connections";
+import { getCollections, createCollection, addCollectionItem, getCollectionIdsForList } from "../api/collections";
 import type { GiftListDetailOwner, GiftListDetailViewer, GiftOwnerView, Gift } from "../types";
 import toast from "react-hot-toast";
 import { Spinner } from "../components/Spinner";
@@ -74,6 +75,18 @@ function OwnerView({
   navigate: ReturnType<typeof useNavigate>;
 }) {
   const [editing, setEditing] = useState(false);
+  const [giftSort, setGiftSort] = useState<"added" | "price_asc" | "price_desc">("added");
+
+  const sortedGifts = useMemo(() => {
+    if (giftSort === "added") return list.gifts;
+    return [...list.gifts].sort((a, b) => {
+      if (a.price === null) return 1;
+      if (b.price === null) return -1;
+      return giftSort === "price_asc"
+        ? Number(a.price) - Number(b.price)
+        : Number(b.price) - Number(a.price);
+    });
+  }, [list.gifts, giftSort]);
 
   const archiveMutation = useMutation({
     mutationFn: () => updateList(listId, { is_archived: !list.is_archived }),
@@ -122,14 +135,28 @@ function OwnerView({
       {list.gifts.length === 0 ? (
         <p className="text-gray-500">No gifts yet. Add one above.</p>
       ) : (
-        <ul className="divide-y divide-gray-200 rounded-lg bg-white shadow">
-          {list.gifts.map((gift) => (
-            <OwnerGiftRow key={gift.id} gift={gift} listId={listId} queryClient={queryClient} />
-          ))}
-        </ul>
+        <>
+          <div className="flex justify-end">
+            <select
+              value={giftSort}
+              onChange={(e) => setGiftSort(e.target.value as "added" | "price_asc" | "price_desc")}
+              className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600"
+            >
+              <option value="added">As added</option>
+              <option value="price_asc">Price: low → high</option>
+              <option value="price_desc">Price: high → low</option>
+            </select>
+          </div>
+          <ul className="divide-y divide-gray-200 rounded-lg bg-white shadow">
+            {sortedGifts.map((gift) => (
+              <OwnerGiftRow key={gift.id} gift={gift} listId={listId} queryClient={queryClient} />
+            ))}
+          </ul>
+        </>
       )}
 
       <SharingSection listId={listId} queryClient={queryClient} />
+      <AddToCollectionSection listId={listId} queryClient={queryClient} />
     </>
   );
 }
@@ -153,8 +180,8 @@ function ListHeader({
 }) {
   return (
     <div className="rounded-lg bg-white p-6 shadow">
-      <div className="flex items-start justify-between">
-        <div>
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0">
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold text-gray-900">{name}</h1>
             {isArchived && (
@@ -165,7 +192,7 @@ function ListHeader({
           {description && <p className="mt-2 text-gray-600">{description}</p>}
         </div>
         {(onEdit || onDelete || onArchive) && (
-          <div className="flex gap-2">
+          <div className="flex gap-2 shrink-0">
             {onArchive}
             {onEdit && (
               <button
@@ -682,6 +709,30 @@ function ViewerView({
   queryClient: ReturnType<typeof useQueryClient>;
   userId: number;
 }) {
+  const [giftFilter, setGiftFilter] = useState<"all" | "available" | "mine">("all");
+  const [giftSort, setGiftSort] = useState<"added" | "price_asc" | "price_desc">("added");
+
+  const filteredGifts = useMemo(() => {
+    let gifts = list.gifts;
+    if (giftFilter === "available") gifts = gifts.filter((g) => g.claimed_by_id === null);
+    if (giftFilter === "mine") gifts = gifts.filter((g) => g.claimed_by_id === userId);
+
+    if (giftSort === "price_asc") {
+      gifts = [...gifts].sort((a, b) => {
+        if (a.price === null) return 1;
+        if (b.price === null) return -1;
+        return Number(a.price) - Number(b.price);
+      });
+    } else if (giftSort === "price_desc") {
+      gifts = [...gifts].sort((a, b) => {
+        if (a.price === null) return 1;
+        if (b.price === null) return -1;
+        return Number(b.price) - Number(a.price);
+      });
+    }
+    return gifts;
+  }, [list.gifts, giftFilter, giftSort, userId]);
+
   const connections = useQuery({ queryKey: ["connections"], queryFn: getConnections });
   const connectionId = connections.data?.find((c) => c.user.id === list.owner_id)?.id;
 
@@ -709,12 +760,35 @@ function ViewerView({
       {list.gifts.length === 0 ? (
         <p className="text-gray-500">No gifts on this list yet.</p>
       ) : (
-        <ul className="divide-y divide-gray-200 rounded-lg bg-white shadow">
-          {list.gifts.map((gift) => (
-            <ViewerGiftRow key={gift.id} gift={gift} listId={listId} queryClient={queryClient} userId={userId} isArchived={list.is_archived} />
-          ))}
-        </ul>
+        <>
+          <div className="flex gap-2 flex-wrap">
+            <select
+              value={giftFilter}
+              onChange={(e) => setGiftFilter(e.target.value as "all" | "available" | "mine")}
+              className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600"
+            >
+              <option value="all">All gifts</option>
+              <option value="available">Still available</option>
+              <option value="mine">I'm getting</option>
+            </select>
+            <select
+              value={giftSort}
+              onChange={(e) => setGiftSort(e.target.value as "added" | "price_asc" | "price_desc")}
+              className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600"
+            >
+              <option value="added">As added</option>
+              <option value="price_asc">Price: low → high</option>
+              <option value="price_desc">Price: high → low</option>
+            </select>
+          </div>
+          <ul className="divide-y divide-gray-200 rounded-lg bg-white shadow">
+            {filteredGifts.map((gift) => (
+              <ViewerGiftRow key={gift.id} gift={gift} listId={listId} queryClient={queryClient} userId={userId} isArchived={list.is_archived} />
+            ))}
+          </ul>
+        </>
       )}
+      <AddToCollectionSection listId={listId} queryClient={queryClient} />
     </>
   );
 }
@@ -791,6 +865,125 @@ function ViewerGiftRow({
         {claimButton && <div className="ml-auto md:ml-0">{claimButton}</div>}
       </div>
     </li>
+  );
+}
+
+// --- Add to Collection Section ---
+
+function AddToCollectionSection({ listId, queryClient }: { listId: number; queryClient: ReturnType<typeof useQueryClient> }) {
+  const [selectedId, setSelectedId] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
+  const [newName, setNewName] = useState("");
+
+  const collections = useQuery({ queryKey: ["collections"], queryFn: () => getCollections() });
+  const containingIds = useQuery({
+    queryKey: ["collections-for-list", listId],
+    queryFn: () => getCollectionIdsForList(listId),
+  });
+
+  const addMutation = useMutation({
+    mutationFn: (collectionId: number) => addCollectionItem(collectionId, listId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      queryClient.invalidateQueries({ queryKey: ["collections-for-list", listId] });
+      setSelectedId("");
+      toast.success("Added to collection.");
+    },
+    onError: () => toast.error("Failed to add to collection."),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const coll = await createCollection({ name });
+      await addCollectionItem(coll.id, listId);
+      return coll;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      queryClient.invalidateQueries({ queryKey: ["collections-for-list", listId] });
+      setNewName("");
+      setShowCreate(false);
+      toast.success("Collection created and list added.");
+    },
+    onError: () => toast.error("Failed to create collection."),
+  });
+
+  const containingSet = new Set(containingIds.data ?? []);
+  const available = (collections.data ?? []).filter((c) => !containingSet.has(c.id));
+
+  if (available.length === 0 && !showCreate) {
+    return (
+      <div className="space-y-2">
+        <h2 className="text-lg font-semibold text-gray-900">Collections</h2>
+        <button
+          onClick={() => setShowCreate(true)}
+          className="text-sm text-blue-600 hover:underline"
+        >
+          Create a new collection for this list
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <h2 className="text-lg font-semibold text-gray-900">Collections</h2>
+
+      {available.length > 0 && (
+        <div className="flex gap-2">
+          <select
+            value={selectedId}
+            onChange={(e) => setSelectedId(e.target.value)}
+            className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm"
+          >
+            <option value="">Add to collection…</option>
+            {available.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => selectedId && addMutation.mutate(Number(selectedId))}
+            disabled={!selectedId || addMutation.isPending}
+            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            {addMutation.isPending ? "Adding…" : "Add"}
+          </button>
+        </div>
+      )}
+
+      {!showCreate ? (
+        <button
+          onClick={() => setShowCreate(true)}
+          className="text-sm text-blue-600 hover:underline"
+        >
+          Create a new collection
+        </button>
+      ) : (
+        <div className="flex gap-2">
+          <input
+            type="text"
+            placeholder="Collection name"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm"
+            required
+          />
+          <button
+            onClick={() => newName && createMutation.mutate(newName)}
+            disabled={!newName || createMutation.isPending}
+            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            {createMutation.isPending ? "Creating…" : "Create & add"}
+          </button>
+          <button
+            onClick={() => { setShowCreate(false); setNewName(""); }}
+            className="rounded bg-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 

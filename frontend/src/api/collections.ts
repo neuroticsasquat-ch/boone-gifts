@@ -36,3 +36,8 @@ export async function addCollectionItem(collectionId: number, listId: number): P
 export async function removeCollectionItem(collectionId: number, listId: number): Promise<void> {
   await apiClient.delete(`/collections/${collectionId}/items/${listId}`);
 }
+
+export async function getCollectionIdsForList(listId: number): Promise<number[]> {
+  const response = await apiClient.get<number[]>(`/collections/for-list/${listId}`);
+  return response.data;
+}
