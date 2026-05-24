@@ -39,7 +39,7 @@ export function AdminInvites() {
       setCopiedId(id);
       setTimeout(() => setCopiedId(null), 2000);
     } catch {
-      // Clipboard API unavailable — ignore
+      // Clipboard API unavailable
     }
   }
 
@@ -54,52 +54,91 @@ export function AdminInvites() {
           <p className="text-gray-500">No invites yet.</p>
         )}
         {invites.data && invites.data.length > 0 && (
-          <div className="overflow-x-auto rounded-lg bg-white shadow">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Email</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Status</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Created</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {invites.data.map((invite) => (
-                  <tr key={invite.id}>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-900">{invite.email}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm">
-                      <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[invite.status]}`}>
-                        {invite.status}
-                      </span>
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-500">
-                      {new Date(invite.created_at).toLocaleDateString()}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right text-sm space-x-2">
-                      {invite.status === "pending" && (
-                        <button
-                          onClick={() => handleCopyLink(invite.id, invite.token)}
-                          className="rounded bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200"
-                        >
-                          {copiedId === invite.id ? "Copied!" : "Copy link"}
-                        </button>
-                      )}
-                      {invite.status === "pending" && (
-                        <button
-                          onClick={() => handleRevoke(invite.id)}
-                          disabled={deleteMutation.isPending}
-                          className="rounded bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
-                        >
-                          Revoke
-                        </button>
-                      )}
-                    </td>
+          <>
+            {/* Mobile: card list */}
+            <ul className="space-y-3 md:hidden">
+              {invites.data.map((invite) => (
+                <li key={invite.id} className="rounded-lg bg-white p-4 shadow">
+                  <div className="flex items-start justify-between">
+                    <div className="min-w-0">
+                      <p className="font-medium text-gray-900 truncate">{invite.email}</p>
+                      <p className="mt-1 text-xs text-gray-400">
+                        Created {new Date(invite.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <span className={`shrink-0 ml-3 inline-block rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[invite.status]}`}>
+                      {invite.status}
+                    </span>
+                  </div>
+                  {invite.status === "pending" && (
+                    <div className="mt-3 flex justify-end gap-2">
+                      <button
+                        onClick={() => handleCopyLink(invite.id, invite.token)}
+                        className="rounded bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200"
+                      >
+                        {copiedId === invite.id ? "Copied!" : "Copy link"}
+                      </button>
+                      <button
+                        onClick={() => handleRevoke(invite.id)}
+                        disabled={deleteMutation.isPending}
+                        className="rounded bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                      >
+                        Revoke
+                      </button>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+
+            {/* Desktop: table */}
+            <div className="hidden md:block overflow-x-auto rounded-lg bg-white shadow">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Email</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Status</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Created</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {invites.data.map((invite) => (
+                    <tr key={invite.id}>
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-900">{invite.email}</td>
+                      <td className="whitespace-nowrap px-4 py-3 text-sm">
+                        <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[invite.status]}`}>
+                          {invite.status}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-500">
+                        {new Date(invite.created_at).toLocaleDateString()}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right text-sm space-x-2">
+                        {invite.status === "pending" && (
+                          <button
+                            onClick={() => handleCopyLink(invite.id, invite.token)}
+                            className="rounded bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200"
+                          >
+                            {copiedId === invite.id ? "Copied!" : "Copy link"}
+                          </button>
+                        )}
+                        {invite.status === "pending" && (
+                          <button
+                            onClick={() => handleRevoke(invite.id)}
+                            disabled={deleteMutation.isPending}
+                            className="rounded bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                          >
+                            Revoke
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </section>
     </div>

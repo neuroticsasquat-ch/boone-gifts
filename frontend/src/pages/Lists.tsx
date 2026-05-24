@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getLists } from "../api/lists";
 import { useTitle } from "../hooks/useTitle";
 import { Spinner } from "../components/Spinner";
+import { ClipboardIcon, HandshakeIcon } from "../components/Icons";
 
 export function Lists() {
   useTitle("Lists");
@@ -21,7 +22,7 @@ export function Lists() {
       {/* My Lists */}
       <section>
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">My Lists</h1>
+          <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900"><ClipboardIcon className="h-6 w-6" /> My Lists</h1>
           <Link
             to="/lists/new"
             className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
@@ -56,7 +57,7 @@ export function Lists() {
       {/* Shared with Me */}
       {sharedLists.data && sharedLists.data.length > 0 && (
         <section>
-          <h2 className="text-lg font-semibold text-gray-900">Shared with Me</h2>
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900"><HandshakeIcon className="h-5 w-5" /> Shared with Me</h2>
           <ul className="mt-3 divide-y divide-gray-200 rounded-lg bg-white shadow">
             {sharedLists.data.map((list) => (
               <li key={list.id}>
@@ -74,7 +75,7 @@ export function Lists() {
 
       {sharedLists.data && sharedLists.data.length === 0 && (
         <section>
-          <h2 className="text-lg font-semibold text-gray-900">Shared with Me</h2>
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900"><HandshakeIcon className="h-5 w-5" /> Shared with Me</h2>
           <p className="mt-3 text-gray-500">
             No one has shared a list with you yet.{" "}
             <Link to="/connections" className="text-blue-600 hover:underline">Add a connection</Link> to get started.

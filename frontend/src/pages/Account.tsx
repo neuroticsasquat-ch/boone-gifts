@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { useTitle } from "../hooks/useTitle";
+import { CogIcon } from "../components/Icons";
 
 interface AxiosLikeError {
   response?: { status?: number; data?: { detail?: string } };
@@ -46,7 +47,7 @@ export function Account() {
 
   return (
     <div className="max-w-md mx-auto">
-      <h1 className="text-2xl font-bold mb-2">Account</h1>
+      <h1 className="flex items-center gap-2 text-2xl font-bold mb-2"><CogIcon className="h-6 w-6" /> Account</h1>
       {user && <p className="text-sm text-gray-600 mb-6">{user.email}</p>}
 
       <div className="bg-white shadow rounded p-6">
