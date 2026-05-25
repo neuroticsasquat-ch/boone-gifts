@@ -98,6 +98,13 @@ export interface Connection {
   accepted_at: string | null;
 }
 
+// User Search
+export interface UserSearchResult {
+  id: number;
+  name: string;
+  email: string;
+}
+
 // Shares
 export interface ListShare {
   id: number;

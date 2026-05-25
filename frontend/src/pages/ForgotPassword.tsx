@@ -7,9 +7,11 @@ export function ForgotPassword() {
   useTitle("Forgot Password");
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    setSubmitting(true);
     try {
       await forgotPassword(email);
     } catch {
@@ -18,6 +20,7 @@ export function ForgotPassword() {
       // failures so the user can't infer anything from the UI.
     }
     setSubmitted(true);
+    setSubmitting(false);
   }
 
   return (
@@ -55,9 +58,10 @@ export function ForgotPassword() {
               </label>
               <button
                 type="submit"
-                className="w-full bg-blue-600 text-white rounded py-2 hover:bg-blue-700"
+                className="w-full bg-blue-600 text-white rounded py-2 hover:bg-blue-700 disabled:opacity-50"
+                disabled={submitting}
               >
-                Send reset link
+                {submitting ? "Sending…" : "Send reset link"}
               </button>
               <p className="text-sm text-center mt-4">
                 <Link to="/login" className="text-blue-600 hover:underline">

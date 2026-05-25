@@ -17,22 +17,27 @@ export function Account() {
   const [name, setName] = useState(user?.name ?? "");
   const [nameError, setNameError] = useState<string | null>(null);
   const [nameSuccess, setNameSuccess] = useState(false);
+  const [nameSubmitting, setNameSubmitting] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [passwordSubmitting, setPasswordSubmitting] = useState(false);
 
   async function handleNameSubmit(e: FormEvent) {
     e.preventDefault();
     setNameError(null);
     setNameSuccess(false);
+    setNameSubmitting(true);
 
     try {
       await updateProfile(name);
       setNameSuccess(true);
     } catch {
       setNameError("Failed to update name.");
+    } finally {
+      setNameSubmitting(false);
     }
   }
 
@@ -40,8 +45,10 @@ export function Account() {
     e.preventDefault();
     setError(null);
     setSuccess(false);
+    setPasswordSubmitting(true);
 
     if (newPassword !== confirm) {
+      setPasswordSubmitting(false);
       setError("Passwords don't match.");
       return;
     }
@@ -58,6 +65,8 @@ export function Account() {
       } else {
         setError("Could not update password. Try again.");
       }
+    } finally {
+      setPasswordSubmitting(false);
     }
   }
 
@@ -88,9 +97,10 @@ export function Account() {
           </label>
           <button
             type="submit"
-            className="w-full bg-blue-600 text-white rounded py-2 hover:bg-blue-700"
+            className="w-full bg-blue-600 text-white rounded py-2 hover:bg-blue-700 disabled:opacity-50"
+            disabled={nameSubmitting}
           >
-            Save
+            {nameSubmitting ? "Saving…" : "Save"}
           </button>
         </form>
       </div>
@@ -141,9 +151,10 @@ export function Account() {
           </label>
           <button
             type="submit"
-            className="w-full bg-blue-600 text-white rounded py-2 hover:bg-blue-700"
+            className="w-full bg-blue-600 text-white rounded py-2 hover:bg-blue-700 disabled:opacity-50"
+            disabled={passwordSubmitting}
           >
-            Change password
+            {passwordSubmitting ? "Changing…" : "Change password"}
           </button>
         </form>
       </div>

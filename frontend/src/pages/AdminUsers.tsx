@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getUsers, updateUser } from "../api/users";
+import { deleteUser, getUsers, updateUser } from "../api/users";
 import { useAuth } from "../hooks/useAuth";
 import { useTitle } from "../hooks/useTitle";
 import toast from "react-hot-toast";
@@ -21,10 +21,25 @@ export function AdminUsers() {
     onError: () => toast.error("Failed to update user."),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => deleteUser(id, true),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      toast.success("User deleted.");
+    },
+    onError: () => toast.error("Failed to delete user."),
+  });
+
   function handleToggle(id: number, currentlyActive: boolean) {
     const action = currentlyActive ? "Deactivate" : "Reactivate";
     if (window.confirm(`${action} this user?`)) {
       toggleMutation.mutate({ id, is_active: !currentlyActive });
+    }
+  }
+
+  function handleDelete(id: number, name: string) {
+    if (window.confirm(`Permanently delete ${name} and all their data? This cannot be undone.`)) {
+      deleteMutation.mutate(id);
     }
   }
 
@@ -46,7 +61,8 @@ export function AdminUsers() {
                   user={u}
                   isSelf={currentUser?.id === u.id}
                   onToggle={handleToggle}
-                  isPending={toggleMutation.isPending}
+                  onDelete={handleDelete}
+                  isPending={toggleMutation.isPending || deleteMutation.isPending}
                 />
               ))}
             </ul>
@@ -80,11 +96,20 @@ export function AdminUsers() {
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-right text-sm">
                         {currentUser && u.id !== currentUser.id && (
-                          <ToggleButton
-                            isActive={u.is_active}
-                            isPending={toggleMutation.isPending}
-                            onClick={() => handleToggle(u.id, u.is_active)}
-                          />
+                          <div className="flex justify-end gap-2">
+                            <ToggleButton
+                              isActive={u.is_active}
+                              isPending={toggleMutation.isPending}
+                              onClick={() => handleToggle(u.id, u.is_active)}
+                            />
+                            <button
+                              onClick={() => handleDelete(u.id, u.name)}
+                              disabled={deleteMutation.isPending}
+                              className="rounded bg-gray-600 px-3 py-1 text-xs font-medium text-white hover:bg-gray-700 disabled:opacity-50"
+                            >
+                              Delete
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -103,11 +128,13 @@ function UserCard({
   user,
   isSelf,
   onToggle,
+  onDelete,
   isPending,
 }: {
   user: User;
   isSelf: boolean;
   onToggle: (id: number, isActive: boolean) => void;
+  onDelete: (id: number, name: string) => void;
   isPending: boolean;
 }) {
   return (
@@ -128,12 +155,19 @@ function UserCard({
         </div>
       </div>
       {!isSelf && (
-        <div className="mt-3 flex justify-end">
+        <div className="mt-3 flex justify-end gap-2">
           <ToggleButton
             isActive={user.is_active}
             isPending={isPending}
             onClick={() => onToggle(user.id, user.is_active)}
           />
+          <button
+            onClick={() => onDelete(user.id, user.name)}
+            disabled={isPending}
+            className="rounded bg-gray-600 px-3 py-1 text-xs font-medium text-white hover:bg-gray-700 disabled:opacity-50"
+          >
+            Delete
+          </button>
         </div>
       )}
     </li>

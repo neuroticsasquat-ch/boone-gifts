@@ -6,8 +6,20 @@ export async function login(email: string, password: string): Promise<AccessToke
   return response.data;
 }
 
-export async function register(token: string, name: string, password: string): Promise<void> {
-  await apiClient.post("/auth/register", { token, name, password });
+export async function getInviteInfo(token: string): Promise<{ email: string }> {
+  const response = await apiClient.get<{ email: string }>("/auth/invite-info", {
+    params: { token },
+  });
+  return response.data;
+}
+
+export async function register(
+  token: string,
+  name: string,
+  password: string,
+  email: string,
+): Promise<void> {
+  await apiClient.post("/auth/register", { token, name, password, email });
 }
 
 export async function refresh(): Promise<AccessTokenResponse> {
