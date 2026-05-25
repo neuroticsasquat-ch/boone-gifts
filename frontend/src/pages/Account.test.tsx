@@ -11,11 +11,12 @@ const API = "https://boone-gifts-api.localhost";
 
 function renderAccount(overrides: Partial<AuthContextType> = {}) {
   const value: AuthContextType = {
-    user: { id: 1, email: "user@test.com", role: "member" },
+    user: { id: 1, email: "user@test.com", name: "Test User", role: "member" },
     isLoading: false,
     login: vi.fn(),
     logout: vi.fn(),
     changePassword: vi.fn(),
+    updateProfile: vi.fn(),
     ...overrides,
   };
   return {
