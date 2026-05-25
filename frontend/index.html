@@ -7,7 +7,22 @@
     <title>Boone Gifts</title>
   </head>
   <body>
-    <div id="root" autocorrect="off" autocapitalize="off" spellcheck="false"></div>
+    <div id="root"></div>
+    <script>
+      new MutationObserver(function(mutations) {
+        mutations.forEach(function(m) {
+          m.addedNodes.forEach(function(n) {
+            if (n.querySelectorAll) {
+              n.querySelectorAll('input,textarea').forEach(function(el) {
+                el.setAttribute('autocorrect', 'off');
+                el.setAttribute('autocapitalize', 'off');
+                el.setAttribute('spellcheck', 'false');
+              });
+            }
+          });
+        });
+      }).observe(document.getElementById('root'), { childList: true, subtree: true });
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
