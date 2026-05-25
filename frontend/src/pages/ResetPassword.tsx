@@ -11,6 +11,7 @@ export function ResetPassword() {
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [tokenError, setTokenError] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
 
   if (!token) {
@@ -33,11 +34,14 @@ export function ResetPassword() {
       setError("Passwords don't match.");
       return;
     }
+    setSubmitting(true);
     try {
       await resetPassword(token, newPassword);
       navigate("/login", { replace: true });
     } catch {
       setTokenError(true);
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -88,9 +92,10 @@ export function ResetPassword() {
           </label>
           <button
             type="submit"
-            className="w-full bg-blue-600 text-white rounded py-2 hover:bg-blue-700"
+            className="w-full bg-blue-600 text-white rounded py-2 hover:bg-blue-700 disabled:opacity-50"
+            disabled={submitting}
           >
-            Set new password
+            {submitting ? "Saving…" : "Set new password"}
           </button>
         </form>
       </div>

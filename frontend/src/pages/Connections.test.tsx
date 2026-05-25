@@ -66,6 +66,9 @@ describe("Connections", () => {
     server.use(
       http.get(`${API}/connections`, () => HttpResponse.json([])),
       http.get(`${API}/connections/requests`, () => HttpResponse.json([])),
+      http.get(`${API}/users/search`, () =>
+        HttpResponse.json([{ id: 4, name: "Carol", email: "carol@test.com" }])
+      ),
       http.post(`${API}/connections`, () =>
         HttpResponse.json(
           { id: 10, status: "pending", user: { id: 4, name: "Carol", email: "carol@test.com" }, created_at: "2026-01-01", accepted_at: null },
@@ -76,15 +79,16 @@ describe("Connections", () => {
 
     renderConnections();
 
-    await waitFor(() => {
-      expect(screen.getByPlaceholderText("Email address")).toBeInTheDocument();
-    });
+    const input = await screen.findByPlaceholderText("Search by name or email");
+    await userEvent.type(input, "carol");
 
-    await userEvent.type(screen.getByPlaceholderText("Email address"), "carol@test.com");
+    const option = await screen.findByText("Carol");
+    await userEvent.click(option);
+
     await userEvent.click(screen.getByText("Send Request"));
 
     await waitFor(() => {
-      expect(screen.getByPlaceholderText("Email address")).toHaveValue("");
+      expect(screen.getByPlaceholderText("Search by name or email")).toHaveValue("");
     });
   });
 
@@ -92,6 +96,9 @@ describe("Connections", () => {
     server.use(
       http.get(`${API}/connections`, () => HttpResponse.json([])),
       http.get(`${API}/connections/requests`, () => HttpResponse.json([])),
+      http.get(`${API}/users/search`, () =>
+        HttpResponse.json([{ id: 5, name: "Existing", email: "existing@test.com" }])
+      ),
       http.post(`${API}/connections`, () =>
         HttpResponse.json({ detail: "Conflict" }, { status: 409 })
       ),
@@ -99,11 +106,12 @@ describe("Connections", () => {
 
     renderConnections();
 
-    await waitFor(() => {
-      expect(screen.getByPlaceholderText("Email address")).toBeInTheDocument();
-    });
+    const input = await screen.findByPlaceholderText("Search by name or email");
+    await userEvent.type(input, "existing");
 
-    await userEvent.type(screen.getByPlaceholderText("Email address"), "existing@test.com");
+    const option = await screen.findByText("Existing");
+    await userEvent.click(option);
+
     await userEvent.click(screen.getByText("Send Request"));
 
     await waitFor(() => {
