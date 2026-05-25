@@ -1,3 +1,12 @@
+## [0.2.1] - 2026-05-25
+
+### 🚀 Features
+
+- Registration form, typeahead connections, loading states, user delete
+
+### 🐛 Bug Fixes
+
+- Move setState out of effect body to satisfy eslint rule
 ## [0.2.0] - 2026-05-25
 
 ### 🚀 Features
