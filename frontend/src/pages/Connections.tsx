@@ -138,12 +138,10 @@ function SendRequestForm({
   const dropdownRef = useRef<HTMLUListElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const shouldSearch = query.length >= 2 && !selectedUser;
+
   useEffect(() => {
-    if (query.length < 2 || selectedUser) {
-      setResults([]);
-      setShowDropdown(false);
-      return;
-    }
+    if (!shouldSearch) return;
 
     const timeout = setTimeout(async () => {
       try {
@@ -158,7 +156,7 @@ function SendRequestForm({
     }, 300);
 
     return () => clearTimeout(timeout);
-  }, [query, selectedUser]);
+  }, [query, shouldSearch]);
 
   function selectUser(user: UserSearchResult) {
     setSelectedUser(user);
@@ -228,8 +226,13 @@ function SendRequestForm({
             placeholder="Search by name or email"
             value={query}
             onChange={(e) => {
-              setQuery(e.target.value);
+              const val = e.target.value;
+              setQuery(val);
               if (selectedUser) setSelectedUser(null);
+              if (val.length < 2) {
+                setResults([]);
+                setShowDropdown(false);
+              }
             }}
             onKeyDown={handleKeyDown}
             onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
