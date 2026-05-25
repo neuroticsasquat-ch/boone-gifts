@@ -20,30 +20,22 @@ function renderDashboard() {
 }
 
 describe("Dashboard", () => {
-  it("renders summary cards with counts", async () => {
+  it("renders owned lists as clickable items", async () => {
     server.use(
       http.get("https://boone-gifts-api.localhost/lists", ({ request }) => {
         const url = new URL(request.url);
-        const filter = url.searchParams.get("filter");
-        if (filter === "owned") return HttpResponse.json([{ id: 1, name: "My List", owner_id: 1, owner_name: "Me" }]);
-        if (filter === "shared") return HttpResponse.json([]);
+        if (url.searchParams.get("filter") === "owned")
+          return HttpResponse.json([{ id: 1, name: "My Wishlist", owner_id: 1, owner_name: "Me" }]);
         return HttpResponse.json([]);
       }),
-      http.get("https://boone-gifts-api.localhost/connections/requests", () => {
-        return HttpResponse.json([]);
-      }),
-      http.get("https://boone-gifts-api.localhost/collections", () => {
-        return HttpResponse.json([{ id: 1, name: "Holidays" }, { id: 2, name: "Birthdays" }]);
-      }),
+      http.get("https://boone-gifts-api.localhost/connections/requests", () => HttpResponse.json([])),
     );
 
     renderDashboard();
 
     await waitFor(() => {
-      expect(screen.getByText("1")).toBeInTheDocument(); // My Lists
+      expect(screen.getByText("My Wishlist")).toBeInTheDocument();
     });
-    expect(screen.getByText("2")).toBeInTheDocument(); // Collections
-    expect(screen.getByText("0")).toBeInTheDocument(); // Connection Requests
   });
 
   it("renders connection requests with accept/decline", async () => {
@@ -54,7 +46,6 @@ describe("Dashboard", () => {
           { id: 5, status: "pending", user: { id: 2, name: "Jane Doe", email: "jane@test.com" }, created_at: "2026-01-01", accepted_at: null },
         ]);
       }),
-      http.get("https://boone-gifts-api.localhost/collections", () => HttpResponse.json([])),
     );
 
     renderDashboard();
@@ -79,7 +70,6 @@ describe("Dashboard", () => {
         return HttpResponse.json([]);
       }),
       http.get("https://boone-gifts-api.localhost/connections/requests", () => HttpResponse.json([])),
-      http.get("https://boone-gifts-api.localhost/collections", () => HttpResponse.json([])),
     );
 
     renderDashboard();
@@ -90,19 +80,19 @@ describe("Dashboard", () => {
     expect(screen.getByText("from Alice")).toBeInTheDocument();
   });
 
-  it("hides sections when empty", async () => {
+  it("shows empty states when no data", async () => {
     server.use(
       http.get("https://boone-gifts-api.localhost/lists", () => HttpResponse.json([])),
       http.get("https://boone-gifts-api.localhost/connections/requests", () => HttpResponse.json([])),
-      http.get("https://boone-gifts-api.localhost/collections", () => HttpResponse.json([])),
     );
 
     renderDashboard();
 
     await waitFor(() => {
-      expect(screen.getAllByText("0")).toHaveLength(3);
+      expect(screen.getByText(/You haven't created any lists yet/)).toBeInTheDocument();
     });
     expect(screen.queryByText("Pending Connection Requests")).not.toBeInTheDocument();
-    expect(screen.queryByText("Shared with Me")).not.toBeInTheDocument();
+    expect(screen.getByText("Shared with Me")).toBeInTheDocument();
+    expect(screen.getByText(/No one has shared a list with you yet/)).toBeInTheDocument();
   });
 });

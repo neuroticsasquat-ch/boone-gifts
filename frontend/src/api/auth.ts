@@ -27,6 +27,11 @@ export async function resetPassword(token: string, newPassword: string): Promise
   await apiClient.post("/auth/reset-password", { token, new_password: newPassword });
 }
 
+export async function updateProfile(name: string): Promise<AccessTokenResponse> {
+  const response = await apiClient.put<AccessTokenResponse>("/auth/profile", { name });
+  return response.data;
+}
+
 export async function changePassword(
   currentPassword: string,
   newPassword: string

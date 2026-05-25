@@ -24,3 +24,13 @@ export async function unclaimGift(listId: number, giftId: number): Promise<Gift>
   const response = await apiClient.delete<Gift>(`/lists/${listId}/gifts/${giftId}/claim`);
   return response.data;
 }
+
+export async function purchaseGift(listId: number, giftId: number): Promise<Gift> {
+  const response = await apiClient.post<Gift>(`/lists/${listId}/gifts/${giftId}/purchase`);
+  return response.data;
+}
+
+export async function unpurchaseGift(listId: number, giftId: number): Promise<Gift> {
+  const response = await apiClient.delete<Gift>(`/lists/${listId}/gifts/${giftId}/purchase`);
+  return response.data;
+}

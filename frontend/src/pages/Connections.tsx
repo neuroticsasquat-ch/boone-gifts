@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { Link } from "react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getConnections,
@@ -9,6 +10,9 @@ import {
 } from "../api/connections";
 import { isAxiosError } from "axios";
 import { useTitle } from "../hooks/useTitle";
+import toast from "react-hot-toast";
+import { Spinner } from "../components/Spinner";
+import { HandshakeIcon } from "../components/Icons";
 
 export function Connections() {
   useTitle("Connections");
@@ -27,21 +31,31 @@ export function Connections() {
   const acceptMutation = useMutation({
     mutationFn: acceptConnection,
     onSuccess: invalidateAll,
+    onError: () => toast.error("Failed to accept request."),
   });
 
   const declineMutation = useMutation({
     mutationFn: deleteConnection,
     onSuccess: invalidateAll,
+    onError: () => toast.error("Failed to decline request."),
   });
 
   const removeMutation = useMutation({
     mutationFn: deleteConnection,
     onSuccess: invalidateAll,
+    onError: () => toast.error("Failed to remove connection."),
   });
+
+  if (connections.isPending || requests.isPending) return (
+    <div className="space-y-8">
+      <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900"><HandshakeIcon className="h-6 w-6" /> Connections</h1>
+      <Spinner />
+    </div>
+  );
 
   return (
     <div className="space-y-8">
-      <h1 className="text-2xl font-bold text-gray-900">Connections</h1>
+      <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900"><HandshakeIcon className="h-6 w-6" /> Connections</h1>
 
       <SendRequestForm onSuccess={invalidateAll} />
 
@@ -80,14 +94,16 @@ export function Connections() {
       <section>
         <h2 className="text-lg font-semibold text-gray-900">My Connections</h2>
         {connections.data && connections.data.length === 0 && (
-          <p className="mt-3 text-gray-500">No connections yet.</p>
+          <p className="mt-3 text-gray-500">
+            You don't have any connections yet. Use the form above to send a request.
+          </p>
         )}
         {connections.data && connections.data.length > 0 && (
           <ul className="mt-3 divide-y divide-gray-200 rounded-lg bg-white shadow">
             {connections.data.map((conn) => (
               <li key={conn.id} className="flex items-center justify-between px-4 py-3">
                 <div>
-                  <p className="font-medium text-gray-900">{conn.user.name}</p>
+                  <Link to={`/connections/${conn.id}`} className="font-medium text-blue-600 hover:underline">{conn.user.name}</Link>
                   <p className="text-sm text-gray-500">{conn.user.email}</p>
                 </div>
                 <button

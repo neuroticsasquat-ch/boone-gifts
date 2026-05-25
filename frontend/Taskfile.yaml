@@ -29,6 +29,10 @@ tasks:
     desc: Build for production
     cmd: docker compose exec app npx vite build
 
+  lint:
+    desc: Run ESLint
+    cmd: docker compose exec app npx eslint .
+
   test:
     desc: Run tests
     cmd: docker compose exec app npx vitest run
