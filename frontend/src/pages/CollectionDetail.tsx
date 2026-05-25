@@ -7,9 +7,11 @@ import {
   deleteCollection,
   addCollectionItem,
   removeCollectionItem,
+  getShoppingList,
 } from "../api/collections";
+import { purchaseGift, unpurchaseGift } from "../api/gifts";
 import { getLists } from "../api/lists";
-import type { CollectionDetail as CollectionDetailType } from "../types";
+import type { CollectionDetail as CollectionDetailType, ShoppingListItem } from "../types";
 import { useTitle } from "../hooks/useTitle";
 import toast from "react-hot-toast";
 import { Spinner } from "../components/Spinner";
@@ -19,6 +21,7 @@ export function CollectionDetail() {
   const collectionId = Number(id);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [showShoppingList, setShowShoppingList] = useState(false);
 
   const { data: collection, isLoading, error, refetch } = useQuery({
     queryKey: ["collection", collectionId],
@@ -45,12 +48,32 @@ export function CollectionDetail() {
         queryClient={queryClient}
         navigate={navigate}
       />
-      <CollectionLists
-        collection={collection}
-        collectionId={collectionId}
-        queryClient={queryClient}
-      />
-      <AddListForm collectionId={collectionId} collection={collection} queryClient={queryClient} />
+      <div className="flex gap-3">
+        <button
+          onClick={() => setShowShoppingList(false)}
+          className={`rounded px-4 py-2 text-sm font-medium transition-colors ${!showShoppingList ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
+        >
+          Lists
+        </button>
+        <button
+          onClick={() => setShowShoppingList(true)}
+          className={`rounded px-4 py-2 text-sm font-medium transition-colors ${showShoppingList ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
+        >
+          My Shopping List
+        </button>
+      </div>
+      {showShoppingList ? (
+        <ShoppingList collectionId={collectionId} />
+      ) : (
+        <>
+          <CollectionLists
+            collection={collection}
+            collectionId={collectionId}
+            queryClient={queryClient}
+          />
+          <AddListForm collectionId={collectionId} collection={collection} queryClient={queryClient} />
+        </>
+      )}
     </div>
   );
 }
@@ -304,5 +327,130 @@ function AddListForm({
         </button>
       </div>
     </form>
+  );
+}
+
+function ShoppingList({ collectionId }: { collectionId: number }) {
+  const queryClient = useQueryClient();
+
+  const { data: items = [], isLoading, error } = useQuery({
+    queryKey: ["shoppingList", collectionId],
+    queryFn: () => getShoppingList(collectionId),
+  });
+
+  const purchaseMutation = useMutation({
+    mutationFn: ({ listId, giftId }: { listId: number; giftId: number }) =>
+      purchaseGift(listId, giftId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["shoppingList", collectionId] });
+      toast.success("Marked as purchased!");
+    },
+    onError: () => toast.error("Failed to mark as purchased."),
+  });
+
+  const unpurchaseMutation = useMutation({
+    mutationFn: ({ listId, giftId }: { listId: number; giftId: number }) =>
+      unpurchaseGift(listId, giftId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["shoppingList", collectionId] });
+      toast.success("Marked as not purchased.");
+    },
+    onError: () => toast.error("Failed to update purchase status."),
+  });
+
+  function handleToggle(item: ShoppingListItem) {
+    if (item.purchased_at) {
+      unpurchaseMutation.mutate({ listId: item.list_id, giftId: item.id });
+    } else {
+      purchaseMutation.mutate({ listId: item.list_id, giftId: item.id });
+    }
+  }
+
+  if (isLoading) return <Spinner />;
+  if (error) return <p className="text-red-600">Failed to load shopping list.</p>;
+
+  if (items.length === 0) {
+    return (
+      <div className="rounded-lg bg-white p-6 shadow text-center">
+        <p className="text-gray-500">No claimed gifts in this collection.</p>
+        <p className="text-sm text-gray-400 mt-1">Claim gifts from shared lists to see them here.</p>
+      </div>
+    );
+  }
+
+  const purchasedCount = items.filter((i) => i.purchased_at !== null).length;
+
+  // Group items by list_name
+  const grouped = items.reduce<Record<string, ShoppingListItem[]>>((acc, item) => {
+    if (!acc[item.list_name]) acc[item.list_name] = [];
+    acc[item.list_name].push(item);
+    return acc;
+  }, {});
+
+  const isMutating = purchaseMutation.isPending || unpurchaseMutation.isPending;
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-lg bg-white px-4 py-3 shadow">
+        <p className="text-sm font-medium text-gray-700">
+          {purchasedCount} of {items.length} purchased
+        </p>
+        {purchasedCount === items.length && items.length > 0 && (
+          <p className="text-sm text-green-600 mt-0.5">All done!</p>
+        )}
+      </div>
+      {Object.entries(grouped).map(([listName, listItems]) => (
+        <div key={listName} className="rounded-lg bg-white shadow overflow-hidden">
+          <div className="px-4 py-2 bg-gray-50 border-b border-gray-200">
+            <h3 className="text-sm font-semibold text-gray-700">{listName}</h3>
+          </div>
+          <ul className="divide-y divide-gray-100">
+            {listItems.map((item) => {
+              const isPurchased = item.purchased_at !== null;
+              return (
+                <li key={item.id} className={`flex items-start gap-3 px-4 py-3 ${isPurchased ? "bg-gray-50" : ""}`}>
+                  <input
+                    type="checkbox"
+                    checked={isPurchased}
+                    onChange={() => handleToggle(item)}
+                    disabled={isMutating}
+                    className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 cursor-pointer disabled:cursor-not-allowed"
+                    aria-label={`Mark "${item.name}" as ${isPurchased ? "not purchased" : "purchased"}`}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline gap-2 flex-wrap">
+                      {item.url ? (
+                        <a
+                          href={item.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`font-medium text-blue-600 hover:underline ${isPurchased ? "line-through text-gray-400" : ""}`}
+                        >
+                          {item.name}
+                        </a>
+                      ) : (
+                        <span className={`font-medium ${isPurchased ? "line-through text-gray-400" : "text-gray-900"}`}>
+                          {item.name}
+                        </span>
+                      )}
+                      {item.price && (
+                        <span className={`text-sm ${isPurchased ? "text-gray-400" : "text-gray-500"}`}>
+                          ${item.price}
+                        </span>
+                      )}
+                    </div>
+                    {item.description && (
+                      <p className={`text-sm mt-0.5 ${isPurchased ? "text-gray-400" : "text-gray-500"}`}>
+                        {item.description}
+                      </p>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
+    </div>
   );
 }

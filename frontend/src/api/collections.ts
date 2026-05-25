@@ -1,5 +1,5 @@
 import { apiClient } from "./client";
-import type { Collection, CollectionDetail } from "../types";
+import type { Collection, CollectionDetail, ShoppingListItem } from "../types";
 
 export async function getCollections(archived?: boolean): Promise<Collection[]> {
   const params = archived !== undefined ? { archived: String(archived) } : undefined;
@@ -39,5 +39,10 @@ export async function removeCollectionItem(collectionId: number, listId: number)
 
 export async function getCollectionIdsForList(listId: number): Promise<number[]> {
   const response = await apiClient.get<number[]>(`/collections/for-list/${listId}`);
+  return response.data;
+}
+
+export async function getShoppingList(collectionId: number): Promise<ShoppingListItem[]> {
+  const response = await apiClient.get<ShoppingListItem[]>(`/collections/${collectionId}/shopping-list`);
   return response.data;
 }

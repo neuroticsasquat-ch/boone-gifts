@@ -8,6 +8,7 @@ export interface AccessTokenResponse {
 export interface AuthUser {
   id: number;
   email: string;
+  name: string;
   role: string;
 }
 
@@ -140,6 +141,18 @@ export interface UrlMeta {
   description: string | null;
   price: string | null;
   image: string | null;
+}
+
+// Shopping List
+export interface ShoppingListItem {
+  id: number;
+  name: string;
+  description: string | null;
+  url: string | null;
+  price: string | null;
+  list_id: number;
+  list_name: string;
+  purchased_at: string | null;
 }
 
 // Invites (admin)
