@@ -263,8 +263,8 @@ function SendRequestForm({
                       i === highlightIndex ? "bg-blue-50" : ""
                     }`}
                   >
-                    <span className="font-medium text-gray-900">{user.name}</span>
-                    <span className="ml-2 text-gray-500">{user.email}</span>
+                    <span className="block font-medium text-gray-900">{user.name}</span>
+                    <span className="block text-gray-500">{user.email}</span>
                   </button>
                 </li>
               ))}
