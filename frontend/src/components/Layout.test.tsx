@@ -44,75 +44,63 @@ function renderLayout() {
 }
 
 describe("Layout", () => {
-  it("renders hamburger menu button", async () => {
+  it("renders bottom tab bar with nav links", async () => {
     renderLayout();
-    const hamburger = await screen.findByLabelText("Open menu");
-    expect(hamburger).toBeInTheDocument();
+    await screen.findByLabelText("Account menu");
+    expect(screen.getByText("Home")).toBeInTheDocument();
+    expect(screen.getAllByText("Lists").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("Connect")).toBeInTheDocument();
+    expect(screen.getByText("Collect")).toBeInTheDocument();
   });
 
-  it("opens drawer when hamburger is clicked", async () => {
-    const user = userEvent.setup();
+  it("renders account menu button", async () => {
     renderLayout();
-    const hamburger = await screen.findByLabelText("Open menu");
-    await user.click(hamburger);
-    // Drawer becomes visible (has role="dialog" when open)
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByLabelText("Close menu")).toBeInTheDocument();
+    const accountButton = await screen.findByLabelText("Account menu");
+    expect(accountButton).toBeInTheDocument();
   });
 
-  it("renders nav links inside the drawer", async () => {
+  it("opens account dropdown when clicked", async () => {
     const user = userEvent.setup();
     renderLayout();
-    const hamburger = await screen.findByLabelText("Open menu");
-    await user.click(hamburger);
-    const dialog = screen.getByRole("dialog");
-    expect(dialog).toHaveTextContent("Lists");
-    expect(dialog).toHaveTextContent("Connections");
-    expect(dialog).toHaveTextContent("Collections");
+    const accountButton = await screen.findByLabelText("Account menu");
+    await user.click(accountButton);
+    expect(screen.getByText("Account Settings")).toBeInTheDocument();
+    expect(screen.getByText("Logout")).toBeInTheDocument();
   });
 
-  it("renders user email and logout in drawer", async () => {
+  it("shows email in account dropdown", async () => {
     const user = userEvent.setup();
     renderLayout();
-    const hamburger = await screen.findByLabelText("Open menu");
-    await user.click(hamburger);
-    const dialog = screen.getByRole("dialog");
-    expect(dialog).toHaveTextContent("user@test.com");
-    const logoutButtons = screen.getAllByText("Logout");
-    expect(logoutButtons.length).toBeGreaterThanOrEqual(1);
+    const accountButton = await screen.findByLabelText("Account menu");
+    await user.click(accountButton);
+    const emails = screen.getAllByText("user@test.com");
+    expect(emails.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("closes drawer when close button is clicked", async () => {
+  it("closes dropdown when clicking outside", async () => {
     const user = userEvent.setup();
     renderLayout();
-    const hamburger = await screen.findByLabelText("Open menu");
-    await user.click(hamburger);
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
-    await user.click(screen.getByLabelText("Close menu"));
-    // Drawer is still in DOM but no longer has role="dialog"
+    const accountButton = await screen.findByLabelText("Account menu");
+    await user.click(accountButton);
+    expect(screen.getByText("Account Settings")).toBeInTheDocument();
+    await user.click(document.body);
     await waitFor(() => {
-      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    });
-  });
-
-  it("closes drawer when backdrop is clicked", async () => {
-    const user = userEvent.setup();
-    renderLayout();
-    const hamburger = await screen.findByLabelText("Open menu");
-    await user.click(hamburger);
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
-    await user.click(screen.getByTestId("drawer-backdrop"));
-    await waitFor(() => {
-      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(screen.queryByText("Account Settings")).not.toBeInTheDocument();
     });
   });
 
   it("renders desktop nav links in the header", async () => {
     renderLayout();
-    await screen.findByLabelText("Open menu");
-    const nav = document.querySelector("nav");
-    expect(nav).toHaveTextContent("Lists");
-    expect(nav).toHaveTextContent("Connections");
-    expect(nav).toHaveTextContent("Collections");
+    await screen.findByText("Home Content");
+    const topNav = document.querySelector("nav");
+    expect(topNav).toHaveTextContent("Lists");
+    expect(topNav).toHaveTextContent("Connections");
+    expect(topNav).toHaveTextContent("Collections");
+  });
+
+  it("renders Boone Gifts brand link", async () => {
+    renderLayout();
+    await screen.findByText("Boone Gifts");
+    expect(screen.getByText("Boone Gifts")).toBeInTheDocument();
   });
 });

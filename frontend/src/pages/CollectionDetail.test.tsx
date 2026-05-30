@@ -133,4 +133,112 @@ describe("CollectionDetail", () => {
       expect(screen.getByText("No lists in this collection.")).toBeInTheDocument();
     });
   });
+
+  it("switches to shopping list view and shows empty state", async () => {
+    server.use(
+      http.get(`${API}/collections/1`, () => HttpResponse.json(sampleCollection)),
+      http.get(`${API}/lists`, () => HttpResponse.json([])),
+      http.get(`${API}/collections/1/shopping-list`, () => HttpResponse.json([])),
+    );
+
+    renderCollectionDetail();
+
+    await waitFor(() => {
+      expect(screen.getByText("Christmas 2026")).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByText("My Shopping List"));
+
+    await waitFor(() => {
+      expect(screen.getByText("No claimed gifts in this collection.")).toBeInTheDocument();
+    });
+  });
+
+  it("shows shopping list items grouped by list and summary count", async () => {
+    const shoppingItems = [
+      {
+        id: 1,
+        name: "Lego Set",
+        description: "Great fun",
+        url: "https://lego.com",
+        price: "49.99",
+        list_id: 10,
+        list_name: "My Wishlist",
+        purchased_at: null,
+      },
+      {
+        id: 2,
+        name: "Book",
+        description: null,
+        url: null,
+        price: "14.99",
+        list_id: 10,
+        list_name: "My Wishlist",
+        purchased_at: "2026-01-10T00:00:00",
+      },
+    ];
+
+    server.use(
+      http.get(`${API}/collections/1`, () => HttpResponse.json(sampleCollection)),
+      http.get(`${API}/lists`, () => HttpResponse.json([])),
+      http.get(`${API}/collections/1/shopping-list`, () => HttpResponse.json(shoppingItems)),
+    );
+
+    renderCollectionDetail();
+
+    await waitFor(() => {
+      expect(screen.getByText("Christmas 2026")).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByText("My Shopping List"));
+
+    await waitFor(() => {
+      expect(screen.getByText("1 of 2 purchased")).toBeInTheDocument();
+    });
+    expect(screen.getByText("My Wishlist")).toBeInTheDocument();
+    expect(screen.getByText("Lego Set")).toBeInTheDocument();
+    expect(screen.getByText("Book")).toBeInTheDocument();
+  });
+
+  it("toggles purchase status on checkbox click", async () => {
+    const shoppingItems = [
+      {
+        id: 1,
+        name: "Lego Set",
+        description: null,
+        url: null,
+        price: null,
+        list_id: 10,
+        list_name: "My Wishlist",
+        purchased_at: null,
+      },
+    ];
+
+    server.use(
+      http.get(`${API}/collections/1`, () => HttpResponse.json(sampleCollection)),
+      http.get(`${API}/lists`, () => HttpResponse.json([])),
+      http.get(`${API}/collections/1/shopping-list`, () => HttpResponse.json(shoppingItems)),
+      http.post(`${API}/lists/10/gifts/1/purchase`, () =>
+        HttpResponse.json({ ...shoppingItems[0], purchased_at: "2026-01-10T00:00:00" })
+      ),
+    );
+
+    renderCollectionDetail();
+
+    await waitFor(() => {
+      expect(screen.getByText("Christmas 2026")).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByText("My Shopping List"));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Mark "Lego Set" as purchased/)).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByLabelText(/Mark "Lego Set" as purchased/));
+
+    await waitFor(() => {
+      expect(screen.queryByText("Failed to mark as purchased.")).not.toBeInTheDocument();
+    });
+  });
 });

@@ -3,18 +3,26 @@ import { Link } from "react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getCollections, createCollection, deleteCollection } from "../api/collections";
 import { useTitle } from "../hooks/useTitle";
+import toast from "react-hot-toast";
+import { Spinner } from "../components/Spinner";
+import { FolderOpenIcon } from "../components/Icons";
 
 export function Collections() {
   useTitle("Collections");
   const queryClient = useQueryClient();
+  const [showArchived, setShowArchived] = useState(false);
 
-  const collections = useQuery({ queryKey: ["collections"], queryFn: getCollections });
+  const collections = useQuery({
+    queryKey: ["collections", { archived: showArchived }],
+    queryFn: () => getCollections(showArchived || undefined),
+  });
 
   const deleteMutation = useMutation({
     mutationFn: deleteCollection,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["collections"] });
     },
+    onError: () => toast.error("Failed to delete collection."),
   });
 
   function handleDelete(id: number) {
@@ -23,33 +31,58 @@ export function Collections() {
     }
   }
 
+  if (collections.isPending) return (
+    <div className="space-y-8">
+      <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900"><FolderOpenIcon className="h-6 w-6" /> Collections</h1>
+      <Spinner />
+    </div>
+  );
+
   return (
     <div className="space-y-8">
-      <h1 className="text-2xl font-bold text-gray-900">Collections</h1>
+      <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900"><FolderOpenIcon className="h-6 w-6" /> Collections</h1>
 
-      <CreateCollectionForm queryClient={queryClient} />
+      <p className="text-sm text-gray-500">
+        Collections let you group gift lists together for easy access — for example, all the lists for Christmas 2026.
+      </p>
+
+      {!showArchived && <CreateCollectionForm queryClient={queryClient} />}
 
       <section>
-        {collections.data && collections.data.length === 0 && (
+        <div className="mb-3">
+          <button
+            onClick={() => setShowArchived(!showArchived)}
+            className="text-sm text-blue-600 hover:underline"
+          >
+            {showArchived ? "View active collections" : "View archived collections"}
+          </button>
+        </div>
+
+        {collections.data && collections.data.length === 0 && !showArchived && (
           <p className="text-gray-500">No collections yet.</p>
+        )}
+        {collections.data && collections.data.length === 0 && showArchived && (
+          <p className="text-gray-500">No archived collections.</p>
         )}
         {collections.data && collections.data.length > 0 && (
           <ul className="divide-y divide-gray-200 rounded-lg bg-white shadow">
             {collections.data.map((coll) => (
-              <li key={coll.id} className="flex items-center justify-between px-4 py-3">
+              <li key={coll.id} className={`flex items-center justify-between px-4 py-3${showArchived ? " opacity-60" : ""}`}>
                 <Link to={`/collections/${coll.id}`} className="min-w-0 flex-1 hover:opacity-75">
                   <p className="font-medium text-gray-900">{coll.name}</p>
                   {coll.description && (
                     <p className="text-sm text-gray-500 truncate">{coll.description}</p>
                   )}
                 </Link>
-                <button
-                  onClick={() => handleDelete(coll.id)}
-                  disabled={deleteMutation.isPending}
-                  className="ml-4 shrink-0 rounded bg-red-600 px-3 py-1 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
-                >
-                  Delete
-                </button>
+                {!showArchived && (
+                  <button
+                    onClick={() => handleDelete(coll.id)}
+                    disabled={deleteMutation.isPending}
+                    className="ml-4 shrink-0 rounded bg-red-600 px-3 py-1 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                  >
+                    Delete
+                  </button>
+                )}
               </li>
             ))}
           </ul>
@@ -74,6 +107,7 @@ function CreateCollectionForm({
       setName("");
       setDescription("");
     },
+    onError: () => toast.error("Failed to create collection."),
   });
 
   function handleSubmit(e: FormEvent) {
@@ -84,8 +118,8 @@ function CreateCollectionForm({
   return (
     <form onSubmit={handleSubmit} className="rounded-lg bg-white p-4 shadow">
       <h2 className="text-sm font-semibold text-gray-700 mb-3">Create a Collection</h2>
-      {mutation.isError && <p className="text-sm text-red-600 mb-2">Failed to create collection.</p>}
-      <div className="flex gap-2">
+
+      <div className="flex flex-col gap-2 sm:flex-row">
         <input
           type="text"
           placeholder="Collection name"
@@ -104,7 +138,7 @@ function CreateCollectionForm({
         <button
           type="submit"
           disabled={mutation.isPending}
-          className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 shrink-0"
         >
           {mutation.isPending ? "Creating\u2026" : "Create"}
         </button>

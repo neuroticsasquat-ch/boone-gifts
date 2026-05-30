@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useState, useCallback, useEffect, type ReactNode } from "react";
 import { apiClient, setAccessToken, clearAccessToken } from "../api/client";
-import { logout as apiLogout, changePassword as apiChangePassword } from "../api/auth";
+import { logout as apiLogout, changePassword as apiChangePassword, updateProfile as apiUpdateProfile } from "../api/auth";
 import type { AuthUser, AccessTokenResponse } from "../types";
 
 export interface AuthContextType {
@@ -9,6 +9,7 @@ export interface AuthContextType {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  updateProfile: (name: string) => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
 }
 
@@ -21,6 +22,7 @@ function decodePayload(token: string): AuthUser {
   return {
     id: Number(payload.sub),
     email: payload.email,
+    name: payload.name ?? "",
     role: payload.role,
   };
 }
@@ -71,6 +73,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  const updateProfile = useCallback(async (name: string) => {
+    const { access_token } = await apiUpdateProfile(name);
+    setAccessToken(access_token);
+    setUser(decodePayload(access_token));
+  }, []);
+
   const changePassword = useCallback(
     async (currentPassword: string, newPassword: string) => {
       const { access_token } = await apiChangePassword(currentPassword, newPassword);
@@ -81,7 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout, changePassword }}>
+    <AuthContext.Provider value={{ user, isLoading, login, logout, updateProfile, changePassword }}>
       {children}
     </AuthContext.Provider>
   );

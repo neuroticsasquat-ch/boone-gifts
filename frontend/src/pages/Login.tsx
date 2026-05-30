@@ -8,6 +8,7 @@ export function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -16,11 +17,14 @@ export function Login() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError("");
+    setSubmitting(true);
     try {
       await login(email, password);
       navigate(from, { replace: true });
     } catch {
       setError("Invalid email or password");
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -54,9 +58,10 @@ export function Login() {
           </label>
           <button
             type="submit"
-            className="w-full bg-blue-600 text-white rounded py-2 hover:bg-blue-700"
+            className="w-full bg-blue-600 text-white rounded py-2 hover:bg-blue-700 disabled:opacity-50"
+            disabled={submitting}
           >
-            Log in
+            {submitting ? "Logging in…" : "Log in"}
           </button>
           <p className="text-sm text-center mt-4">
             <Link to="/forgot-password" className="text-blue-600 hover:underline">

@@ -8,6 +8,7 @@ export interface AccessTokenResponse {
 export interface AuthUser {
   id: number;
   email: string;
+  name: string;
   role: string;
 }
 
@@ -29,6 +30,9 @@ export interface GiftList {
   description: string | null;
   owner_id: number;
   owner_name: string;
+  is_archived: boolean;
+  gift_count: number;
+  claimed_count: number;
   created_at: string;
   updated_at: string;
 }
@@ -61,6 +65,7 @@ export interface GiftListDetailOwner {
   description: string | null;
   owner_id: number;
   owner_name: string;
+  is_archived: boolean;
   gifts: GiftOwnerView[];
   created_at: string;
   updated_at: string;
@@ -72,6 +77,7 @@ export interface GiftListDetailViewer {
   description: string | null;
   owner_id: number;
   owner_name: string;
+  is_archived: boolean;
   gifts: Gift[];
   created_at: string;
   updated_at: string;
@@ -92,6 +98,13 @@ export interface Connection {
   accepted_at: string | null;
 }
 
+// User Search
+export interface UserSearchResult {
+  id: number;
+  name: string;
+  email: string;
+}
+
 // Shares
 export interface ListShare {
   id: number;
@@ -106,6 +119,7 @@ export interface Collection {
   name: string;
   description: string | null;
   owner_id: number;
+  is_archived: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -115,9 +129,17 @@ export interface CollectionDetail {
   name: string;
   description: string | null;
   owner_id: number;
+  is_archived: boolean;
   lists: GiftList[];
   created_at: string;
   updated_at: string;
+}
+
+// Shared Users
+export interface SharedUser {
+  id: number;
+  name: string;
+  email: string;
 }
 
 // URL Metadata
@@ -126,4 +148,29 @@ export interface UrlMeta {
   description: string | null;
   price: string | null;
   image: string | null;
+}
+
+// Shopping List
+export interface ShoppingListItem {
+  id: number;
+  name: string;
+  description: string | null;
+  url: string | null;
+  price: string | null;
+  list_id: number;
+  list_name: string;
+  purchased_at: string | null;
+}
+
+// Invites (admin)
+export interface Invite {
+  id: number;
+  token: string;
+  email: string;
+  role: string;
+  status: "pending" | "used" | "expired";
+  expires_at: string;
+  used_at: string | null;
+  invited_by_id: number;
+  created_at: string;
 }
