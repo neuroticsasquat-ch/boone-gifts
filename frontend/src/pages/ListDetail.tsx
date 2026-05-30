@@ -6,6 +6,7 @@ import { getConnections } from "../api/connections";
 import { useAuth } from "../hooks/useAuth";
 import { useTitle } from "../hooks/useTitle";
 import type { GiftListDetailOwner, GiftListDetailViewer } from "../types";
+import { isAxiosError } from "axios";
 import toast from "react-hot-toast";
 import { Spinner } from "../components/Spinner";
 import { GiftsTab } from "./list-detail/GiftsTab";
@@ -305,7 +306,12 @@ function DeleteListButton({
       queryClient.invalidateQueries({ queryKey: ["lists"] });
       navigate("/lists", { replace: true });
     },
-    onError: () => toast.error("Failed to delete list."),
+    onError: (err) => {
+      const detail = isAxiosError(err) && err.response?.status === 409
+        ? err.response.data?.detail
+        : null;
+      toast.error(detail || "Failed to delete list.");
+    },
   });
 
   function handleDelete() {
