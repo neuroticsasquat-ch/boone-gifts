@@ -4,6 +4,11 @@ export interface AccessTokenResponse {
   token_type: string;
 }
 
+export interface InviteInfo {
+  email: string;
+  family_name: string | null; // null for admin-invite tokens
+}
+
 // User (decoded from JWT access token)
 export interface AuthUser {
   id: number;

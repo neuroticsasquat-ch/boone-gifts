@@ -8,7 +8,7 @@ import { useAuth } from "../hooks/useAuth";
 
 // Helper component that exposes auth state for testing
 function AuthConsumer() {
-  const { user, login, logout, isLoading } = useAuth();
+  const { user, login, logout, register, isLoading } = useAuth();
 
   if (isLoading) return <div>Loading...</div>;
 
@@ -16,6 +16,9 @@ function AuthConsumer() {
     <div>
       <div data-testid="user">{user ? user.email : "none"}</div>
       <button onClick={() => login("test@test.com", "password")}>Login</button>
+      <button onClick={() => register("tok-1", "Tester", "password", "test@test.com")}>
+        Register
+      </button>
       <button onClick={() => logout()}>Logout</button>
     </div>
   );
@@ -127,6 +130,30 @@ describe("AuthContext", () => {
     await userEvent.click(screen.getByText("Logout"));
     await waitFor(() => {
       expect(screen.getByTestId("user")).toHaveTextContent("none");
+    });
+  });
+
+  it("register stores user from JWT", async () => {
+    server.use(
+      http.post("https://boone-gifts-api.localhost/auth/register", () => {
+        return HttpResponse.json({ access_token: fakeAccessToken, token_type: "bearer" });
+      })
+    );
+
+    render(
+      <AuthProvider>
+        <AuthConsumer />
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("user")).toHaveTextContent("none");
+    });
+
+    await userEvent.click(screen.getByText("Register"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("user")).toHaveTextContent("test@test.com");
     });
   });
 });
