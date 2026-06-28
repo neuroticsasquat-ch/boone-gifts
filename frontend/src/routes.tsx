@@ -17,6 +17,7 @@ import { CollectionDetail } from "./pages/CollectionDetail";
 import { Account } from "./pages/Account";
 import { AdminInvites } from "./pages/AdminInvites";
 import { AdminUsers } from "./pages/AdminUsers";
+import { FamilyDetail } from "./pages/FamilyDetail";
 
 export const routes: RouteObject[] = [
   {
@@ -49,6 +50,7 @@ export const routes: RouteObject[] = [
           { path: "connections/:id", element: <ConnectionProfile /> },
           { path: "collections", element: <Collections /> },
           { path: "collections/:id", element: <CollectionDetail /> },
+          { path: "families/:id", element: <FamilyDetail /> },
           { path: "account", element: <Account /> },
           {
             path: "admin",

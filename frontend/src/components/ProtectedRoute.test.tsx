@@ -10,6 +10,7 @@ function renderWithAuth(user: AuthContextType["user"], initialPath = "/") {
     isLoading: false,
     login: async () => {},
     logout: async () => {},
+    register: async () => {},
     changePassword: async () => {},
     updateProfile: async () => {},
   };
