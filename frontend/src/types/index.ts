@@ -4,11 +4,6 @@ export interface AccessTokenResponse {
   token_type: string;
 }
 
-export interface InviteInfo {
-  email: string;
-  family_name: string | null; // null for admin-invite tokens
-}
-
 // User (decoded from JWT access token)
 export interface AuthUser {
   id: number;
@@ -40,7 +35,6 @@ export interface GiftList {
   claimed_count: number;
   created_at: string;
   updated_at: string;
-  families?: FamilyRef[];
 }
 
 export interface Gift {
@@ -179,21 +173,4 @@ export interface Invite {
   used_at: string | null;
   invited_by_id: number;
   created_at: string;
-}
-
-// Families
-export interface Family { id: number; name: string; role: string; member_count: number; }
-export interface FamilyMember { user_id: number; name: string; role: string; }
-export interface FamilyDetail { id: number; name: string; created_by_id: number; members: FamilyMember[]; }
-export interface FamilyRef { id: number; name: string; }
-export interface FamilyInvite {
-  id: number; family_id: number; email: string; role: string; simple_mode: boolean;
-  token: string; invited_by_id: number; expires_at: string;
-  accepted_at: string | null; declined_at: string | null; created_at: string;
-  status: "pending" | "accepted" | "declined" | "expired";
-}
-export interface IncomingFamilyInvite {
-  id: number; token: string; role: string;
-  family: FamilyRef; invited_by: { id: number; name: string };
-  expires_at: string; created_at: string;
 }
