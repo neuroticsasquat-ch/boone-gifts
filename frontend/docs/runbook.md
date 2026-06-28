@@ -10,18 +10,9 @@
 
 ## Deploy
 
-Push to `main`. Cloudflare Pages detects the push, runs `npm ci` then the build command, and deploys the output to its CDN.
+Push to `main`. Cloudflare Pages detects the push, runs `npm ci && npm run build` (`tsc -b && vite build`), and deploys the output to its CDN.
 
-The build command must inject the commit SHA as the Sentry release tag:
-
-    VITE_GIT_SHA=$CF_PAGES_COMMIT_SHA npm run build
-
-(`npm run build` is `tsc -b && vite build`; `CF_PAGES_COMMIT_SHA` is provided
-automatically by Cloudflare Pages.) Tagging the release lets Sentry tie errors and
-the uploaded source maps to a specific deploy. Source maps are uploaded to Sentry at
-build time and then deleted from the output, so they are never served on the CDN.
-
-No manual steps required for a standard deploy once the build command is set.
+No manual steps required for a standard deploy.
 
 ### Verify a deploy
 
@@ -60,7 +51,6 @@ Set in Cloudflare Pages → Settings → Environment variables:
 | `VITE_API_URL` | Backend API base URL (`https://api.boone.gift`) |
 | `VITE_SENTRY_DSN` | Sentry DSN for error tracking |
 | `VITE_SENTRY_ENVIRONMENT` | Sentry environment tag |
-| `VITE_GIT_SHA` | Sentry release tag — set in the build command via `$CF_PAGES_COMMIT_SHA` (see Deploy) |
 
 **Build-time (used by plugins during build, not shipped to browser):**
 

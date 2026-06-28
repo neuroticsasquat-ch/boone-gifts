@@ -6,13 +6,7 @@ import { sentryVitePlugin } from "@sentry/vite-plugin";
 
 export default defineConfig({
   build: {
-    // "hidden" emits source maps (so the Sentry plugin can upload them) but omits
-    // the //# sourceMappingURL= comment. Combined with filesToDeleteAfterUpload
-    // below, the maps are uploaded to Sentry and then removed from dist/ so they are
-    // never served publicly on the CDN. Stack traces still resolve via debug IDs.
-    // Must be "hidden" (not true) — with true, deleting the maps leaves dangling
-    // sourceMappingURL comments that break the build output.
-    sourcemap: process.env.SENTRY_AUTH_TOKEN ? "hidden" : false,
+    sourcemap: true,
   },
   plugins: [
     react(),
@@ -22,7 +16,6 @@ export default defineConfig({
       project: process.env.SENTRY_PROJECT,
       authToken: process.env.SENTRY_AUTH_TOKEN,
       disable: !process.env.SENTRY_AUTH_TOKEN,
-      sourcemaps: { filesToDeleteAfterUpload: ["./dist/**/*.map"] },
     }),
   ],
   server: {
