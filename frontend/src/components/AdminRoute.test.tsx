@@ -14,7 +14,6 @@ function renderWithAuth(
     isLoading,
     login: async () => {},
     logout: async () => {},
-    register: async () => {},
     changePassword: async () => {},
     updateProfile: async () => {},
   };
