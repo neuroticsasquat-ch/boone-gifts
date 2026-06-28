@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { useParams, Link } from "react-router";
+import { useParams } from "react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 import { getFamily, createInvite, getInvites, revokeInvite } from "../api/families";
@@ -45,10 +45,6 @@ export function FamilyDetail() {
 
   return (
     <div className="space-y-6">
-      <Link to="/families" className="text-sm text-blue-600 hover:underline">
-        &larr; Back to families
-      </Link>
-
       <h1 className="text-2xl font-bold text-gray-900">{family.name}</h1>
 
       {isOrganizer && (
@@ -135,6 +131,7 @@ function PendingInvites({
   queryClient: ReturnType<typeof useQueryClient>;
 }) {
   const [revokeErrors, setRevokeErrors] = useState<Record<number, string>>({});
+  const [pendingRevokes, setPendingRevokes] = useState<Set<number>>(new Set());
 
   const { data: invites = [], isLoading, error } = useQuery<FamilyInvite[]>({
     queryKey: ["invites", familyId],
@@ -142,7 +139,10 @@ function PendingInvites({
   });
 
   const revokeMutation = useMutation({
-    mutationFn: (inviteId: number) => revokeInvite(familyId, inviteId),
+    mutationFn: (inviteId: number) => {
+      setPendingRevokes((prev) => new Set(prev).add(inviteId));
+      return revokeInvite(familyId, inviteId);
+    },
     onSuccess: (_data, inviteId) => {
       queryClient.invalidateQueries({ queryKey: ["invites", familyId] });
       setRevokeErrors((prev) => {
@@ -153,6 +153,13 @@ function PendingInvites({
     },
     onError: (_err, inviteId) => {
       setRevokeErrors((prev) => ({ ...prev, [inviteId]: "Failed to revoke invite." }));
+    },
+    onSettled: (_data, _err, inviteId) => {
+      setPendingRevokes((prev) => {
+        const s = new Set(prev);
+        s.delete(inviteId);
+        return s;
+      });
     },
   });
 
@@ -176,7 +183,7 @@ function PendingInvites({
             {invite.status === "pending" && (
               <button
                 onClick={() => revokeMutation.mutate(invite.id)}
-                disabled={revokeMutation.isPending}
+                disabled={pendingRevokes.has(invite.id)}
                 className="rounded bg-red-600 px-3 py-1 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
               >
                 Revoke
