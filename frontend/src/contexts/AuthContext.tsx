@@ -1,7 +1,12 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useState, useCallback, useEffect, type ReactNode } from "react";
 import { apiClient, setAccessToken, clearAccessToken } from "../api/client";
-import { logout as apiLogout, changePassword as apiChangePassword, updateProfile as apiUpdateProfile } from "../api/auth";
+import {
+  logout as apiLogout,
+  register as apiRegister,
+  changePassword as apiChangePassword,
+  updateProfile as apiUpdateProfile,
+} from "../api/auth";
 import type { AuthUser, AccessTokenResponse } from "../types";
 
 export interface AuthContextType {
@@ -9,6 +14,7 @@ export interface AuthContextType {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  register: (token: string, name: string, password: string, email: string) => Promise<void>;
   updateProfile: (name: string) => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
 }
@@ -73,6 +79,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  const register = useCallback(
+    async (token: string, name: string, password: string, email: string) => {
+      setIsLoading(true);
+      try {
+        const { access_token } = await apiRegister(token, name, password, email);
+        setAccessToken(access_token);
+        setUser(decodePayload(access_token));
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    []
+  );
+
   const updateProfile = useCallback(async (name: string) => {
     const { access_token } = await apiUpdateProfile(name);
     setAccessToken(access_token);
@@ -89,7 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout, updateProfile, changePassword }}>
+    <AuthContext.Provider value={{ user, isLoading, login, logout, register, updateProfile, changePassword }}>
       {children}
     </AuthContext.Provider>
   );
