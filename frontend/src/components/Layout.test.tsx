@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router";
@@ -92,7 +92,7 @@ describe("Layout", () => {
   it("renders desktop nav links in the header", async () => {
     renderLayout();
     await screen.findByText("Home Content");
-    const topNav = document.querySelector("nav");
+    const topNav = screen.getByRole("navigation", { name: "Primary navigation" });
     expect(topNav).toHaveTextContent("Lists");
     expect(topNav).toHaveTextContent("Connections");
     expect(topNav).toHaveTextContent("Collections");
@@ -102,5 +102,61 @@ describe("Layout", () => {
     renderLayout();
     await screen.findByText("Boone Gifts");
     expect(screen.getByText("Boone Gifts")).toBeInTheDocument();
+  });
+
+  it("shows family invite badge on Families tab in bottom nav when invites are pending", async () => {
+    server.use(
+      http.get(`${API}/families/invites`, () =>
+        HttpResponse.json([{
+          id: 1, token: "tok-abc", role: "member",
+          family: { id: 10, name: "Smith Family" },
+          invited_by: { id: 20, name: "Alice" },
+          expires_at: "2026-07-05T00:00:00Z",
+          created_at: "2026-06-28T00:00:00Z",
+        }])
+      ),
+    );
+    renderLayout();
+    await screen.findByLabelText("Account menu");
+    await waitFor(() => {
+      // Badge with count 1 should appear in the bottom mobile nav bar
+      const bottomNav = screen.getByRole("navigation", { name: "Mobile navigation" });
+      expect(within(bottomNav).getByText("1")).toBeInTheDocument();
+    });
+  });
+
+  it("hides family invite badge on Families tab when no invites are pending", async () => {
+    // Default handler returns [] — badge must not appear
+    renderLayout();
+    await screen.findByLabelText("Account menu");
+    // Wait for queries to settle then verify no badge with count appears in either nav
+    await waitFor(() => {
+      const topNav = screen.getByRole("navigation", { name: "Primary navigation" });
+      const bottomNav = screen.getByRole("navigation", { name: "Mobile navigation" });
+      expect(within(topNav).queryByText("1")).not.toBeInTheDocument();
+      expect(within(bottomNav).queryByText("1")).not.toBeInTheDocument();
+    });
+  });
+
+  it("shows family invite badge on Families link in top nav when invites are pending", async () => {
+    server.use(
+      http.get(`${API}/families/invites`, () =>
+        HttpResponse.json([{
+          id: 1, token: "tok-abc", role: "member",
+          family: { id: 10, name: "Smith Family" },
+          invited_by: { id: 20, name: "Alice" },
+          expires_at: "2026-07-05T00:00:00Z",
+          created_at: "2026-06-28T00:00:00Z",
+        }])
+      ),
+    );
+    renderLayout();
+    await screen.findByLabelText("Account menu");
+    await waitFor(() => {
+      // The top nav Families link has an inline badge span
+      const topNav = screen.getByRole("navigation", { name: "Primary navigation" });
+      expect(topNav).toHaveTextContent("Families");
+      expect(within(topNav).getByText("1")).toBeInTheDocument();
+    });
   });
 });
