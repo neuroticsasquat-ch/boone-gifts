@@ -1,5 +1,10 @@
 # Boone Gifts Frontend
 
+<!-- Specs/plans live under this repo's own docs/ (not the umbrella). This overrides the
+     personal-skills DOCS_DIR auto-resolution so /planit, /implementit, /reviewit, and the loop
+     resolve DOCS_DIR = <repo>/docs and find files in docs/superpowers/{specs,plans}. -->
+specs_dir: docs
+
 ## Overview
 React SPA frontend for the Boone Gifts platform. TypeScript, runs entirely in Docker (no host node_modules).
 
