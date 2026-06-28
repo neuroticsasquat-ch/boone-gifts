@@ -1,13 +1,13 @@
 import { apiClient } from "./client";
-import type { AccessTokenResponse, InviteInfo } from "../types";
+import type { AccessTokenResponse } from "../types";
 
 export async function login(email: string, password: string): Promise<AccessTokenResponse> {
   const response = await apiClient.post<AccessTokenResponse>("/auth/login", { email, password });
   return response.data;
 }
 
-export async function getInviteInfo(token: string): Promise<InviteInfo> {
-  const response = await apiClient.get<InviteInfo>("/auth/invite-info", {
+export async function getInviteInfo(token: string): Promise<{ email: string }> {
+  const response = await apiClient.get<{ email: string }>("/auth/invite-info", {
     params: { token },
   });
   return response.data;
@@ -18,14 +18,8 @@ export async function register(
   name: string,
   password: string,
   email: string,
-): Promise<AccessTokenResponse> {
-  const response = await apiClient.post<AccessTokenResponse>("/auth/register", {
-    token,
-    name,
-    password,
-    email,
-  });
-  return response.data;
+): Promise<void> {
+  await apiClient.post("/auth/register", { token, name, password, email });
 }
 
 export async function refresh(): Promise<AccessTokenResponse> {
