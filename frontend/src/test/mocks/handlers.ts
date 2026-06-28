@@ -13,4 +13,8 @@ export const handlers = [
   http.get("https://boone-gifts-api.localhost/lists/unseen-count", () => {
     return HttpResponse.json({ count: 0 });
   }),
+  // Default handler: no pending invites (organizer-only useQuery mounts on every organizer render)
+  http.get("https://boone-gifts-api.localhost/families/:familyId/invites", () => {
+    return HttpResponse.json([]);
+  }),
 ];

@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useParams, useNavigate } from "react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getFamily, renameFamily, deleteFamily, removeMember, updateMemberRole } from "../api/families";
+import { getFamily, renameFamily, deleteFamily, removeMember, updateMemberRole, createInvite, getInvites, revokeInvite } from "../api/families";
 import { useAuth } from "../hooks/useAuth";
 import { useTitle } from "../hooks/useTitle";
 import { Spinner } from "../components/Spinner";
@@ -19,6 +19,8 @@ export function FamilyDetail() {
   const [renameError, setRenameError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteError, setInviteError] = useState<string | null>(null);
 
   const family = useQuery({
     queryKey: ["family", familyId],
@@ -35,6 +37,47 @@ export function FamilyDetail() {
     queryClient.invalidateQueries({ queryKey: ["family", familyId] });
     queryClient.invalidateQueries({ queryKey: ["families"] });
   };
+
+  const invites = useQuery({
+    queryKey: ["family-invites", familyId],
+    queryFn: () => getInvites(familyId),
+    enabled: isOrganizer && Number.isFinite(familyId),
+  });
+
+  const sendInviteMutation = useMutation({
+    mutationFn: (email: string) => createInvite(familyId, { email }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["family-invites", familyId] });
+      setInviteEmail("");
+      setInviteError(null);
+    },
+    onError: (err: unknown) => {
+      if (isAxiosError(err) && err.response?.status === 409) {
+        setInviteError("A pending invite for that email already exists.");
+      } else if (isAxiosError(err) && err.response?.status === 400) {
+        setInviteError(err.response.data?.detail ?? "Invalid email address.");
+      } else {
+        toast.error("Failed to send invite.");
+      }
+    },
+  });
+
+  const revokeInviteMutation = useMutation({
+    mutationFn: (inviteId: number) => revokeInvite(familyId, inviteId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["family-invites", familyId] });
+    },
+    onError: () => {
+      toast.error("Failed to revoke invite.");
+    },
+  });
+
+  function handleSendInvite(e: FormEvent) {
+    e.preventDefault();
+    if (!inviteEmail.trim()) return;
+    setInviteError(null);
+    sendInviteMutation.mutate(inviteEmail.trim());
+  }
 
   const renameMutation = useMutation({
     mutationFn: (name: string) => renameFamily(familyId, { name }),
@@ -186,6 +229,54 @@ export function FamilyDetail() {
       {/* Organizer-only controls */}
       {isOrganizer && (
         <>
+          {/* Invite by email */}
+          <section>
+            <h2 className="text-lg font-semibold text-gray-900 mb-3">Invite to Family</h2>
+            <form onSubmit={handleSendInvite} className="flex gap-2">
+              <input
+                type="email"
+                placeholder="Email address"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm"
+              />
+              <button
+                type="submit"
+                disabled={sendInviteMutation.isPending}
+                className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                Send Invite
+              </button>
+            </form>
+            {inviteError && <p className="mt-2 text-sm text-red-600">{inviteError}</p>}
+          </section>
+
+          {/* Pending invites list */}
+          {invites.data && invites.data.length > 0 && (
+            <section>
+              <h2 className="text-lg font-semibold text-gray-900 mb-3">Invites</h2>
+              <ul className="divide-y divide-gray-200 rounded-lg bg-white shadow">
+                {invites.data.map((invite) => (
+                  <li key={invite.id} className="flex items-center justify-between px-4 py-3">
+                    <div>
+                      <p className="font-medium text-gray-900">{invite.email}</p>
+                      <p className="text-sm text-gray-500 capitalize">{invite.status}</p>
+                    </div>
+                    {invite.status === "pending" && (
+                      <button
+                        onClick={() => revokeInviteMutation.mutate(invite.id)}
+                        disabled={revokeInviteMutation.isPending}
+                        className="rounded bg-red-100 px-3 py-1 text-sm font-medium text-red-700 hover:bg-red-200 disabled:opacity-50"
+                      >
+                        Revoke
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           {/* Rename */}
           <section>
             <h2 className="text-lg font-semibold text-gray-900 mb-3">Rename Family</h2>

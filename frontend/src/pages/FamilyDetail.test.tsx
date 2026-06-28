@@ -303,4 +303,149 @@ describe("FamilyDetail", () => {
     const backLink = screen.getByRole("link", { name: /Back to families/i });
     expect(backLink).toHaveAttribute("href", "/families");
   });
+
+  // --- Invite UI tests ---
+
+  it("invite success: organizer submits email → POST /families/1/invites called → new invite row appears", async () => {
+    const newInvite = {
+      id: 10,
+      family_id: 1,
+      email: "newperson@example.com",
+      role: "member",
+      simple_mode: false,
+      token: "abc123",
+      invited_by_id: 1,
+      expires_at: "2099-01-01T00:00:00Z",
+      accepted_at: null,
+      declined_at: null,
+      created_at: "2026-06-28T00:00:00Z",
+      status: "pending" as const,
+    };
+
+    server.use(
+      http.get(`${API}/families/1`, () => HttpResponse.json(sampleFamily)),
+      http.post(`${API}/families/1/invites`, () => HttpResponse.json(newInvite, { status: 201 })),
+      http.get(`${API}/families/1/invites`, () => HttpResponse.json([newInvite])),
+    );
+
+    renderFamilyDetail(organizerToken);
+
+    await waitFor(() => {
+      expect(screen.getByText("The Boones")).toBeInTheDocument();
+    });
+
+    const emailInput = screen.getByPlaceholderText("Email address");
+    await userEvent.type(emailInput, "newperson@example.com");
+    await userEvent.click(screen.getByRole("button", { name: "Send Invite" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("newperson@example.com")).toBeInTheDocument();
+    });
+    expect(emailInput).toHaveValue("");
+  });
+
+  it("revoke: pending invite shown, organizer clicks Revoke → row disappears", async () => {
+    const pendingInvite = {
+      id: 10,
+      family_id: 1,
+      email: "pending@example.com",
+      role: "member",
+      simple_mode: false,
+      token: "abc123",
+      invited_by_id: 1,
+      expires_at: "2099-01-01T00:00:00Z",
+      accepted_at: null,
+      declined_at: null,
+      created_at: "2026-06-28T00:00:00Z",
+      status: "pending" as const,
+    };
+
+    let inviteDeleted = false;
+    server.use(
+      http.get(`${API}/families/1`, () => HttpResponse.json(sampleFamily)),
+      http.get(`${API}/families/1/invites`, () =>
+        HttpResponse.json(inviteDeleted ? [] : [pendingInvite])
+      ),
+      http.delete(`${API}/families/1/invites/10`, () => {
+        inviteDeleted = true;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+
+    renderFamilyDetail(organizerToken);
+
+    await waitFor(() => {
+      expect(screen.getByText("pending@example.com")).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Revoke" }));
+
+    await waitFor(() => {
+      expect(screen.queryByText("pending@example.com")).not.toBeInTheDocument();
+    });
+  });
+
+  it("409 duplicate invite shows inline error message", async () => {
+    server.use(
+      http.get(`${API}/families/1`, () => HttpResponse.json(sampleFamily)),
+      http.post(`${API}/families/1/invites`, () =>
+        HttpResponse.json({ detail: "Duplicate" }, { status: 409 })
+      ),
+    );
+
+    renderFamilyDetail(organizerToken);
+
+    await waitFor(() => {
+      expect(screen.getByText("The Boones")).toBeInTheDocument();
+    });
+
+    const emailInput = screen.getByPlaceholderText("Email address");
+    await userEvent.type(emailInput, "dup@example.com");
+    await userEvent.click(screen.getByRole("button", { name: "Send Invite" }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("A pending invite for that email already exists.")
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("400 bad email shows backend detail message", async () => {
+    server.use(
+      http.get(`${API}/families/1`, () => HttpResponse.json(sampleFamily)),
+      http.post(`${API}/families/1/invites`, () =>
+        HttpResponse.json({ detail: "Invalid email" }, { status: 400 })
+      ),
+    );
+
+    renderFamilyDetail(organizerToken);
+
+    await waitFor(() => {
+      expect(screen.getByText("The Boones")).toBeInTheDocument();
+    });
+
+    const emailInput = screen.getByPlaceholderText("Email address");
+    await userEvent.type(emailInput, "bad@example.com");
+    await userEvent.click(screen.getByRole("button", { name: "Send Invite" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Invalid email")).toBeInTheDocument();
+    });
+  });
+
+  it("organizer gating: member does not see invite form or invite list", async () => {
+    server.use(
+      http.get(`${API}/families/1`, () => HttpResponse.json(sampleFamily)),
+    );
+
+    renderFamilyDetail(memberToken);
+
+    await waitFor(() => {
+      expect(screen.getByText("The Boones")).toBeInTheDocument();
+    });
+
+    expect(screen.queryByPlaceholderText("Email address")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Send Invite" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Invites")).not.toBeInTheDocument();
+  });
 });
