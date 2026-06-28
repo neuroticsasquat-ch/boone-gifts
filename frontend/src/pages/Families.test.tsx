@@ -29,6 +29,17 @@ function renderFamilies() {
 describe("Families", () => {
   afterEach(() => vi.restoreAllMocks());
 
+  it("renders link to Family Lists page", async () => {
+    server.use(
+      http.get(`${API}/families`, () => HttpResponse.json([])),
+    );
+
+    renderFamilies();
+
+    const link = await screen.findByRole("link", { name: /View Family Lists/ });
+    expect(link).toHaveAttribute("href", "/family-lists");
+  });
+
   it("renders list of families with name, role, and member count", async () => {
     server.use(
       http.get(`${API}/families`, () =>

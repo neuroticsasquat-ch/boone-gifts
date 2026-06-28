@@ -46,7 +46,12 @@ export function Families() {
 
   return (
     <div className="space-y-8">
-      <h1 className="text-2xl font-bold text-gray-900">Families</h1>
+      <div className="space-y-2">
+        <h1 className="text-2xl font-bold text-gray-900">Families</h1>
+        <Link to="/family-lists" className="inline-block text-sm text-blue-600 hover:underline">
+          View Family Lists →
+        </Link>
+      </div>
 
       <form onSubmit={handleSubmit} className="rounded-lg bg-white p-4 shadow">
         <h2 className="text-sm font-semibold text-gray-700 mb-3">Create a Family</h2>
