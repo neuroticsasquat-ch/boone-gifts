@@ -70,7 +70,7 @@ function InviteForm({
   const inviteMutation = useMutation({
     mutationFn: (emailVal: string) => createInvite(familyId, { email: emailVal }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["invites", familyId] });
+      queryClient.invalidateQueries({ queryKey: ["family-invites", familyId] });
       setEmail("");
       setInviteError("");
     },
@@ -134,17 +134,17 @@ function PendingInvites({
   const [pendingRevokes, setPendingRevokes] = useState<Set<number>>(new Set());
 
   const { data: invites = [], isLoading, error } = useQuery<FamilyInvite[]>({
-    queryKey: ["invites", familyId],
+    queryKey: ["family-invites", familyId],
     queryFn: () => getInvites(familyId),
   });
 
   const revokeMutation = useMutation({
-    mutationFn: (inviteId: number) => {
+    onMutate: (inviteId: number) => {
       setPendingRevokes((prev) => new Set(prev).add(inviteId));
-      return revokeInvite(familyId, inviteId);
     },
+    mutationFn: (inviteId: number) => revokeInvite(familyId, inviteId),
     onSuccess: (_data, inviteId) => {
-      queryClient.invalidateQueries({ queryKey: ["invites", familyId] });
+      queryClient.invalidateQueries({ queryKey: ["family-invites", familyId] });
       setRevokeErrors((prev) => {
         const next = { ...prev };
         delete next[inviteId];

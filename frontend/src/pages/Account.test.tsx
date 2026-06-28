@@ -15,6 +15,7 @@ function renderAccount(overrides: Partial<AuthContextType> = {}) {
     isLoading: false,
     login: vi.fn(),
     logout: vi.fn(),
+    register: vi.fn(),
     changePassword: vi.fn(),
     updateProfile: vi.fn(),
     ...overrides,
