@@ -6,6 +6,7 @@ import {
   register as apiRegister,
   changePassword as apiChangePassword,
   updateProfile as apiUpdateProfile,
+  toggleSimpleMode as apiToggleSimpleMode,
 } from "../api/auth";
 import type { AuthUser, AccessTokenResponse } from "../types";
 
@@ -17,6 +18,7 @@ export interface AuthContextType {
   register: (token: string, name: string, password: string, email: string) => Promise<void>;
   updateProfile: (name: string) => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  toggleSimpleMode: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null);
@@ -30,6 +32,7 @@ function decodePayload(token: string): AuthUser {
     email: payload.email,
     name: payload.name ?? "",
     role: payload.role,
+    simple_mode: payload.simple_mode ?? false,
   };
 }
 
@@ -108,8 +111,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     []
   );
 
+  const toggleSimpleMode = useCallback(async () => {
+    const { access_token } = await apiToggleSimpleMode(user!.simple_mode);
+    setAccessToken(access_token);
+    setUser(decodePayload(access_token));
+  }, [user]);
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout, register, updateProfile, changePassword }}>
+    <AuthContext.Provider value={{ user, isLoading, login, logout, register, updateProfile, changePassword, toggleSimpleMode }}>
       {children}
     </AuthContext.Provider>
   );

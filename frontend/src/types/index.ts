@@ -15,6 +15,7 @@ export interface AuthUser {
   email: string;
   name: string;
   role: string;
+  simple_mode: boolean;
 }
 
 // User (from API)

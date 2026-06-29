@@ -17,6 +17,7 @@ function renderWithAuth(
     register: async () => {},
     changePassword: async () => {},
     updateProfile: async () => {},
+    toggleSimpleMode: async () => {},
   };
 
   return render(
@@ -36,7 +37,7 @@ function renderWithAuth(
 
 describe("AdminRoute", () => {
   it("renders children when user is admin", () => {
-    renderWithAuth({ id: 1, email: "admin@test.com", name: "Admin", role: "admin" });
+    renderWithAuth({ id: 1, email: "admin@test.com", name: "Admin", role: "admin", simple_mode: false });
     expect(screen.getByText("Admin Content")).toBeInTheDocument();
   });
 
@@ -47,7 +48,7 @@ describe("AdminRoute", () => {
   });
 
   it("redirects to dashboard when authenticated but not admin", () => {
-    renderWithAuth({ id: 2, email: "member@test.com", name: "Member", role: "member" });
+    renderWithAuth({ id: 2, email: "member@test.com", name: "Member", role: "member", simple_mode: false });
     expect(screen.getByText("Dashboard")).toBeInTheDocument();
     expect(screen.queryByText("Admin Content")).not.toBeInTheDocument();
   });

@@ -16,6 +16,12 @@ const token = [
   "fake-signature",
 ].join(".");
 
+const simpleModeToken = [
+  btoa(JSON.stringify({ alg: "HS256", typ: "JWT" })),
+  btoa(JSON.stringify({ sub: "1", email: "user@test.com", role: "member", simple_mode: true, exp: 9999999999 })),
+  "fake-signature",
+].join(".");
+
 function renderLayout() {
   server.use(
     http.post(`${API}/auth/refresh`, () =>
@@ -35,6 +41,33 @@ function renderLayout() {
             <Route element={<Layout />}>
               <Route index element={<div>Home Content</div>} />
               <Route path="/lists" element={<div>Lists Content</div>} />
+            </Route>
+          </Routes>
+        </MemoryRouter>
+      </AuthProvider>
+    </QueryClientProvider>
+  );
+}
+
+function renderSimpleLayout() {
+  server.use(
+    http.post(`${API}/auth/refresh`, () =>
+      HttpResponse.json({ access_token: simpleModeToken, token_type: "bearer" })
+    ),
+  );
+
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <MemoryRouter initialEntries={["/lists"]}>
+          <Routes>
+            <Route element={<Layout />}>
+              <Route path="/lists" element={<div>Lists Content</div>} />
+              <Route path="/family-lists" element={<div>Family Lists Content</div>} />
             </Route>
           </Routes>
         </MemoryRouter>
@@ -158,5 +191,27 @@ describe("Layout", () => {
       expect(topNav).toHaveTextContent("Families");
       expect(within(topNav).getByText("1")).toBeInTheDocument();
     });
+  });
+
+  it("simple-mode: bottom tab bar shows only My Lists and Family Lists", async () => {
+    renderSimpleLayout();
+    await screen.findByLabelText("Account menu");
+    const bottomNav = screen.getByRole("navigation", { name: "Mobile navigation" });
+    expect(within(bottomNav).getByText("My Lists")).toBeInTheDocument();
+    expect(within(bottomNav).getByText("Family Lists")).toBeInTheDocument();
+    expect(within(bottomNav).queryByText("Home")).not.toBeInTheDocument();
+    expect(within(bottomNav).queryByText("Connect")).not.toBeInTheDocument();
+    expect(within(bottomNav).queryByText("Families")).not.toBeInTheDocument();
+    expect(within(bottomNav).queryByText("Collect")).not.toBeInTheDocument();
+  });
+
+  it("simple-mode: top nav shows My Lists and Family Lists links only", async () => {
+    renderSimpleLayout();
+    await screen.findByLabelText("Account menu");
+    const topNav = screen.getByRole("navigation", { name: "Primary navigation" });
+    expect(topNav).toHaveTextContent("My Lists");
+    expect(topNav).toHaveTextContent("Family Lists");
+    expect(topNav).not.toHaveTextContent("Connections");
+    expect(topNav).not.toHaveTextContent("Collections");
   });
 });

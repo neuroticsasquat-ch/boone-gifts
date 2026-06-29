@@ -56,14 +56,6 @@ function FamiliesIcon({ className }: { className?: string }) {
   );
 }
 
-const TABS = [
-  { to: "/", label: "Home", Icon: HomeIcon, match: (p: string) => p === "/" },
-  { to: "/lists", label: "Lists", Icon: ListIcon, match: (p: string) => p.startsWith("/lists") },
-  { to: "/connections", label: "Connect", Icon: PeopleIcon, match: (p: string) => p.startsWith("/connections") },
-  { to: "/families", label: "Families", Icon: FamiliesIcon, match: (p: string) => p.startsWith("/families") },
-  { to: "/collections", label: "Collect", Icon: FolderIcon, match: (p: string) => p.startsWith("/collections") },
-];
-
 export function Layout() {
   const { user, logout } = useAuth();
   const location = useLocation();
@@ -77,6 +69,19 @@ export function Layout() {
   const requestCount = requests.data?.length ?? 0;
   const unseenCount = unseenShares.data ?? 0;
   const familyInviteCount = familyInvites.data?.length ?? 0;
+
+  const fullTabs = [
+    { to: "/", label: "Home", Icon: HomeIcon, match: (p: string) => p === "/" },
+    { to: "/lists", label: "Lists", Icon: ListIcon, match: (p: string) => p.startsWith("/lists") },
+    { to: "/connections", label: "Connect", Icon: PeopleIcon, match: (p: string) => p.startsWith("/connections") },
+    { to: "/families", label: "Families", Icon: FamiliesIcon, match: (p: string) => p.startsWith("/families") },
+    { to: "/collections", label: "Collect", Icon: FolderIcon, match: (p: string) => p.startsWith("/collections") },
+  ];
+  const simpleTabs = [
+    { to: "/lists", label: "My Lists", Icon: ListIcon, match: (p: string) => p.startsWith("/lists") },
+    { to: "/family-lists", label: "Family Lists", Icon: FamiliesIcon, match: (p: string) => p.startsWith("/family-lists") },
+  ];
+  const tabs = user?.simple_mode ? simpleTabs : fullTabs;
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -98,33 +103,51 @@ export function Layout() {
             <Link to="/" className="flex items-center gap-1.5 text-xl font-bold text-gray-900">
               <GiftIcon className="h-6 w-6" /> Boone Gifts
             </Link>
-            <Link to="/lists" className="hidden md:inline relative text-gray-600 hover:text-gray-900">
-              Lists
-              {unseenCount > 0 && (
-                <span className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
-                  {unseenCount > 9 ? "9+" : unseenCount}
-                </span>
-              )}
-            </Link>
-            <Link to="/connections" className="hidden md:inline relative text-gray-600 hover:text-gray-900">
-              Connections
-              {requestCount > 0 && (
-                <span className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
-                  {requestCount > 9 ? "9+" : requestCount}
-                </span>
-              )}
-            </Link>
-            <Link to="/families" className="hidden md:inline relative text-gray-600 hover:text-gray-900">
-              Families
-              {familyInviteCount > 0 && (
-                <span className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
-                  {familyInviteCount > 9 ? "9+" : familyInviteCount}
-                </span>
-              )}
-            </Link>
-            <Link to="/collections" className="hidden md:inline text-gray-600 hover:text-gray-900">
-              Collections
-            </Link>
+            {user?.simple_mode ? (
+              <>
+                <Link to="/lists" className="hidden md:inline relative text-gray-600 hover:text-gray-900">
+                  My Lists
+                  {unseenCount > 0 && (
+                    <span className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+                      {unseenCount > 9 ? "9+" : unseenCount}
+                    </span>
+                  )}
+                </Link>
+                <Link to="/family-lists" className="hidden md:inline text-gray-600 hover:text-gray-900">
+                  Family Lists
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link to="/lists" className="hidden md:inline relative text-gray-600 hover:text-gray-900">
+                  Lists
+                  {unseenCount > 0 && (
+                    <span className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+                      {unseenCount > 9 ? "9+" : unseenCount}
+                    </span>
+                  )}
+                </Link>
+                <Link to="/connections" className="hidden md:inline relative text-gray-600 hover:text-gray-900">
+                  Connections
+                  {requestCount > 0 && (
+                    <span className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+                      {requestCount > 9 ? "9+" : requestCount}
+                    </span>
+                  )}
+                </Link>
+                <Link to="/families" className="hidden md:inline relative text-gray-600 hover:text-gray-900">
+                  Families
+                  {familyInviteCount > 0 && (
+                    <span className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+                      {familyInviteCount > 9 ? "9+" : familyInviteCount}
+                    </span>
+                  )}
+                </Link>
+                <Link to="/collections" className="hidden md:inline text-gray-600 hover:text-gray-900">
+                  Collections
+                </Link>
+              </>
+            )}
           </div>
 
           {/* Account dropdown — all screen sizes */}
@@ -180,7 +203,7 @@ export function Layout() {
       {/* Bottom tab bar — mobile only */}
       <nav className="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-200 md:hidden" aria-label="Mobile navigation">
         <div className="flex justify-around">
-          {TABS.map(({ to, label, Icon, match }) => {
+          {tabs.map(({ to, label, Icon, match }) => {
             const active = match(location.pathname);
             let badgeCount = 0;
             if (to === "/connections") badgeCount = requestCount;
