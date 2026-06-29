@@ -33,6 +33,7 @@ export function ListDetail() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>("gifts");
   const [editing, setEditing] = useState(false);
+  const visibleTabs = TABS.filter(t => !(user?.simple_mode && t.key === "shared"));
 
   const { data: list, isLoading, error, refetch } = useQuery({
     queryKey: ["list", listId],
@@ -75,7 +76,7 @@ export function ListDetail() {
 
       {/* Tab bar */}
       <div className="flex border-b border-gray-200">
-        {TABS.map(({ key, label }) => (
+        {visibleTabs.map(({ key, label }) => (
           <button
             key={key}
             onClick={() => setActiveTab(key)}

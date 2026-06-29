@@ -14,6 +14,9 @@ import { Connections } from "./pages/Connections";
 import { ConnectionProfile } from "./pages/ConnectionProfile";
 import { Collections } from "./pages/Collections";
 import { CollectionDetail } from "./pages/CollectionDetail";
+import { Families } from "./pages/Families";
+import { FamilyDetail } from "./pages/FamilyDetail";
+import { FamilyLists } from "./pages/FamilyLists";
 import { Account } from "./pages/Account";
 import { AdminInvites } from "./pages/AdminInvites";
 import { AdminUsers } from "./pages/AdminUsers";
@@ -49,6 +52,9 @@ export const routes: RouteObject[] = [
           { path: "connections/:id", element: <ConnectionProfile /> },
           { path: "collections", element: <Collections /> },
           { path: "collections/:id", element: <CollectionDetail /> },
+          { path: "families", element: <Families /> },
+          { path: "families/:id", element: <FamilyDetail /> },
+          { path: "family-lists", element: <FamilyLists /> },
           { path: "account", element: <Account /> },
           {
             path: "admin",

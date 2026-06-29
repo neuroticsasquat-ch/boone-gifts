@@ -1,7 +1,13 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useState, useCallback, useEffect, type ReactNode } from "react";
 import { apiClient, setAccessToken, clearAccessToken } from "../api/client";
-import { logout as apiLogout, changePassword as apiChangePassword, updateProfile as apiUpdateProfile } from "../api/auth";
+import {
+  logout as apiLogout,
+  register as apiRegister,
+  changePassword as apiChangePassword,
+  updateProfile as apiUpdateProfile,
+  toggleSimpleMode as apiToggleSimpleMode,
+} from "../api/auth";
 import type { AuthUser, AccessTokenResponse } from "../types";
 
 export interface AuthContextType {
@@ -9,8 +15,10 @@ export interface AuthContextType {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  register: (token: string, name: string, password: string, email: string) => Promise<void>;
   updateProfile: (name: string) => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  toggleSimpleMode: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null);
@@ -24,6 +32,7 @@ function decodePayload(token: string): AuthUser {
     email: payload.email,
     name: payload.name ?? "",
     role: payload.role,
+    simple_mode: payload.simple_mode ?? false,
   };
 }
 
@@ -73,6 +82,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  const register = useCallback(
+    async (token: string, name: string, password: string, email: string) => {
+      setIsLoading(true);
+      try {
+        const { access_token } = await apiRegister(token, name, password, email);
+        setAccessToken(access_token);
+        setUser(decodePayload(access_token));
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    []
+  );
+
   const updateProfile = useCallback(async (name: string) => {
     const { access_token } = await apiUpdateProfile(name);
     setAccessToken(access_token);
@@ -88,8 +111,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     []
   );
 
+  const toggleSimpleMode = useCallback(async () => {
+    const { access_token } = await apiToggleSimpleMode(user!.simple_mode);
+    setAccessToken(access_token);
+    setUser(decodePayload(access_token));
+  }, [user]);
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout, updateProfile, changePassword }}>
+    <AuthContext.Provider value={{ user, isLoading, login, logout, register, updateProfile, changePassword, toggleSimpleMode }}>
       {children}
     </AuthContext.Provider>
   );

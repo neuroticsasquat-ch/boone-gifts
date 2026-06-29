@@ -24,6 +24,13 @@ const viewerToken = [
   "fake-signature",
 ].join(".");
 
+// JWT with payload: { sub: "1", email: "owner@test.com", role: "member", simple_mode: true, exp: 9999999999 }
+const simpleModeOwnerToken = [
+  btoa(JSON.stringify({ alg: "HS256", typ: "JWT" })),
+  btoa(JSON.stringify({ sub: "1", email: "owner@test.com", role: "member", simple_mode: true, exp: 9999999999 })),
+  "fake-signature",
+].join(".");
+
 const ownerListDetail = {
   id: 1,
   name: "My Wishlist",
@@ -405,5 +412,32 @@ describe("Gift list item responsive layout", () => {
 
     const prices = await screen.findAllByText("$15.00");
     expect(prices.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("ListDetail — simple mode tab visibility", () => {
+  it("hides the Shared with tab when user is in simple mode", async () => {
+    server.use(
+      http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
+      http.get(`${API}/connections`, () => HttpResponse.json([]))
+    );
+
+    renderListDetail(simpleModeOwnerToken);
+
+    await screen.findByText("My Wishlist");
+    expect(screen.queryByRole("button", { name: /shared with/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /gifts/i })).toBeInTheDocument();
+  });
+
+  it("shows the Shared with tab when user is in full mode", async () => {
+    server.use(
+      http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
+      http.get(`${API}/connections`, () => HttpResponse.json([]))
+    );
+
+    renderListDetail(ownerToken);
+
+    await screen.findByText("My Wishlist");
+    expect(screen.getByRole("button", { name: /shared with/i })).toBeInTheDocument();
   });
 });

@@ -10,8 +10,10 @@ function renderWithAuth(user: AuthContextType["user"], initialPath = "/") {
     isLoading: false,
     login: async () => {},
     logout: async () => {},
+    register: async () => {},
     changePassword: async () => {},
     updateProfile: async () => {},
+    toggleSimpleMode: async () => {},
   };
 
   return render(
@@ -30,7 +32,7 @@ function renderWithAuth(user: AuthContextType["user"], initialPath = "/") {
 
 describe("ProtectedRoute", () => {
   it("renders children when authenticated", () => {
-    renderWithAuth({ id: 1, email: "test@test.com", name: "Test", role: "member" });
+    renderWithAuth({ id: 1, email: "test@test.com", name: "Test", role: "member", simple_mode: false });
     expect(screen.getByText("Protected Content")).toBeInTheDocument();
   });
 
