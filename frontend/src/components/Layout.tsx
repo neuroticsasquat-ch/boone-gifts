@@ -5,6 +5,7 @@ import { useAuth } from "../hooks/useAuth";
 import { GiftIcon } from "./Icons";
 import { getConnectionRequests } from "../api/connections";
 import { getUnseenShareCount } from "../api/lists";
+import { getIncomingFamilyInvites } from "../api/families";
 import { Badge } from "./Badge";
 
 function HomeIcon({ className }: { className?: string }) {
@@ -47,12 +48,13 @@ function UserIcon({ className }: { className?: string }) {
   );
 }
 
-const TABS = [
-  { to: "/", label: "Home", Icon: HomeIcon, match: (p: string) => p === "/" },
-  { to: "/lists", label: "Lists", Icon: ListIcon, match: (p: string) => p.startsWith("/lists") },
-  { to: "/connections", label: "Connect", Icon: PeopleIcon, match: (p: string) => p.startsWith("/connections") },
-  { to: "/collections", label: "Collect", Icon: FolderIcon, match: (p: string) => p.startsWith("/collections") },
-];
+function FamiliesIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+    </svg>
+  );
+}
 
 export function Layout() {
   const { user, logout } = useAuth();
@@ -62,9 +64,24 @@ export function Layout() {
 
   const requests = useQuery({ queryKey: ["connectionRequests"], queryFn: getConnectionRequests });
   const unseenShares = useQuery({ queryKey: ["unseen-shares"], queryFn: getUnseenShareCount });
+  const familyInvites = useQuery({ queryKey: ["familyInvites"], queryFn: getIncomingFamilyInvites });
 
   const requestCount = requests.data?.length ?? 0;
   const unseenCount = unseenShares.data ?? 0;
+  const familyInviteCount = familyInvites.data?.length ?? 0;
+
+  const fullTabs = [
+    { to: "/", label: "Home", Icon: HomeIcon, match: (p: string) => p === "/" },
+    { to: "/lists", label: "Lists", Icon: ListIcon, match: (p: string) => p.startsWith("/lists") },
+    { to: "/connections", label: "Connect", Icon: PeopleIcon, match: (p: string) => p.startsWith("/connections") },
+    { to: "/families", label: "Families", Icon: FamiliesIcon, match: (p: string) => p.startsWith("/families") },
+    { to: "/collections", label: "Collect", Icon: FolderIcon, match: (p: string) => p.startsWith("/collections") },
+  ];
+  const simpleTabs = [
+    { to: "/lists", label: "My Lists", Icon: ListIcon, match: (p: string) => p.startsWith("/lists") },
+    { to: "/family-lists", label: "Family Lists", Icon: FamiliesIcon, match: (p: string) => p.startsWith("/family-lists") },
+  ];
+  const tabs = user?.simple_mode ? simpleTabs : fullTabs;
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -80,31 +97,57 @@ export function Layout() {
   return (
     <div className="min-h-screen bg-gray-50 pb-16 md:pb-0">
       {/* Top bar */}
-      <nav className="bg-white shadow">
+      <nav className="bg-white shadow" aria-label="Primary navigation">
         <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-6">
             <Link to="/" className="flex items-center gap-1.5 text-xl font-bold text-gray-900">
               <GiftIcon className="h-6 w-6" /> Boone Gifts
             </Link>
-            <Link to="/lists" className="hidden md:inline relative text-gray-600 hover:text-gray-900">
-              Lists
-              {unseenCount > 0 && (
-                <span className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
-                  {unseenCount > 9 ? "9+" : unseenCount}
-                </span>
-              )}
-            </Link>
-            <Link to="/connections" className="hidden md:inline relative text-gray-600 hover:text-gray-900">
-              Connections
-              {requestCount > 0 && (
-                <span className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
-                  {requestCount > 9 ? "9+" : requestCount}
-                </span>
-              )}
-            </Link>
-            <Link to="/collections" className="hidden md:inline text-gray-600 hover:text-gray-900">
-              Collections
-            </Link>
+            {user?.simple_mode ? (
+              <>
+                <Link to="/lists" className="hidden md:inline relative text-gray-600 hover:text-gray-900">
+                  My Lists
+                  {unseenCount > 0 && (
+                    <span className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+                      {unseenCount > 9 ? "9+" : unseenCount}
+                    </span>
+                  )}
+                </Link>
+                <Link to="/family-lists" className="hidden md:inline text-gray-600 hover:text-gray-900">
+                  Family Lists
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link to="/lists" className="hidden md:inline relative text-gray-600 hover:text-gray-900">
+                  Lists
+                  {unseenCount > 0 && (
+                    <span className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+                      {unseenCount > 9 ? "9+" : unseenCount}
+                    </span>
+                  )}
+                </Link>
+                <Link to="/connections" className="hidden md:inline relative text-gray-600 hover:text-gray-900">
+                  Connections
+                  {requestCount > 0 && (
+                    <span className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+                      {requestCount > 9 ? "9+" : requestCount}
+                    </span>
+                  )}
+                </Link>
+                <Link to="/families" className="hidden md:inline relative text-gray-600 hover:text-gray-900">
+                  Families
+                  {familyInviteCount > 0 && (
+                    <span className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+                      {familyInviteCount > 9 ? "9+" : familyInviteCount}
+                    </span>
+                  )}
+                </Link>
+                <Link to="/collections" className="hidden md:inline text-gray-600 hover:text-gray-900">
+                  Collections
+                </Link>
+              </>
+            )}
           </div>
 
           {/* Account dropdown — all screen sizes */}
@@ -158,13 +201,14 @@ export function Layout() {
       </main>
 
       {/* Bottom tab bar — mobile only */}
-      <nav className="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-200 md:hidden">
+      <nav className="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-200 md:hidden" aria-label="Mobile navigation">
         <div className="flex justify-around">
-          {TABS.map(({ to, label, Icon, match }) => {
+          {tabs.map(({ to, label, Icon, match }) => {
             const active = match(location.pathname);
             let badgeCount = 0;
             if (to === "/connections") badgeCount = requestCount;
             if (to === "/lists") badgeCount = unseenCount;
+            if (to === "/families") badgeCount = familyInviteCount;
             return (
               <Link
                 key={to}
