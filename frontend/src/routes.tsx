@@ -17,6 +17,7 @@ import { CollectionDetail } from "./pages/CollectionDetail";
 import { Families } from "./pages/Families";
 import { FamilyDetail } from "./pages/FamilyDetail";
 import { FamilyLists } from "./pages/FamilyLists";
+import { AcceptFamilyInvite } from "./pages/AcceptFamilyInvite";
 import { Account } from "./pages/Account";
 import { AdminInvites } from "./pages/AdminInvites";
 import { AdminUsers } from "./pages/AdminUsers";
@@ -41,6 +42,7 @@ export const routes: RouteObject[] = [
   {
     element: <ProtectedRoute />,
     children: [
+      { path: "family-invites/:token", element: <AcceptFamilyInvite /> },
       {
         element: <Layout />,
         children: [
