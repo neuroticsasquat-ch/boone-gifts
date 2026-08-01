@@ -30,8 +30,8 @@ tasks:
     cmd: docker compose exec app npx vite build
 
   lint:
-    desc: Run ESLint
-    cmd: docker compose exec app npx eslint .
+    desc: Run oxlint
+    cmd: docker compose exec app npx oxlint
 
   test:
     desc: Run tests
