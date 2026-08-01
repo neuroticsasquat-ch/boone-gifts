@@ -20,7 +20,7 @@ jobs:
         run: npm ci
 
       - name: Lint
-        run: npx eslint .
+        run: npx oxlint
 
       - name: Run tests
         run: npx vitest run

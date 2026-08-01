@@ -1,4 +1,4 @@
-/* eslint-disable react-refresh/only-export-components */
+/* eslint-disable react/only-export-components */
 import { createContext, useState, useCallback, useEffect, type ReactNode } from "react";
 import { apiClient, setAccessToken, clearAccessToken } from "../api/client";
 import {
