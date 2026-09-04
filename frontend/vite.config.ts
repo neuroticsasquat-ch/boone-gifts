@@ -25,6 +25,7 @@ export default defineConfig({
       protocol: "wss",
       clientPort: 443,
     },
+    allowedHosts: ["web--boone-gifts--tom.coder.neuroticsasquat.ch"]
   },
   test: {
     globals: true,

@@ -1,0 +1,41 @@
+version: "3"
+
+# The workspace owns the compose file one level up; stack lifecycle (up, down,
+# logs, restart) lives in ~/project/Taskfile.yml, not here.
+vars:
+  COMPOSE: "docker compose -f ../docker-compose.yml"
+  SVC: web
+  EXEC: "docker compose -f ../docker-compose.yml exec web"
+
+tasks:
+  install:
+    desc: Reinstall dependencies from lock file (use after pulling dependency updates)
+    cmd: "{{.EXEC}} npm ci"
+
+  build:
+    desc: Build for production
+    cmd: "{{.EXEC}} npx vite build"
+
+  lint:
+    desc: Run oxlint
+    cmd: "{{.EXEC}} npx oxlint"
+
+  test:
+    desc: Run tests
+    cmd: "{{.EXEC}} npx vitest run"
+
+  test-watch:
+    desc: Run tests in watch mode
+    cmd: "{{.EXEC}} npx vitest"
+
+  test-file:
+    desc: "Run a specific test file (usage: task test-file -- src/path/to/file.test.tsx)"
+    cmd: "{{.EXEC}} npx vitest run {{.CLI_ARGS}}"
+
+  add:
+    desc: "Add a package (usage: task add -- <package>)"
+    cmd: "{{.EXEC}} npm install {{.CLI_ARGS}}"
+
+  remove:
+    desc: "Remove a package (usage: task remove -- <package>)"
+    cmd: "{{.EXEC}} npm uninstall {{.CLI_ARGS}}"
