@@ -15,7 +15,7 @@ export function clearAccessToken(): void {
 }
 
 export const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL ?? "https://api--boone-gifts--tom.coder.neuroticsasquat.ch/",
+  baseURL: import.meta.env.VITE_API_URL ?? "https://boone-gifts-api.localhost",
   withCredentials: true,
 });
 

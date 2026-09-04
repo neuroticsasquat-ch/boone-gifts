@@ -32,5 +32,11 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
     css: false,
+    // MSW handlers match this exact origin, so pin it rather than inheriting
+    // whatever VITE_API_URL a local .env happens to set (e.g. a Coder
+    // workspace's API subdomain).
+    env: {
+      VITE_API_URL: "https://boone-gifts-api.localhost",
+    },
   },
 });
