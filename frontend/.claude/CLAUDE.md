@@ -52,7 +52,7 @@ src/
   api/
     client.ts        # Axios instance with withCredentials, JWT interceptors (setAccessToken/getAccessToken/clearAccessToken)
     auth.ts          # Auth API functions (login, register, refresh, logout, updateProfile, changePassword, toggleSimpleMode)
-    lists.ts         # Gift list API functions (getLists accepts "owned"|"shared"|"family" filter)
+    lists.ts         # Gift list API functions (getLists accepts "owned"|"shared"|"family" filter; createList takes family_ids; getListFamilies/shareListWithFamily/unshareListFromFamily)
     gifts.ts         # Gift API functions (CRUD + claim/unclaim)
     connections.ts   # Connections API functions
     shares.ts        # Shares API functions
@@ -80,7 +80,7 @@ src/
     ForgotPassword.tsx    # Request password-reset email
     ResetPassword.tsx     # Consume reset token and set new password
     Dashboard.tsx         # Home page (summary cards, connection requests, shared lists) — full-mode only
-    CreateList.tsx        # Create new gift list form
+    CreateList.tsx        # Create new gift list form (full mode: "Share with families" checkboxes)
     Lists.tsx             # Gift lists page (owned + shared sections)
     ListDetail.tsx        # Single list view (owner editing, viewer claiming, sharing, URL auto-populate)
     Connections.tsx       # Connections management (send requests, accept/decline, remove)
@@ -96,6 +96,7 @@ src/
     list-detail/
       GiftsTab.tsx        # Gifts tab (extracted sub-component of ListDetail)
       SharedWithTab.tsx   # Shared-with tab (hidden in simple mode)
+      FamiliesTab.tsx     # Per-family sharing toggles + revoke-claims dialog (read-only in simple mode)
       CollectionsTab.tsx  # Collections tab within list detail
   types/
     index.ts         # TypeScript types matching backend Pydantic schemas
@@ -159,6 +160,7 @@ New types added for the families feature:
 
 Existing type changes:
 - `GiftList` now has `families?: FamilyRef[]` — populated when the list is shared to families
+- `ListFamilyShareState` — `{ id, name, shared }`, one per family the list's owner belongs to
 - `AuthUser` now has `simple_mode: boolean` — decoded from the JWT payload alongside `role`
 - `InviteInfo` has `family_name: string | null` — `null` for admin-invite tokens, family name string for family-invite tokens
 
@@ -190,6 +192,25 @@ Simple mode is a reduced navigation experience for users who only need to see th
 
 `Layout.tsx` selects `simpleTabs` or `fullTabs` based on `user?.simple_mode` and passes the result to the mobile bottom-tab bar. The desktop top nav renders the same conditional split inline.
 
+## Per-Family List Sharing
+
+Family visibility is an explicit per-(list, family) grant on the backend, not implied by
+co-membership. The UI surfaces this in two places, and the backend is always the gate — the
+hidden or read-only UI is not.
+
+- **Create form** (`CreateList.tsx`) — a "Share with families" fieldset of **unchecked** checkboxes,
+  posting `family_ids`. Hidden when the user belongs to no families, and in simple mode (where the
+  backend shares with every family regardless, so a control would be a lie).
+- **List detail** (`list-detail/FamiliesTab.tsx`) — a fourth tab, **Families**, owner-only. In full
+  mode it renders one toggle per family. In simple mode the tab is **still visible** — unlike
+  "Shared with", which stays hidden — showing the real sharing state read-only plus a link to
+  Account settings, because a simple-mode user can own a list created in full mode and deliberately
+  left unshared.
+- **Revoke dialog** — a `409` from the `DELETE` means members of that family hold claims that
+  revoking would orphan. The modal offers **Release those claims** / **Keep them claimed** /
+  **Cancel**, re-issuing with `claims=release` or `claims=keep`. It shows **no counts and no gift or
+  claimer names**: owners are blind to claim state on their own lists.
+
 ## Environment Variables
 
 | Variable | Description |
@@ -197,7 +218,7 @@ Simple mode is a reduced navigation experience for users who only need to see th
 | `VITE_API_URL` | Backend API base URL (e.g., `https://boone-gifts-api.localhost`) |
 
 ## Testing
-- 144 tests across 20 test files: 1 App smoke + 4 API client + 13 families API + 4 AdminRoute + 12 Layout + 11 PendingFamilyInvites + 2 ProtectedRoute + 7 AuthContext + 8 Account + 8 CollectionDetail + 4 Collections + 5 Connections + 4 Dashboard + 8 Families + 16 FamilyDetail + 6 FamilyLists + 4 ForgotPassword + 15 ListDetail + 7 Register + 5 ResetPassword
+- 170 tests across 24 test files: 1 App smoke + 4 API client + 6 lists API + 13 families API + 5 CreateList + 9 FamiliesTab + 4 AdminRoute + 12 Layout + 11 PendingFamilyInvites + 2 ProtectedRoute + 7 AuthContext + 8 Account + 8 CollectionDetail + 4 Collections + 5 Connections + 4 Dashboard + 8 Families + 16 FamilyDetail + 6 FamilyLists + 4 ForgotPassword + 15 ListDetail + 7 Register + 5 ResetPassword
 - Tests run inside the Docker container via `task test`
 
 ## Key Design Decisions

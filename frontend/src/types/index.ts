@@ -44,6 +44,13 @@ export interface GiftList {
   families?: FamilyRef[];
 }
 
+/** One family the list owner belongs to, and whether the list is shared with it. */
+export interface ListFamilyShareState {
+  id: number;
+  name: string;
+  shared: boolean;
+}
+
 export interface Gift {
   id: number;
   name: string;

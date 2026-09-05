@@ -440,4 +440,49 @@ describe("ListDetail — simple mode tab visibility", () => {
     await screen.findByText("My Wishlist");
     expect(screen.getByRole("button", { name: /shared with/i })).toBeInTheDocument();
   });
+
+  it("keeps the Families tab visible in simple mode", async () => {
+    // Unlike "Shared with": a simple-mode user can own a list created in full
+    // mode and left unshared, so they need to see its real state.
+    server.use(
+      http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
+      http.get(`${API}/connections`, () => HttpResponse.json([]))
+    );
+
+    renderListDetail(simpleModeOwnerToken);
+
+    await screen.findByText("My Wishlist");
+    expect(screen.getByRole("button", { name: /^families$/i })).toBeInTheDocument();
+  });
+
+  it("hides the Families tab from a non-owner viewer", async () => {
+    server.use(
+      http.get(`${API}/lists/1`, () => HttpResponse.json(viewerListDetail)),
+      http.get(`${API}/connections`, () => HttpResponse.json([]))
+    );
+
+    renderListDetail(viewerToken);
+
+    await screen.findByText("My Wishlist");
+    expect(screen.queryByRole("button", { name: /^families$/i })).not.toBeInTheDocument();
+  });
+
+  it("renders the Families tab content when selected", async () => {
+    server.use(
+      http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/families`, () =>
+        HttpResponse.json([{ id: 7, name: "The Boones", shared: true }])
+      ),
+    );
+
+    renderListDetail(ownerToken);
+
+    await screen.findByText("My Wishlist");
+    await userEvent.click(screen.getByRole("button", { name: /^families$/i }));
+
+    expect(
+      await screen.findByRole("checkbox", { name: /share with the boones/i })
+    ).toBeChecked();
+  });
 });
