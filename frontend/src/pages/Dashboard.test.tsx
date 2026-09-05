@@ -95,4 +95,53 @@ describe("Dashboard", () => {
     expect(screen.getByText("Shared with Me")).toBeInTheDocument();
     expect(screen.getByText(/No one has shared a list with you yet/)).toBeInTheDocument();
   });
+
+  it("labels the owner's own rows with the recipient (and only those with one)", async () => {
+    server.use(
+      http.get("https://boone-gifts-api.localhost/lists", ({ request }) => {
+        const url = new URL(request.url);
+        if (url.searchParams.get("filter") === "owned") {
+          return HttpResponse.json([
+            { id: 1, name: "My Wishlist", owner_id: 1, owner_name: "Me",
+              recipient_name: null, recipient_has_account: null },
+            { id: 2, name: "Christmas Ideas", owner_id: 1, owner_name: "Me",
+              recipient_name: "Beth", recipient_has_account: false },
+          ]);
+        }
+        return HttpResponse.json([]);
+      }),
+      http.get("https://boone-gifts-api.localhost/connections/requests", () => HttpResponse.json([])),
+    );
+
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(screen.getByText("Christmas Ideas")).toBeInTheDocument();
+    });
+    // Without this the keeper's two lists are told apart only by their names.
+    expect(screen.getByText("for Beth")).toBeInTheDocument();
+    expect(screen.queryByText("for Me")).not.toBeInTheDocument();
+  });
+
+  it("attributes a shared list to its recipient's keeper", async () => {
+    server.use(
+      http.get("https://boone-gifts-api.localhost/lists", ({ request }) => {
+        const url = new URL(request.url);
+        if (url.searchParams.get("filter") === "shared") {
+          return HttpResponse.json([
+            { id: 10, name: "Beth's List", owner_id: 3, owner_name: "Tom",
+              recipient_name: "Beth", recipient_has_account: false },
+          ]);
+        }
+        return HttpResponse.json([]);
+      }),
+      http.get("https://boone-gifts-api.localhost/connections/requests", () => HttpResponse.json([])),
+    );
+
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(screen.getByText("for Beth · kept by Tom")).toBeInTheDocument();
+    });
+  });
 });

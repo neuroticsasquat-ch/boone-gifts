@@ -5,6 +5,7 @@ import { getLists } from "../api/lists";
 import { useTitle } from "../hooks/useTitle";
 import { Spinner } from "../components/Spinner";
 import type { GiftList, FamilyRef } from "../types";
+import { ListAttributionLine } from "../components/ListAttribution";
 
 export function FamilyLists() {
   useTitle("Family Lists");
@@ -62,7 +63,7 @@ export function FamilyLists() {
                 <Link to={`/lists/${list.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50">
                   <div>
                     <p className="font-medium text-gray-900">{list.name}</p>
-                    <p className="text-sm text-gray-500">from {list.owner_name}</p>
+                    <ListAttributionLine list={list} />
                     <p className="text-xs text-gray-400">{list.claimed_count} of {list.gift_count} claimed</p>
                   </div>
                 </Link>

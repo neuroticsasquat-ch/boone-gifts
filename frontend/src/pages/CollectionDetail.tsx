@@ -15,6 +15,7 @@ import type { CollectionDetail as CollectionDetailType, ShoppingListItem } from 
 import { useTitle } from "../hooks/useTitle";
 import toast from "react-hot-toast";
 import { Spinner } from "../components/Spinner";
+import { ListAttributionLine } from "../components/ListAttribution";
 
 export function CollectionDetail() {
   const { id } = useParams();
@@ -250,7 +251,7 @@ function CollectionLists({
         <li key={list.id} className="flex items-center justify-between px-4 py-3">
           <Link to={`/lists/${list.id}`} className="min-w-0 flex-1 hover:opacity-75">
             <p className="font-medium text-gray-900">{list.name}</p>
-            <p className="text-sm text-gray-500">by {list.owner_name}</p>
+            <ListAttributionLine list={list} />
           </Link>
           <button
             onClick={() => removeMutation.mutate(list.id)}

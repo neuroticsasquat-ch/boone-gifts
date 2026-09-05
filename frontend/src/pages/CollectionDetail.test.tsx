@@ -241,4 +241,31 @@ describe("CollectionDetail", () => {
       expect(screen.queryByText("Failed to mark as purchased.")).not.toBeInTheDocument();
     });
   });
+
+  it("attributes collection lists the same way every other list view does", async () => {
+    // This changes the wording from "by X" to "from X"/"for X", accepted for
+    // consistency with the rest of the app.
+    server.use(
+      http.get(`${API}/collections/1`, () =>
+        HttpResponse.json({
+          ...sampleCollection,
+          lists: [
+            { id: 30, name: "Beth's List", description: null, owner_id: 3, owner_name: "Tom",
+              recipient_name: "Beth", recipient_has_account: false,
+              created_at: "2026-01-01", updated_at: "2026-01-01" },
+            { id: 31, name: "Plain List", description: null, owner_id: 4, owner_name: "Alice",
+              recipient_name: null, recipient_has_account: null,
+              created_at: "2026-01-01", updated_at: "2026-01-01" },
+          ],
+        })
+      ),
+    );
+
+    renderCollectionDetail();
+
+    await waitFor(() => {
+      expect(screen.getByText("for Beth · kept by Tom")).toBeInTheDocument();
+    });
+    expect(screen.getByText("from Alice")).toBeInTheDocument();
+  });
 });

@@ -6,6 +6,7 @@ import { useTitle } from "../hooks/useTitle";
 import { Spinner } from "../components/Spinner";
 import { ClipboardIcon, HandshakeIcon } from "../components/Icons";
 import type { GiftList } from "../types";
+import { ListAttributionLine, RecipientLine } from "../components/ListAttribution";
 
 function sortLists(lists: GiftList[], sortBy: "updated" | "name" | "created") {
   return [...lists].sort((a, b) => {
@@ -95,6 +96,7 @@ export function Lists() {
               <li key={list.id} className={showArchived ? "opacity-60" : undefined}>
                 <Link to={`/lists/${list.id}`} className="block px-4 py-3 hover:bg-gray-50">
                   <p className="font-medium text-gray-900">{list.name}</p>
+                  <RecipientLine list={list} />
                   {list.description && (
                     <p className="mt-0.5 text-sm text-gray-500 truncate">{list.description}</p>
                   )}
@@ -126,7 +128,7 @@ export function Lists() {
                 <Link to={`/lists/${list.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50">
                   <div>
                     <p className="font-medium text-gray-900">{list.name}</p>
-                    <p className="text-sm text-gray-500">from {list.owner_name}</p>
+                    <ListAttributionLine list={list} />
                     <p className="text-xs text-gray-400">
                       {list.claimed_count} of {list.gift_count} claimed
                     </p>

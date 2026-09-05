@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
@@ -484,5 +484,212 @@ describe("ListDetail — simple mode tab visibility", () => {
     expect(
       await screen.findByRole("checkbox", { name: /share with the boones/i })
     ).toBeChecked();
+  });
+});
+
+describe("ListDetail — list recipients", () => {
+  const withRecipient = (base: object, name: string | null, hasAccount: boolean | null) => ({
+    ...base,
+    recipient_name: name,
+    recipient_has_account: hasAccount,
+  });
+
+  function serveList(list: object) {
+    server.use(
+      http.get(`${API}/lists/1`, () => HttpResponse.json(list)),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+    );
+  }
+
+  /** Same, but with an accepted connection to the owner, so a profile link renders. */
+  function serveListConnectedToOwner(list: object) {
+    server.use(
+      http.get(`${API}/lists/1`, () => HttpResponse.json(list)),
+      http.get(`${API}/connections`, () =>
+        HttpResponse.json([
+          { id: 55, status: "accepted", user: { id: 1, name: "Owner", email: "owner@test.com" },
+            created_at: "2026-01-01", accepted_at: "2026-01-02" },
+        ])
+      ),
+    );
+  }
+
+  // --- viewer attribution ---
+
+  it("shows the owner on a list with no recipient", async () => {
+    serveList(withRecipient(viewerListDetail, null, null));
+    renderListDetail(viewerToken);
+    expect(await screen.findByText("from Owner")).toBeInTheDocument();
+  });
+
+  it("shows the recipient alone when they have an account", async () => {
+    serveList(withRecipient(viewerListDetail, "Jane", true));
+    renderListDetail(viewerToken);
+    expect(await screen.findByText("from Jane")).toBeInTheDocument();
+    expect(screen.queryByText(/kept by/)).not.toBeInTheDocument();
+  });
+
+  it("names the keeper when the recipient has no account", async () => {
+    serveList(withRecipient(viewerListDetail, "Beth", false));
+    renderListDetail(viewerToken);
+    expect(await screen.findByText(/for Beth · kept by Owner/)).toBeInTheDocument();
+  });
+
+  it("never shows the keeper's warning to a viewer", async () => {
+    serveList(withRecipient(viewerListDetail, "Beth", false));
+    renderListDetail(viewerToken);
+    await screen.findByText(/for Beth · kept by Owner/);
+    expect(screen.queryByText(/Leave off anything you're buying/)).not.toBeInTheDocument();
+  });
+
+  // --- owner header ---
+
+  it("labels the owner's own recipient list", async () => {
+    serveList(withRecipient(ownerListDetail, "Beth", false));
+    renderListDetail(ownerToken);
+    expect(await screen.findByText("for Beth")).toBeInTheDocument();
+  });
+
+  it("shows the keeper's warning to the owner of an absent-recipient list", async () => {
+    serveList(withRecipient(ownerListDetail, "Beth", false));
+    renderListDetail(ownerToken);
+    expect(
+      await screen.findByText(/You can't see or make claims on Beth's list/),
+    ).toBeInTheDocument();
+  });
+
+  it("shows no warning when the recipient has an account", async () => {
+    serveList(withRecipient(ownerListDetail, "Jane", true));
+    renderListDetail(ownerToken);
+    expect(await screen.findByText("for Jane")).toBeInTheDocument();
+    expect(screen.queryByText(/can't see or make claims/)).not.toBeInTheDocument();
+  });
+
+  it("shows nothing extra on the owner's list with no recipient", async () => {
+    serveList(withRecipient(ownerListDetail, null, null));
+    renderListDetail(ownerToken);
+    await screen.findByText("My Wishlist");
+    expect(screen.queryByText(/^for /)).not.toBeInTheDocument();
+    expect(screen.queryByText(/can't see or make claims/)).not.toBeInTheDocument();
+  });
+
+  // --- edit ---
+
+  it("seeds the edit control from the list and can clear the recipient", async () => {
+    const put = vi.fn();
+    serveList(withRecipient(ownerListDetail, "Beth", false));
+    server.use(
+      http.put(`${API}/lists/1`, async ({ request }) => {
+        put(await request.json());
+        return HttpResponse.json(withRecipient(ownerListDetail, null, null));
+      }),
+    );
+
+    renderListDetail(ownerToken);
+
+    await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
+
+    const disclosure = screen.getByRole("checkbox", {
+      name: "This list is for someone else",
+    });
+    expect(disclosure).toBeChecked();
+    expect(screen.getByRole("textbox", { name: /who is this list for/i }))
+      .toHaveValue("Beth");
+    expect(screen.getByRole("radio", { name: "Beth doesn't use this app" }))
+      .toBeChecked();
+
+    await userEvent.click(disclosure);
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(put).toHaveBeenCalled());
+    expect(put.mock.calls[0][0]).toMatchObject({
+      recipient_name: null,
+      recipient_has_account: null,
+    });
+  });
+
+  it("can switch a self-list to a recipient list", async () => {
+    const put = vi.fn();
+    serveList(withRecipient(ownerListDetail, null, null));
+    server.use(
+      http.put(`${API}/lists/1`, async ({ request }) => {
+        put(await request.json());
+        return HttpResponse.json(withRecipient(ownerListDetail, "Jane", true));
+      }),
+    );
+
+    renderListDetail(ownerToken);
+
+    await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    await userEvent.click(
+      screen.getByRole("checkbox", { name: "This list is for someone else" }),
+    );
+    await userEvent.type(
+      screen.getByRole("textbox", { name: /who is this list for/i }),
+      "Jane",
+    );
+    await userEvent.click(screen.getByRole("radio", { name: "Jane uses this app" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(put).toHaveBeenCalled());
+    expect(put.mock.calls[0][0]).toMatchObject({
+      recipient_name: "Jane",
+      recipient_has_account: true,
+    });
+  });
+
+  it("cannot save while the disclosure is open and no radio is chosen", async () => {
+    serveList(withRecipient(ownerListDetail, null, null));
+    renderListDetail(ownerToken);
+
+    await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    await userEvent.click(
+      screen.getByRole("checkbox", { name: "This list is for someone else" }),
+    );
+
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  });
+
+  // --- link placement (§2.5) ---
+
+  it("links the owner's name on a list with no recipient", async () => {
+    serveListConnectedToOwner(withRecipient(viewerListDetail, null, null));
+    renderListDetail(viewerToken);
+
+    const link = await screen.findByRole("link", { name: "Owner" });
+    expect(link).toHaveAttribute("href", "/connections/55");
+  });
+
+  it("links the recipient's name on a shared-account list — same owner profile", async () => {
+    serveListConnectedToOwner(withRecipient(viewerListDetail, "Jane", true));
+    renderListDetail(viewerToken);
+
+    // Jane is the name showing, but the account behind the list is still the owner's.
+    const link = await screen.findByRole("link", { name: "Jane" });
+    expect(link).toHaveAttribute("href", "/connections/55");
+  });
+
+  it("puts the link on the keeper, leaving the absent recipient plain text", async () => {
+    serveListConnectedToOwner(withRecipient(viewerListDetail, "Beth", false));
+    renderListDetail(viewerToken);
+
+    const link = await screen.findByRole("link", { name: "Owner" });
+    expect(link).toHaveAttribute("href", "/connections/55");
+    // Linking "Beth" to the keeper's profile would simply be wrong.
+    expect(screen.queryByRole("link", { name: "Beth" })).not.toBeInTheDocument();
+  });
+
+  it("cannot save with the disclosure open and the name left blank", async () => {
+    serveList(withRecipient(ownerListDetail, null, null));
+    renderListDetail(ownerToken);
+
+    await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    await userEvent.click(
+      screen.getByRole("checkbox", { name: "This list is for someone else" }),
+    );
+    await userEvent.click(screen.getByRole("radio", { name: "They use this app" }));
+
+    // Submitting here would silently save a plain self-list.
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
   });
 });
