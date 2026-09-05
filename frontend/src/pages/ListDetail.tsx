@@ -12,17 +12,19 @@ import { Spinner } from "../components/Spinner";
 import { GiftsTab } from "./list-detail/GiftsTab";
 import { CollectionsTab } from "./list-detail/CollectionsTab";
 import { SharedWithTab } from "./list-detail/SharedWithTab";
+import { FamiliesTab } from "./list-detail/FamiliesTab";
 
 function isOwnerView(list: GiftListDetailOwner | GiftListDetailViewer, userId: number): list is GiftListDetailOwner {
   return list.owner_id === userId;
 }
 
-type Tab = "gifts" | "collections" | "shared";
+type Tab = "gifts" | "collections" | "shared" | "families";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "gifts", label: "Gifts" },
   { key: "collections", label: "Collections" },
   { key: "shared", label: "Shared with" },
+  { key: "families", label: "Families" },
 ];
 
 export function ListDetail() {
@@ -33,7 +35,6 @@ export function ListDetail() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>("gifts");
   const [editing, setEditing] = useState(false);
-  const visibleTabs = TABS.filter(t => !(user?.simple_mode && t.key === "shared"));
 
   const { data: list, isLoading, error, refetch } = useQuery({
     queryKey: ["list", listId],
@@ -58,6 +59,12 @@ export function ListDetail() {
   );
 
   const isOwner = user !== null && isOwnerView(list, user.id);
+  // "Shared with" is hidden in simple mode; "Families" is not — a simple-mode
+  // user can own a list created in full mode and left unshared, so they need to
+  // see its real state. Neither is meaningful to a non-owner viewer.
+  const visibleTabs = TABS.filter(
+    (t) => !(user?.simple_mode && t.key === "shared") && !(!isOwner && t.key === "families"),
+  );
 
   return (
     <div className="space-y-6">
@@ -95,6 +102,7 @@ export function ListDetail() {
       {activeTab === "gifts" && <GiftsTab list={list} listId={listId} isOwner={isOwner} userId={user!.id} queryClient={queryClient} />}
       {activeTab === "collections" && <CollectionsTab listId={listId} queryClient={queryClient} />}
       {activeTab === "shared" && <SharedWithTab listId={listId} isOwner={isOwner} ownerName={list.owner_name} queryClient={queryClient} />}
+      {activeTab === "families" && <FamiliesTab listId={listId} queryClient={queryClient} />}
     </div>
   );
 }

@@ -1,5 +1,10 @@
 import { apiClient } from "./client";
-import type { GiftList, GiftListDetailOwner, GiftListDetailViewer } from "../types";
+import type {
+  GiftList,
+  GiftListDetailOwner,
+  GiftListDetailViewer,
+  ListFamilyShareState,
+} from "../types";
 
 export async function getLists(filter?: "owned" | "shared" | "family", archived?: boolean): Promise<GiftList[]> {
   const params: Record<string, string> = {};
@@ -14,7 +19,11 @@ export async function getList(id: number): Promise<GiftListDetailOwner | GiftLis
   return response.data;
 }
 
-export async function createList(data: { name: string; description?: string }): Promise<GiftList> {
+export async function createList(data: {
+  name: string;
+  description?: string;
+  family_ids?: number[];
+}): Promise<GiftList> {
   const response = await apiClient.post<GiftList>("/lists", data);
   return response.data;
 }
@@ -34,4 +43,28 @@ export async function deleteList(id: number): Promise<void> {
 export async function getUnseenShareCount(): Promise<number> {
   const response = await apiClient.get<{ count: number }>("/lists/unseen-count");
   return response.data.count;
+}
+
+export async function getListFamilies(listId: number): Promise<ListFamilyShareState[]> {
+  const response = await apiClient.get<ListFamilyShareState[]>(`/lists/${listId}/families`);
+  return response.data;
+}
+
+export async function shareListWithFamily(listId: number, familyId: number): Promise<void> {
+  await apiClient.put(`/lists/${listId}/families/${familyId}`);
+}
+
+/**
+ * Revoke a family's access. With no `claims` choice the backend returns 409 when
+ * a member of that family holds a claim they would lose; re-issue with "release"
+ * or "keep" once the owner has decided.
+ */
+export async function unshareListFromFamily(
+  listId: number,
+  familyId: number,
+  claims?: "release" | "keep",
+): Promise<void> {
+  await apiClient.delete(`/lists/${listId}/families/${familyId}`, {
+    params: claims ? { claims } : undefined,
+  });
 }
