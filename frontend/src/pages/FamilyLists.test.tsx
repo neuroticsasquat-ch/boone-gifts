@@ -163,4 +163,40 @@ describe("FamilyLists", () => {
     const link = screen.getByRole("link", { name: /my gift list/i });
     expect(link).toHaveAttribute("href", "/lists/7");
   });
+
+  it("attributes each list by its recipient", async () => {
+    server.use(
+      http.get(`${API}/lists`, ({ request }) => {
+        const url = new URL(request.url);
+        if (url.searchParams.get("filter") === "family") {
+          return HttpResponse.json([
+            {
+              id: 1, name: "Beth's List", owner_name: "Tom", gift_count: 1, claimed_count: 0,
+              description: null, owner_id: 10, is_archived: false,
+              recipient_name: "Beth", recipient_has_account: false,
+              created_at: "2026-01-01", updated_at: "2026-01-01",
+              families: [{ id: 1, name: "Smith Family" }],
+            },
+            {
+              id: 2, name: "Jane's List", owner_name: "Household", gift_count: 1, claimed_count: 0,
+              description: null, owner_id: 11, is_archived: false,
+              recipient_name: "Jane", recipient_has_account: true,
+              created_at: "2026-01-01", updated_at: "2026-01-01",
+              families: [{ id: 1, name: "Smith Family" }],
+            },
+          ]);
+        }
+        return HttpResponse.json([]);
+      }),
+    );
+
+    renderFamilyLists();
+
+    await waitFor(() => {
+      expect(screen.getByText("for Beth · kept by Tom")).toBeInTheDocument();
+    });
+    // A shared account: Jane is the person a viewer would talk to.
+    expect(screen.getByText("from Jane")).toBeInTheDocument();
+    expect(screen.queryByText("from Household")).not.toBeInTheDocument();
+  });
 });

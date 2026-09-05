@@ -13,6 +13,14 @@ import { GiftsTab } from "./list-detail/GiftsTab";
 import { CollectionsTab } from "./list-detail/CollectionsTab";
 import { SharedWithTab } from "./list-detail/SharedWithTab";
 import { FamiliesTab } from "./list-detail/FamiliesTab";
+import { attributionFor, isKeptForAbsentPerson, recipientLabel, recipientNameOf } from "../lib/attribution";
+import { RecipientFields } from "../components/RecipientFields";
+import {
+  recipientIncomplete,
+  recipientPayload,
+  recipientValueFrom,
+  type RecipientValue,
+} from "../lib/recipient";
 
 function isOwnerView(list: GiftListDetailOwner | GiftListDetailViewer, userId: number): list is GiftListDetailOwner {
   return list.owner_id === userId;
@@ -143,6 +151,16 @@ function OwnerHeader({
     <ListHeader
       name={list.name}
       description={list.description}
+      subtitle={recipientLabel(list)}
+      // Creation is when the keeper has the fewest gifts in mind; the temptation
+      // arrives over the following weeks, so this line stays put rather than
+      // being a dismissible alert. Owner-only — a viewer never sees it.
+      footnote={
+        isKeptForAbsentPerson(list)
+          ? `You can't see or make claims on ${recipientNameOf(list)}'s list. ` +
+            "Leave off anything you're buying them yourself."
+          : undefined
+      }
       isArchived={list.is_archived}
       onEdit={onEdit}
       onDelete={
@@ -164,18 +182,32 @@ function OwnerHeader({
 function ViewerHeader({ list }: { list: GiftListDetailViewer }) {
   const connections = useQuery({ queryKey: ["connections"], queryFn: getConnections });
   const connectionId = connections.data?.find((c) => c.user.id === list.owner_id)?.id;
+  const attribution = attributionFor(list);
 
-  const ownerLink = connectionId ? (
-    <Link to={`/connections/${connectionId}`} className="text-blue-600 hover:underline">{list.owner_name}</Link>
-  ) : (
-    list.owner_name
-  );
+  // The link always points at the owner's profile — the account behind the list —
+  // whichever name is showing. On a shared-account list that name is the
+  // recipient's, which is still the right profile to reach. On an "absent" list
+  // the link moves to the keeper: linking "Beth" to Tom's profile would simply
+  // be wrong.
+  const linkToOwner = (label: string) =>
+    connectionId ? (
+      <Link to={`/connections/${connectionId}`} className="text-blue-600 hover:underline">{label}</Link>
+    ) : (
+      label
+    );
+  const ownerLink = linkToOwner(list.owner_name);
 
   return (
     <ListHeader
       name={list.name}
       description={list.description}
-      subtitle={<>from {ownerLink}</>}
+      subtitle={
+        attribution.kind === "absent" ? (
+          <>for {attribution.subject} &middot; kept by {ownerLink}</>
+        ) : (
+          <>from {linkToOwner(attribution.subject)}</>
+        )
+      }
       isArchived={list.is_archived}
     />
   );
@@ -185,6 +217,7 @@ function ListHeader({
   name,
   description,
   subtitle,
+  footnote,
   isArchived,
   onEdit,
   onDelete,
@@ -193,6 +226,7 @@ function ListHeader({
   name: string;
   description: string | null;
   subtitle?: React.ReactNode;
+  footnote?: string;
   isArchived?: boolean;
   onEdit?: () => void;
   onDelete?: React.ReactNode;
@@ -210,6 +244,7 @@ function ListHeader({
           </div>
           {subtitle && <p className="mt-1 text-sm text-gray-500">{subtitle}</p>}
           {description && <p className="mt-2 text-gray-600">{description}</p>}
+          {footnote && <p className="mt-2 text-sm text-gray-500">{footnote}</p>}
         </div>
         {(onEdit || onDelete || onArchive) && (
           <div className="flex gap-2 shrink-0">
@@ -243,9 +278,12 @@ function EditListHeader({
 }) {
   const [name, setName] = useState(list.name);
   const [description, setDescription] = useState(list.description ?? "");
+  // Every transition is permitted — both fields are display-only, so nothing
+  // cascades: no access path shifts and no claim is invalidated.
+  const [recipient, setRecipient] = useState<RecipientValue>(recipientValueFrom(list));
 
   const mutation = useMutation({
-    mutationFn: (data: { name: string; description?: string }) => updateList(listId, data),
+    mutationFn: (data: Parameters<typeof updateList>[1]) => updateList(listId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["list", listId] });
       queryClient.invalidateQueries({ queryKey: ["lists"] });
@@ -255,7 +293,11 @@ function EditListHeader({
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    mutation.mutate({ name, description: description || undefined });
+    mutation.mutate({
+      name,
+      description: description || undefined,
+      ...recipientPayload(recipient),
+    });
   }
 
   return (
@@ -280,10 +322,11 @@ function EditListHeader({
           className="mt-1 block w-full rounded border border-gray-300 px-3 py-2"
         />
       </label>
+      <RecipientFields value={recipient} onChange={setRecipient} />
       <div className="flex gap-2">
         <button
           type="submit"
-          disabled={mutation.isPending}
+          disabled={mutation.isPending || recipientIncomplete(recipient)}
           className="rounded bg-blue-600 px-3 py-1 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
         >
           {mutation.isPending ? "Saving…" : "Save"}

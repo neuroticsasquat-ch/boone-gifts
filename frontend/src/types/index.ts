@@ -36,6 +36,12 @@ export interface GiftList {
   description: string | null;
   owner_id: number;
   owner_name: string;
+  /** Who the list is *for*, when that differs from the account that owns it. */
+  recipient_name: string | null;
+  /** Whether that person has an account of their own. Three-valued: null means
+   * there is no recipient at all. Never read it directly — go through
+   * `attributionFor` / `recipientLabel` in `lib/attribution`. */
+  recipient_has_account: boolean | null;
   is_archived: boolean;
   gift_count: number;
   claimed_count: number;
@@ -79,6 +85,12 @@ export interface GiftListDetailOwner {
   description: string | null;
   owner_id: number;
   owner_name: string;
+  /** Who the list is *for*, when that differs from the account that owns it. */
+  recipient_name: string | null;
+  /** Whether that person has an account of their own. Three-valued: null means
+   * there is no recipient at all. Never read it directly — go through
+   * `attributionFor` / `recipientLabel` in `lib/attribution`. */
+  recipient_has_account: boolean | null;
   is_archived: boolean;
   gifts: GiftOwnerView[];
   created_at: string;
@@ -91,6 +103,12 @@ export interface GiftListDetailViewer {
   description: string | null;
   owner_id: number;
   owner_name: string;
+  /** Who the list is *for*, when that differs from the account that owns it. */
+  recipient_name: string | null;
+  /** Whether that person has an account of their own. Three-valued: null means
+   * there is no recipient at all. Never read it directly — go through
+   * `attributionFor` / `recipientLabel` in `lib/attribution`. */
+  recipient_has_account: boolean | null;
   is_archived: boolean;
   gifts: Gift[];
   created_at: string;

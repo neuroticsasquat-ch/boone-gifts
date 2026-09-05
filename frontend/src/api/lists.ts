@@ -23,6 +23,8 @@ export async function createList(data: {
   name: string;
   description?: string;
   family_ids?: number[];
+  recipient_name?: string | null;
+  recipient_has_account?: boolean | null;
 }): Promise<GiftList> {
   const response = await apiClient.post<GiftList>("/lists", data);
   return response.data;
@@ -30,7 +32,13 @@ export async function createList(data: {
 
 export async function updateList(
   id: number,
-  data: { name?: string; description?: string; is_archived?: boolean },
+  data: {
+    name?: string;
+    description?: string;
+    is_archived?: boolean;
+    recipient_name?: string | null;
+    recipient_has_account?: boolean | null;
+  },
 ): Promise<GiftList> {
   const response = await apiClient.put<GiftList>(`/lists/${id}`, data);
   return response.data;
