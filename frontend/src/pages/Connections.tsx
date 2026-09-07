@@ -27,7 +27,7 @@ export function Connections() {
     queryClient.invalidateQueries({ queryKey: ["connections"] });
     queryClient.invalidateQueries({ queryKey: ["connectionRequests"] });
     queryClient.invalidateQueries({ queryKey: ["lists", "shared"] });
-    queryClient.invalidateQueries({ queryKey: ["collections"] });
+    queryClient.invalidateQueries({ queryKey: ["occasions"] });
   };
 
   const acceptMutation = useMutation({

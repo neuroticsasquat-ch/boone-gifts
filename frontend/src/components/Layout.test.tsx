@@ -80,10 +80,11 @@ describe("Layout", () => {
   it("renders bottom tab bar with nav links", async () => {
     renderLayout();
     await screen.findByLabelText("Account menu");
-    expect(screen.getByText("Home")).toBeInTheDocument();
-    expect(screen.getAllByText("Lists").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText("Connect")).toBeInTheDocument();
-    expect(screen.getByText("Collect")).toBeInTheDocument();
+    const bottomNav = screen.getByRole("navigation", { name: "Mobile navigation" });
+    expect(within(bottomNav).getByText("Home")).toBeInTheDocument();
+    expect(within(bottomNav).getByText("Lists")).toBeInTheDocument();
+    expect(within(bottomNav).getByText("Connect")).toBeInTheDocument();
+    expect(within(bottomNav).getByText("Occasions")).toBeInTheDocument();
   });
 
   it("renders account menu button", async () => {
@@ -128,7 +129,7 @@ describe("Layout", () => {
     const topNav = screen.getByRole("navigation", { name: "Primary navigation" });
     expect(topNav).toHaveTextContent("Lists");
     expect(topNav).toHaveTextContent("Connections");
-    expect(topNav).toHaveTextContent("Collections");
+    expect(topNav).toHaveTextContent("Occasions");
   });
 
   it("renders Boone Gifts brand link", async () => {
@@ -202,7 +203,7 @@ describe("Layout", () => {
     expect(within(bottomNav).queryByText("Home")).not.toBeInTheDocument();
     expect(within(bottomNav).queryByText("Connect")).not.toBeInTheDocument();
     expect(within(bottomNav).queryByText("Families")).not.toBeInTheDocument();
-    expect(within(bottomNav).queryByText("Collect")).not.toBeInTheDocument();
+    expect(within(bottomNav).queryByText("Occasions")).not.toBeInTheDocument();
   });
 
   it("simple-mode: top nav shows My Lists and Family Lists links only", async () => {
@@ -212,6 +213,6 @@ describe("Layout", () => {
     expect(topNav).toHaveTextContent("My Lists");
     expect(topNav).toHaveTextContent("Family Lists");
     expect(topNav).not.toHaveTextContent("Connections");
-    expect(topNav).not.toHaveTextContent("Collections");
+    expect(topNav).not.toHaveTextContent("Occasions");
   });
 });

@@ -75,7 +75,7 @@ export function Layout() {
     { to: "/lists", label: "Lists", Icon: ListIcon, match: (p: string) => p.startsWith("/lists") },
     { to: "/connections", label: "Connect", Icon: PeopleIcon, match: (p: string) => p.startsWith("/connections") },
     { to: "/families", label: "Families", Icon: FamiliesIcon, match: (p: string) => p.startsWith("/families") },
-    { to: "/collections", label: "Collect", Icon: FolderIcon, match: (p: string) => p.startsWith("/collections") },
+    { to: "/occasions", label: "Occasions", Icon: FolderIcon, match: (p: string) => p.startsWith("/occasions") },
   ];
   const simpleTabs = [
     { to: "/lists", label: "My Lists", Icon: ListIcon, match: (p: string) => p.startsWith("/lists") },
@@ -143,8 +143,8 @@ export function Layout() {
                     </span>
                   )}
                 </Link>
-                <Link to="/collections" className="hidden md:inline text-gray-600 hover:text-gray-900">
-                  Collections
+                <Link to="/occasions" className="hidden md:inline text-gray-600 hover:text-gray-900">
+                  Occasions
                 </Link>
               </>
             )}

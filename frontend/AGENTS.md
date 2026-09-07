@@ -58,7 +58,7 @@ src/
                      # getListFamilies / shareListWithFamily / unshareListFromFamily
     gifts.ts         # Gift CRUD + claim/unclaim
     families.ts      # 13 functions — see "Families" below
-    connections.ts, shares.ts, collections.ts, invites.ts, users.ts, meta.ts
+    connections.ts, shares.ts, occasions.ts, invites.ts, users.ts, meta.ts
   contexts/AuthContext.tsx   # Access token in memory, silent refresh on mount, toggleSimpleMode
   hooks/             # useAuth, useTitle
   components/
@@ -70,7 +70,7 @@ src/
     ListAttribution.tsx   # "from Jane" / "for Beth · kept by Tom" row lines
     RecipientFields.tsx   # The "this list is for someone else" control
   pages/             # One per route (see table below)
-    list-detail/     # GiftsTab, SharedWithTab, FamiliesTab, CollectionsTab
+    list-detail/     # GiftsTab, SharedWithTab, FamiliesTab, OccasionsTab
   lib/               # attribution.ts, recipient.ts — list recipient/attribution logic
   types/index.ts     # Types mirroring the backend Pydantic schemas
   test/
@@ -93,8 +93,8 @@ src/
 | `/lists/:id` | `ListDetail` | Owner view or viewer/claimer view |
 | `/connections` | `Connections` | Hidden from simple-mode nav |
 | `/connections/:id` | `ConnectionProfile` | |
-| `/collections` | `Collections` | Hidden from simple-mode nav |
-| `/collections/:id` | `CollectionDetail` | |
+| `/occasions` | `Occasions` | Hidden from simple-mode nav |
+| `/occasions/:id` | `OccasionDetail` | |
 | `/families` | `Families` | Hidden from simple-mode nav |
 | `/families/:id` | `FamilyDetail` | Members, invites, rename, delete, leave |
 | `/family-lists` | `FamilyLists` | Co-members' lists grouped by family; simple mode's second tab |
@@ -111,7 +111,7 @@ A reduced navigation for users who only need their own lists and their family's.
 
 | Mode | Tabs (desktop and mobile) |
 |---|---|
-| Full | Home · Lists · Connect · Families · Collect |
+| Full | Home · Lists · Connect · Families · Occasions |
 | Simple | My Lists · Family Lists |
 
 `Layout.tsx` picks `simpleTabs` or `fullTabs` from `user?.simple_mode` for the mobile bottom bar, and renders the same split inline in the desktop nav.

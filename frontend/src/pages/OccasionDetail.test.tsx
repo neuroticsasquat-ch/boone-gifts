@@ -5,11 +5,11 @@ import { MemoryRouter, Route, Routes } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { server } from "../test/mocks/server";
-import { CollectionDetail } from "./CollectionDetail";
+import { OccasionDetail } from "./OccasionDetail";
 
 const API = "https://boone-gifts-api.localhost";
 
-const sampleCollection = {
+const sampleOccasion = {
   id: 1,
   name: "Christmas 2026",
   description: "Holiday gifts",
@@ -21,30 +21,30 @@ const sampleCollection = {
   updated_at: "2026-01-01",
 };
 
-function renderCollectionDetail(id = "1") {
+function renderOccasionDetail(id = "1") {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={[`/collections/${id}`]}>
+      <MemoryRouter initialEntries={[`/occasions/${id}`]}>
         <Routes>
-          <Route path="/collections/:id" element={<CollectionDetail />} />
-          <Route path="/collections" element={<div>Collections List</div>} />
+          <Route path="/occasions/:id" element={<OccasionDetail />} />
+          <Route path="/occasions" element={<div>Occasions List</div>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>
   );
 }
 
-describe("CollectionDetail", () => {
-  it("renders collection header and lists", async () => {
+describe("OccasionDetail", () => {
+  it("renders occasion header and lists", async () => {
     server.use(
-      http.get(`${API}/collections/1`, () => HttpResponse.json(sampleCollection)),
+      http.get(`${API}/occasions/1`, () => HttpResponse.json(sampleOccasion)),
       http.get(`${API}/lists`, () => HttpResponse.json([])),
     );
 
-    renderCollectionDetail();
+    renderOccasionDetail();
 
     await waitFor(() => {
       expect(screen.getByText("Christmas 2026")).toBeInTheDocument();
@@ -53,16 +53,16 @@ describe("CollectionDetail", () => {
     expect(screen.getByText("My Wishlist")).toBeInTheDocument();
   });
 
-  it("edits collection name and description", async () => {
+  it("edits occasion name and description", async () => {
     server.use(
-      http.get(`${API}/collections/1`, () => HttpResponse.json(sampleCollection)),
+      http.get(`${API}/occasions/1`, () => HttpResponse.json(sampleOccasion)),
       http.get(`${API}/lists`, () => HttpResponse.json([])),
-      http.put(`${API}/collections/1`, () =>
-        HttpResponse.json({ ...sampleCollection, name: "Updated", description: "New desc" })
+      http.put(`${API}/occasions/1`, () =>
+        HttpResponse.json({ ...sampleOccasion, name: "Updated", description: "New desc" })
       ),
     );
 
-    renderCollectionDetail();
+    renderOccasionDetail();
 
     await waitFor(() => {
       expect(screen.getByText("Christmas 2026")).toBeInTheDocument();
@@ -76,16 +76,16 @@ describe("CollectionDetail", () => {
     await userEvent.click(screen.getByText("Save"));
   });
 
-  it("removes a list from collection", async () => {
+  it("removes a list from occasion", async () => {
     server.use(
-      http.get(`${API}/collections/1`, () => HttpResponse.json(sampleCollection)),
+      http.get(`${API}/occasions/1`, () => HttpResponse.json(sampleOccasion)),
       http.get(`${API}/lists`, () => HttpResponse.json([])),
-      http.delete(`${API}/collections/1/items/10`, () =>
+      http.delete(`${API}/occasions/1/items/10`, () =>
         new HttpResponse(null, { status: 204 })
       ),
     );
 
-    renderCollectionDetail();
+    renderOccasionDetail();
 
     await waitFor(() => {
       expect(screen.getByText("My Wishlist")).toBeInTheDocument();
@@ -94,22 +94,22 @@ describe("CollectionDetail", () => {
     await userEvent.click(screen.getByText("Remove"));
   });
 
-  it("adds a list to collection", async () => {
-    const emptyCollection = { ...sampleCollection, lists: [] };
+  it("adds a list to occasion", async () => {
+    const emptyOccasion = { ...sampleOccasion, lists: [] };
 
     server.use(
-      http.get(`${API}/collections/1`, () => HttpResponse.json(emptyCollection)),
+      http.get(`${API}/occasions/1`, () => HttpResponse.json(emptyOccasion)),
       http.get(`${API}/lists`, () =>
         HttpResponse.json([
           { id: 20, name: "Birthday List", description: null, owner_id: 1, owner_name: "Me", created_at: "2026-01-01", updated_at: "2026-01-01" },
         ])
       ),
-      http.post(`${API}/collections/1/items`, () =>
+      http.post(`${API}/occasions/1/items`, () =>
         new HttpResponse(null, { status: 201 })
       ),
     );
 
-    renderCollectionDetail();
+    renderOccasionDetail();
 
     await waitFor(() => {
       expect(screen.getByText("Add")).toBeInTheDocument();
@@ -120,28 +120,28 @@ describe("CollectionDetail", () => {
   });
 
   it("shows empty state for lists", async () => {
-    const emptyCollection = { ...sampleCollection, lists: [] };
+    const emptyOccasion = { ...sampleOccasion, lists: [] };
 
     server.use(
-      http.get(`${API}/collections/1`, () => HttpResponse.json(emptyCollection)),
+      http.get(`${API}/occasions/1`, () => HttpResponse.json(emptyOccasion)),
       http.get(`${API}/lists`, () => HttpResponse.json([])),
     );
 
-    renderCollectionDetail();
+    renderOccasionDetail();
 
     await waitFor(() => {
-      expect(screen.getByText("No lists in this collection.")).toBeInTheDocument();
+      expect(screen.getByText("No lists in this occasion.")).toBeInTheDocument();
     });
   });
 
   it("switches to shopping list view and shows empty state", async () => {
     server.use(
-      http.get(`${API}/collections/1`, () => HttpResponse.json(sampleCollection)),
+      http.get(`${API}/occasions/1`, () => HttpResponse.json(sampleOccasion)),
       http.get(`${API}/lists`, () => HttpResponse.json([])),
-      http.get(`${API}/collections/1/shopping-list`, () => HttpResponse.json([])),
+      http.get(`${API}/occasions/1/shopping-list`, () => HttpResponse.json([])),
     );
 
-    renderCollectionDetail();
+    renderOccasionDetail();
 
     await waitFor(() => {
       expect(screen.getByText("Christmas 2026")).toBeInTheDocument();
@@ -150,7 +150,7 @@ describe("CollectionDetail", () => {
     await userEvent.click(screen.getByText("My Shopping List"));
 
     await waitFor(() => {
-      expect(screen.getByText("No claimed gifts in this collection.")).toBeInTheDocument();
+      expect(screen.getByText("No claimed gifts in this occasion.")).toBeInTheDocument();
     });
   });
 
@@ -179,12 +179,12 @@ describe("CollectionDetail", () => {
     ];
 
     server.use(
-      http.get(`${API}/collections/1`, () => HttpResponse.json(sampleCollection)),
+      http.get(`${API}/occasions/1`, () => HttpResponse.json(sampleOccasion)),
       http.get(`${API}/lists`, () => HttpResponse.json([])),
-      http.get(`${API}/collections/1/shopping-list`, () => HttpResponse.json(shoppingItems)),
+      http.get(`${API}/occasions/1/shopping-list`, () => HttpResponse.json(shoppingItems)),
     );
 
-    renderCollectionDetail();
+    renderOccasionDetail();
 
     await waitFor(() => {
       expect(screen.getByText("Christmas 2026")).toBeInTheDocument();
@@ -215,15 +215,15 @@ describe("CollectionDetail", () => {
     ];
 
     server.use(
-      http.get(`${API}/collections/1`, () => HttpResponse.json(sampleCollection)),
+      http.get(`${API}/occasions/1`, () => HttpResponse.json(sampleOccasion)),
       http.get(`${API}/lists`, () => HttpResponse.json([])),
-      http.get(`${API}/collections/1/shopping-list`, () => HttpResponse.json(shoppingItems)),
+      http.get(`${API}/occasions/1/shopping-list`, () => HttpResponse.json(shoppingItems)),
       http.post(`${API}/lists/10/gifts/1/purchase`, () =>
         HttpResponse.json({ ...shoppingItems[0], purchased_at: "2026-01-10T00:00:00" })
       ),
     );
 
-    renderCollectionDetail();
+    renderOccasionDetail();
 
     await waitFor(() => {
       expect(screen.getByText("Christmas 2026")).toBeInTheDocument();
@@ -242,13 +242,13 @@ describe("CollectionDetail", () => {
     });
   });
 
-  it("attributes collection lists the same way every other list view does", async () => {
+  it("attributes occasion lists the same way every other list view does", async () => {
     // This changes the wording from "by X" to "from X"/"for X", accepted for
     // consistency with the rest of the app.
     server.use(
-      http.get(`${API}/collections/1`, () =>
+      http.get(`${API}/occasions/1`, () =>
         HttpResponse.json({
-          ...sampleCollection,
+          ...sampleOccasion,
           lists: [
             { id: 30, name: "Beth's List", description: null, owner_id: 3, owner_name: "Tom",
               recipient_name: "Beth", recipient_has_account: false,
@@ -261,7 +261,7 @@ describe("CollectionDetail", () => {
       ),
     );
 
-    renderCollectionDetail();
+    renderOccasionDetail();
 
     await waitFor(() => {
       expect(screen.getByText("for Beth · kept by Tom")).toBeInTheDocument();

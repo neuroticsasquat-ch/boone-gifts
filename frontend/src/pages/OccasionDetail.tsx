@@ -2,50 +2,50 @@ import { useState, type FormEvent } from "react";
 import { useParams, useNavigate, Link } from "react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  getCollection,
-  updateCollection,
-  deleteCollection,
-  addCollectionItem,
-  removeCollectionItem,
+  getOccasion,
+  updateOccasion,
+  deleteOccasion,
+  addOccasionItem,
+  removeOccasionItem,
   getShoppingList,
-} from "../api/collections";
+} from "../api/occasions";
 import { purchaseGift, unpurchaseGift } from "../api/gifts";
 import { getLists } from "../api/lists";
-import type { CollectionDetail as CollectionDetailType, ShoppingListItem } from "../types";
+import type { OccasionDetail as OccasionDetailType, ShoppingListItem } from "../types";
 import { useTitle } from "../hooks/useTitle";
 import toast from "react-hot-toast";
 import { Spinner } from "../components/Spinner";
 import { ListAttributionLine } from "../components/ListAttribution";
 
-export function CollectionDetail() {
+export function OccasionDetail() {
   const { id } = useParams();
-  const collectionId = Number(id);
+  const occasionId = Number(id);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [showShoppingList, setShowShoppingList] = useState(false);
 
-  const { data: collection, isLoading, error, refetch } = useQuery({
-    queryKey: ["collection", collectionId],
-    queryFn: () => getCollection(collectionId),
+  const { data: occasion, isLoading, error, refetch } = useQuery({
+    queryKey: ["occasion", occasionId],
+    queryFn: () => getOccasion(occasionId),
     enabled: !!id,
   });
 
-  useTitle(collection?.name ?? "Collection");
+  useTitle(occasion?.name ?? "Occasion");
 
   if (isLoading) return <Spinner />;
-  if (error || !collection) return (
+  if (error || !occasion) return (
     <div className="text-center py-12">
-      <p className="text-red-600">Failed to load collection.</p>
+      <p className="text-red-600">Failed to load occasion.</p>
       <button onClick={() => refetch()} className="mt-2 text-sm text-blue-600 hover:underline">Try again</button>
     </div>
   );
 
   return (
     <div className="space-y-6">
-      <Link to="/collections" className="text-sm text-blue-600 hover:underline">&larr; Back to collections</Link>
-      <CollectionHeader
-        collection={collection}
-        collectionId={collectionId}
+      <Link to="/occasions" className="text-sm text-blue-600 hover:underline">&larr; Back to occasions</Link>
+      <OccasionHeader
+        occasion={occasion}
+        occasionId={occasionId}
         queryClient={queryClient}
         navigate={navigate}
       />
@@ -64,62 +64,62 @@ export function CollectionDetail() {
         </button>
       </div>
       {showShoppingList ? (
-        <ShoppingList collectionId={collectionId} />
+        <ShoppingList occasionId={occasionId} />
       ) : (
         <>
-          <CollectionLists
-            collection={collection}
-            collectionId={collectionId}
+          <OccasionLists
+            occasion={occasion}
+            occasionId={occasionId}
             queryClient={queryClient}
           />
-          <AddListForm collectionId={collectionId} collection={collection} queryClient={queryClient} />
+          <AddListForm occasionId={occasionId} occasion={occasion} queryClient={queryClient} />
         </>
       )}
     </div>
   );
 }
 
-function CollectionHeader({
-  collection,
-  collectionId,
+function OccasionHeader({
+  occasion,
+  occasionId,
   queryClient,
   navigate,
 }: {
-  collection: CollectionDetailType;
-  collectionId: number;
+  occasion: OccasionDetailType;
+  occasionId: number;
   queryClient: ReturnType<typeof useQueryClient>;
   navigate: ReturnType<typeof useNavigate>;
 }) {
   const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(collection.name);
-  const [description, setDescription] = useState(collection.description ?? "");
+  const [name, setName] = useState(occasion.name);
+  const [description, setDescription] = useState(occasion.description ?? "");
 
   const updateMutation = useMutation({
-    mutationFn: (data: { name?: string; description?: string }) => updateCollection(collectionId, data),
+    mutationFn: (data: { name?: string; description?: string }) => updateOccasion(occasionId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["collection", collectionId] });
-      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      queryClient.invalidateQueries({ queryKey: ["occasion", occasionId] });
+      queryClient.invalidateQueries({ queryKey: ["occasions"] });
       setEditing(false);
     },
-    onError: () => toast.error("Failed to update collection."),
+    onError: () => toast.error("Failed to update occasion."),
   });
 
   const archiveMutation = useMutation({
-    mutationFn: () => updateCollection(collectionId, { is_archived: !collection.is_archived }),
+    mutationFn: () => updateOccasion(occasionId, { is_archived: !occasion.is_archived }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["collection", collectionId] });
-      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      queryClient.invalidateQueries({ queryKey: ["occasion", occasionId] });
+      queryClient.invalidateQueries({ queryKey: ["occasions"] });
     },
-    onError: () => toast.error("Failed to update collection."),
+    onError: () => toast.error("Failed to update occasion."),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: () => deleteCollection(collectionId),
+    mutationFn: () => deleteOccasion(occasionId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["collections"] });
-      navigate("/collections", { replace: true });
+      queryClient.invalidateQueries({ queryKey: ["occasions"] });
+      navigate("/occasions", { replace: true });
     },
-    onError: () => toast.error("Failed to delete collection."),
+    onError: () => toast.error("Failed to delete occasion."),
   });
 
   function handleSave(e: FormEvent) {
@@ -128,15 +128,15 @@ function CollectionHeader({
   }
 
   function handleDelete() {
-    if (window.confirm("Delete this collection? This cannot be undone.")) {
+    if (window.confirm("Delete this occasion? This cannot be undone.")) {
       deleteMutation.mutate();
     }
   }
 
   function handleArchiveToggle() {
-    if (collection.is_archived) {
+    if (occasion.is_archived) {
       archiveMutation.mutate();
-    } else if (window.confirm("Archive this collection?")) {
+    } else if (window.confirm("Archive this occasion?")) {
       archiveMutation.mutate();
     }
   }
@@ -189,20 +189,20 @@ function CollectionHeader({
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-gray-900">{collection.name}</h1>
-            {collection.is_archived && (
+            <h1 className="text-2xl font-bold text-gray-900">{occasion.name}</h1>
+            {occasion.is_archived && (
               <span className="inline-block rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600">Archived</span>
             )}
           </div>
-          {collection.description && <p className="mt-2 text-gray-600">{collection.description}</p>}
+          {occasion.description && <p className="mt-2 text-gray-600">{occasion.description}</p>}
         </div>
         <div className="flex gap-2 shrink-0">
           <button
             onClick={handleArchiveToggle}
             disabled={archiveMutation.isPending}
-            className={`rounded px-3 py-1 text-sm font-medium text-white disabled:opacity-50 ${collection.is_archived ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700"}`}
+            className={`rounded px-3 py-1 text-sm font-medium text-white disabled:opacity-50 ${occasion.is_archived ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700"}`}
           >
-            {archiveMutation.isPending ? "…" : collection.is_archived ? "Unarchive" : "Archive"}
+            {archiveMutation.isPending ? "…" : occasion.is_archived ? "Unarchive" : "Archive"}
           </button>
           <button
             onClick={() => setEditing(true)}
@@ -223,31 +223,31 @@ function CollectionHeader({
   );
 }
 
-function CollectionLists({
-  collection,
-  collectionId,
+function OccasionLists({
+  occasion,
+  occasionId,
   queryClient,
 }: {
-  collection: CollectionDetailType;
-  collectionId: number;
+  occasion: OccasionDetailType;
+  occasionId: number;
   queryClient: ReturnType<typeof useQueryClient>;
 }) {
   const removeMutation = useMutation({
-    mutationFn: (listId: number) => removeCollectionItem(collectionId, listId),
+    mutationFn: (listId: number) => removeOccasionItem(occasionId, listId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["collection", collectionId] });
-      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      queryClient.invalidateQueries({ queryKey: ["occasion", occasionId] });
+      queryClient.invalidateQueries({ queryKey: ["occasions"] });
     },
     onError: () => toast.error("Failed to remove list."),
   });
 
-  if (collection.lists.length === 0) {
-    return <p className="text-gray-500">No lists in this collection.</p>;
+  if (occasion.lists.length === 0) {
+    return <p className="text-gray-500">No lists in this occasion.</p>;
   }
 
   return (
     <ul className="divide-y divide-gray-200 rounded-lg bg-white shadow">
-      {collection.lists.map((list) => (
+      {occasion.lists.map((list) => (
         <li key={list.id} className="flex items-center justify-between px-4 py-3">
           <Link to={`/lists/${list.id}`} className="min-w-0 flex-1 hover:opacity-75">
             <p className="font-medium text-gray-900">{list.name}</p>
@@ -267,12 +267,12 @@ function CollectionLists({
 }
 
 function AddListForm({
-  collectionId,
-  collection,
+  occasionId,
+  occasion,
   queryClient,
 }: {
-  collectionId: number;
-  collection: CollectionDetailType;
+  occasionId: number;
+  occasion: OccasionDetailType;
   queryClient: ReturnType<typeof useQueryClient>;
 }) {
   const [selectedListId, setSelectedListId] = useState("");
@@ -280,16 +280,16 @@ function AddListForm({
   const allLists = useQuery({ queryKey: ["lists"], queryFn: () => getLists() });
 
   const addMutation = useMutation({
-    mutationFn: (listId: number) => addCollectionItem(collectionId, listId),
+    mutationFn: (listId: number) => addOccasionItem(occasionId, listId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["collection", collectionId] });
-      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      queryClient.invalidateQueries({ queryKey: ["occasion", occasionId] });
+      queryClient.invalidateQueries({ queryKey: ["occasions"] });
       setSelectedListId("");
     },
     onError: () => toast.error("Failed to add list."),
   });
 
-  const existingListIds = new Set(collection.lists.map((l) => l.id));
+  const existingListIds = new Set(occasion.lists.map((l) => l.id));
   const availableLists = (allLists.data ?? []).filter((l) => !existingListIds.has(l.id));
 
   if (availableLists.length === 0) return null;
@@ -331,19 +331,19 @@ function AddListForm({
   );
 }
 
-function ShoppingList({ collectionId }: { collectionId: number }) {
+function ShoppingList({ occasionId }: { occasionId: number }) {
   const queryClient = useQueryClient();
 
   const { data: items = [], isLoading, error } = useQuery({
-    queryKey: ["shoppingList", collectionId],
-    queryFn: () => getShoppingList(collectionId),
+    queryKey: ["shoppingList", occasionId],
+    queryFn: () => getShoppingList(occasionId),
   });
 
   const purchaseMutation = useMutation({
     mutationFn: ({ listId, giftId }: { listId: number; giftId: number }) =>
       purchaseGift(listId, giftId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["shoppingList", collectionId] });
+      queryClient.invalidateQueries({ queryKey: ["shoppingList", occasionId] });
       toast.success("Marked as purchased!");
     },
     onError: () => toast.error("Failed to mark as purchased."),
@@ -353,7 +353,7 @@ function ShoppingList({ collectionId }: { collectionId: number }) {
     mutationFn: ({ listId, giftId }: { listId: number; giftId: number }) =>
       unpurchaseGift(listId, giftId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["shoppingList", collectionId] });
+      queryClient.invalidateQueries({ queryKey: ["shoppingList", occasionId] });
       toast.success("Marked as not purchased.");
     },
     onError: () => toast.error("Failed to update purchase status."),
@@ -373,7 +373,7 @@ function ShoppingList({ collectionId }: { collectionId: number }) {
   if (items.length === 0) {
     return (
       <div className="rounded-lg bg-white p-6 shadow text-center">
-        <p className="text-gray-500">No claimed gifts in this collection.</p>
+        <p className="text-gray-500">No claimed gifts in this occasion.</p>
         <p className="text-sm text-gray-400 mt-1">Claim gifts from shared lists to see them here.</p>
       </div>
     );

@@ -10,7 +10,7 @@ import { isAxiosError } from "axios";
 import toast from "react-hot-toast";
 import { Spinner } from "../components/Spinner";
 import { GiftsTab } from "./list-detail/GiftsTab";
-import { CollectionsTab } from "./list-detail/CollectionsTab";
+import { OccasionsTab } from "./list-detail/OccasionsTab";
 import { SharedWithTab } from "./list-detail/SharedWithTab";
 import { FamiliesTab } from "./list-detail/FamiliesTab";
 import { attributionFor, isKeptForAbsentPerson, recipientLabel, recipientNameOf } from "../lib/attribution";
@@ -26,11 +26,11 @@ function isOwnerView(list: GiftListDetailOwner | GiftListDetailViewer, userId: n
   return list.owner_id === userId;
 }
 
-type Tab = "gifts" | "collections" | "shared" | "families";
+type Tab = "gifts" | "occasions" | "shared" | "families";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "gifts", label: "Gifts" },
-  { key: "collections", label: "Collections" },
+  { key: "occasions", label: "Occasions" },
   { key: "shared", label: "Shared with" },
   { key: "families", label: "Families" },
 ];
@@ -108,7 +108,7 @@ export function ListDetail() {
 
       {/* Tab content */}
       {activeTab === "gifts" && <GiftsTab list={list} listId={listId} isOwner={isOwner} userId={user!.id} queryClient={queryClient} />}
-      {activeTab === "collections" && <CollectionsTab listId={listId} queryClient={queryClient} />}
+      {activeTab === "occasions" && <OccasionsTab listId={listId} queryClient={queryClient} />}
       {activeTab === "shared" && <SharedWithTab listId={listId} isOwner={isOwner} ownerName={list.owner_name} queryClient={queryClient} />}
       {activeTab === "families" && <FamiliesTab listId={listId} queryClient={queryClient} />}
     </div>

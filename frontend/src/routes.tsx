@@ -12,8 +12,8 @@ import { CreateList } from "./pages/CreateList";
 import { ListDetail } from "./pages/ListDetail";
 import { Connections } from "./pages/Connections";
 import { ConnectionProfile } from "./pages/ConnectionProfile";
-import { Collections } from "./pages/Collections";
-import { CollectionDetail } from "./pages/CollectionDetail";
+import { Occasions } from "./pages/Occasions";
+import { OccasionDetail } from "./pages/OccasionDetail";
 import { Families } from "./pages/Families";
 import { FamilyDetail } from "./pages/FamilyDetail";
 import { FamilyLists } from "./pages/FamilyLists";
@@ -52,8 +52,8 @@ export const routes: RouteObject[] = [
           { path: "lists/:id", element: <ListDetail /> },
           { path: "connections", element: <Connections /> },
           { path: "connections/:id", element: <ConnectionProfile /> },
-          { path: "collections", element: <Collections /> },
-          { path: "collections/:id", element: <CollectionDetail /> },
+          { path: "occasions", element: <Occasions /> },
+          { path: "occasions/:id", element: <OccasionDetail /> },
           { path: "families", element: <Families /> },
           { path: "families/:id", element: <FamilyDetail /> },
           { path: "family-lists", element: <FamilyLists /> },

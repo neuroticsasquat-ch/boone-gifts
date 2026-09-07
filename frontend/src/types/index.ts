@@ -145,8 +145,8 @@ export interface ListShare {
   created_at: string;
 }
 
-// Collections
-export interface Collection {
+// Occasions
+export interface Occasion {
   id: number;
   name: string;
   description: string | null;
@@ -156,7 +156,7 @@ export interface Collection {
   updated_at: string;
 }
 
-export interface CollectionDetail {
+export interface OccasionDetail {
   id: number;
   name: string;
   description: string | null;

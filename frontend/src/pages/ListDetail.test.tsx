@@ -89,8 +89,8 @@ describe("ListDetail Sharing Section", () => {
         ])
       ),
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
-      http.get(`${API}/collections`, () => HttpResponse.json([])),
-      http.get(`${API}/collections/for-list/1`, () => HttpResponse.json([])),
+      http.get(`${API}/occasions`, () => HttpResponse.json([])),
+      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
     );
 
     renderListDetail(ownerToken);
@@ -111,8 +111,8 @@ describe("ListDetail Sharing Section", () => {
       http.get(`${API}/lists/1`, () => HttpResponse.json(viewerListDetail)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/shares/users`, () => HttpResponse.json([])),
-      http.get(`${API}/collections`, () => HttpResponse.json([])),
-      http.get(`${API}/collections/for-list/1`, () => HttpResponse.json([])),
+      http.get(`${API}/occasions`, () => HttpResponse.json([])),
+      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
     );
 
     renderListDetail(viewerToken);
@@ -140,8 +140,8 @@ describe("ListDetail Sharing Section", () => {
       http.post(`${API}/lists/1/shares`, () =>
         HttpResponse.json({ id: 1, list_id: 1, user_id: 2, created_at: "2026-01-01" }, { status: 201 })
       ),
-      http.get(`${API}/collections`, () => HttpResponse.json([])),
-      http.get(`${API}/collections/for-list/1`, () => HttpResponse.json([])),
+      http.get(`${API}/occasions`, () => HttpResponse.json([])),
+      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
     );
 
     renderListDetail(ownerToken);
@@ -173,8 +173,8 @@ describe("ListDetail Sharing Section", () => {
       http.delete(`${API}/lists/1/shares/2`, () =>
         new HttpResponse(null, { status: 204 })
       ),
-      http.get(`${API}/collections`, () => HttpResponse.json([])),
-      http.get(`${API}/collections/for-list/1`, () => HttpResponse.json([])),
+      http.get(`${API}/occasions`, () => HttpResponse.json([])),
+      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
     );
 
     renderListDetail(ownerToken);
@@ -204,8 +204,8 @@ describe("ListDetail Sharing Section", () => {
       http.get(`${API}/lists/1/shares`, () =>
         HttpResponse.json([{ id: 1, list_id: 1, user_id: 2, created_at: "2026-01-01" }])
       ),
-      http.get(`${API}/collections`, () => HttpResponse.json([])),
-      http.get(`${API}/collections/for-list/1`, () => HttpResponse.json([])),
+      http.get(`${API}/occasions`, () => HttpResponse.json([])),
+      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
     );
 
     renderListDetail(ownerToken);
@@ -237,8 +237,8 @@ describe("AddGiftForm URL Auto-Populate", () => {
       http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
-      http.get(`${API}/collections`, () => HttpResponse.json([])),
-      http.get(`${API}/collections/for-list/1`, () => HttpResponse.json([])),
+      http.get(`${API}/occasions`, () => HttpResponse.json([])),
+      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
       http.get(`${API}/meta`, () =>
         HttpResponse.json({
           title: "Cool Gadget",
@@ -267,8 +267,8 @@ describe("AddGiftForm URL Auto-Populate", () => {
       http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
-      http.get(`${API}/collections`, () => HttpResponse.json([])),
-      http.get(`${API}/collections/for-list/1`, () => HttpResponse.json([])),
+      http.get(`${API}/occasions`, () => HttpResponse.json([])),
+      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
       http.get(`${API}/meta`, () =>
         HttpResponse.json({
           title: "From Meta",
@@ -302,8 +302,8 @@ describe("AddGiftForm URL Auto-Populate", () => {
       http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
-      http.get(`${API}/collections`, () => HttpResponse.json([])),
-      http.get(`${API}/collections/for-list/1`, () => HttpResponse.json([])),
+      http.get(`${API}/occasions`, () => HttpResponse.json([])),
+      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
       http.get(`${API}/meta`, () => HttpResponse.error()),
     );
 
@@ -342,8 +342,8 @@ describe("Gift list item responsive layout", () => {
       http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListWithGift)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
-      http.get(`${API}/collections`, () => HttpResponse.json([])),
-      http.get(`${API}/collections/for-list/1`, () => HttpResponse.json([])),
+      http.get(`${API}/occasions`, () => HttpResponse.json([])),
+      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
     );
 
     renderListDetail(ownerToken);
@@ -357,8 +357,8 @@ describe("Gift list item responsive layout", () => {
     server.use(
       http.get(`${API}/lists/1`, () => HttpResponse.json(viewerListWithGift)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
-      http.get(`${API}/collections`, () => HttpResponse.json([])),
-      http.get(`${API}/collections/for-list/1`, () => HttpResponse.json([])),
+      http.get(`${API}/occasions`, () => HttpResponse.json([])),
+      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
     );
 
     renderListDetail(viewerToken);
@@ -373,8 +373,8 @@ describe("Gift list item responsive layout", () => {
       http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListWithGift)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
-      http.get(`${API}/collections`, () => HttpResponse.json([])),
-      http.get(`${API}/collections/for-list/1`, () => HttpResponse.json([])),
+      http.get(`${API}/occasions`, () => HttpResponse.json([])),
+      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
     );
 
     renderListDetail(ownerToken);
@@ -389,8 +389,8 @@ describe("Gift list item responsive layout", () => {
       http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListWithGift)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
-      http.get(`${API}/collections`, () => HttpResponse.json([])),
-      http.get(`${API}/collections/for-list/1`, () => HttpResponse.json([])),
+      http.get(`${API}/occasions`, () => HttpResponse.json([])),
+      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
     );
 
     renderListDetail(ownerToken);
@@ -404,8 +404,8 @@ describe("Gift list item responsive layout", () => {
     server.use(
       http.get(`${API}/lists/1`, () => HttpResponse.json(viewerListWithGift)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
-      http.get(`${API}/collections`, () => HttpResponse.json([])),
-      http.get(`${API}/collections/for-list/1`, () => HttpResponse.json([])),
+      http.get(`${API}/occasions`, () => HttpResponse.json([])),
+      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
     );
 
     renderListDetail(viewerToken);
