@@ -71,8 +71,9 @@ src/
     ListAttribution.tsx   # "from Jane" / "for Beth · kept by Tom" row lines
     RecipientFields.tsx   # The "this list is for someone else" control
   pages/             # One per route (see table below), plus Occasions.tsx and
-                     # OccasionDetail.tsx — currently unrouted, kept for the
-                     # occasion filter (M4-M5)
+                     # OccasionDetail.tsx — still unrouted; the Lists page's
+                     # occasion filter is where a user meets the concept now (M5
+                     # gives it a home on list detail)
     list-detail/     # GiftsTab, SharedWithTab, FamiliesTab, OccasionsTab
   lib/               # attribution.ts, recipient.ts — list recipient/attribution logic
   types/index.ts     # Types mirroring the backend Pydantic schemas
@@ -91,7 +92,7 @@ src/
 | `/reset-password` | `ResetPassword` | Public |
 | `/family-invites/:token` | `AcceptFamilyInvite` | Authenticated, outside `Layout` |
 | `/` | — | Redirects to `/lists`; the app's entry point, not a page |
-| `/lists` | `Lists` | Owned + directly shared lists, under the actionable banner |
+| `/lists` | `Lists` | My lists + everything shared with me, under the actionable banner. Header controls: occasion filter, sort, archive (full mode only) |
 | `/lists/new` | `CreateList` | Full mode also shows "Share with families" checkboxes |
 | `/lists/:id` | `ListDetail` | Owner view or viewer/claimer view |
 | `/people` | `People` | The People tab: families, then individuals, under the actionable banner |
@@ -115,6 +116,11 @@ A reduced navigation for users who only need their own lists and their family's.
 
 `ActionableBanner` is deliberately **not** subtracted in simple mode: with People hidden, the banner
 on `/lists` is the only route to a pending connection request or family invite.
+
+On `/lists`, simple mode hides the header controls — occasion filter, sort, archive — **and nothing
+else**. The rows, the section headings and the New List button are identical in both modes; only the
+"nothing shared with you yet" empty state differs, because full mode's "Add a connection" link points
+at People, which simple mode hides.
 
 `Layout.tsx` holds **one** `tabs` array driving both the mobile bottom bar and the desktop nav. Simple
 mode is purely subtractive — it filters People out of that array and adds a People link to the account
@@ -157,8 +163,28 @@ Family visibility is an explicit per-(list, family) grant on the backend, not im
 
 A list can name a recipient. `RecipientFields.tsx` is the shared "this list is for someone else" control (create form and edit header); `lib/recipient.ts` holds its value type and payload mapping, `lib/attribution.ts` turns a list into its display line, and `ListAttribution.tsx` renders it — "from Jane" for a list someone shared, "for Beth · kept by Tom" for one kept on behalf of a person with no account.
 
+## Occasions
+
+An occasion is a user's saved grouping of lists — renamed from "collection" (NEU-1229). It has **no
+top-level route** any more, so the **occasion filter on `/lists` is the primary place a user meets
+the concept**, and it carries the explanation the old page's blurb used to.
+
+- The filter is a `<select>` in the Lists page header, defaulting to "All lists". It narrows **both**
+  sections at once; a list in several occasions is matched by each of them.
+- It renders only when the viewer has at least one occasion — a select whose sole option is
+  "All lists" would name a concept it cannot explain.
+- Membership comes from `getOccasion(id).lists` (`["occasion", id]`), not from a per-list lookup, so
+  one request answers the whole page.
+
+**Sort is one page-level control, not one per section.** The Lists page used to hold two independent
+sort selects (`ownedSort`, `sharedSort`); NEU-1238 moved sort into the header row shared with the
+occasion filter, and a page-level control that sorts one section is a lie. So the two states
+collapsed into one `sortBy` governing both — the same both-sections-at-once reach the occasion filter
+has. This deliberately diverges from the project spec §4.2 wireframe, which still draws `[sort ▾]`
+against each section heading.
+
 ## Testing
-- ~233 test cases across 26 files, run inside the container via `task test`
+- ~256 test cases across 25 files, run inside the container via `task test`
 - MSW mocks live in `src/test/mocks/handlers.ts` (default `/auth/refresh → 401`); setup in `src/test/setup.ts`
 
 ## Critical conventions

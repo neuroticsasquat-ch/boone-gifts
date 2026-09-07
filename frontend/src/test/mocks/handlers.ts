@@ -21,4 +21,9 @@ export const handlers = [
   http.get("https://boone-gifts-api.localhost/families/invites", () => {
     return HttpResponse.json([]);
   }),
+  // Default handler: no occasions (the Lists page's occasion filter fetches these
+  // in full mode on every render)
+  http.get("https://boone-gifts-api.localhost/occasions", () => {
+    return HttpResponse.json([]);
+  }),
 ];
