@@ -70,9 +70,9 @@ src/
                           # inline. The one implementation; renders nothing when empty
     ListAttribution.tsx   # "from Jane" / "for Beth · kept by Tom" row lines
     RecipientFields.tsx   # The "this list is for someone else" control
-  pages/             # One per route (see table below), plus Families.tsx,
-                     # Occasions.tsx and OccasionDetail.tsx — currently unrouted,
-                     # kept for the People page and the occasion filter (M3-M5)
+  pages/             # One per route (see table below), plus Occasions.tsx and
+                     # OccasionDetail.tsx — currently unrouted, kept for the
+                     # occasion filter (M4-M5)
     list-detail/     # GiftsTab, SharedWithTab, FamiliesTab, OccasionsTab
   lib/               # attribution.ts, recipient.ts — list recipient/attribution logic
   types/index.ts     # Types mirroring the backend Pydantic schemas
@@ -94,7 +94,7 @@ src/
 | `/lists` | `Lists` | Owned + directly shared lists, under the actionable banner |
 | `/lists/new` | `CreateList` | Full mode also shows "Share with families" checkboxes |
 | `/lists/:id` | `ListDetail` | Owner view or viewer/claimer view |
-| `/people` | `Connections` | The People tab. Merging families in is NEU-1234 |
+| `/people` | `People` | The People tab: families, then individuals, under the actionable banner |
 | `/people/:id` | `ConnectionProfile` | |
 | `/people/families/:id` | `FamilyDetail` | Members, invites, rename, delete, leave |
 | `/account` | `Account` | Both modes, via the user menu |
@@ -138,7 +138,7 @@ row and drops the badge.
 connection requests and family invites — the logic that used to live once in `Dashboard.tsx` (deleted
 in NEU-1231) and once in `PendingFamilyInvites.tsx` (replaced by this).
 
-- Mounted on `/lists` above the lists, on `/people`, and on the unrouted `Families` page.
+- Mounted on `/lists` above the lists, and on `/people`.
 - Renders **nothing** when nothing is pending — no empty card, no heading.
 - While an item's accept/decline is in flight, both of that item's buttons are disabled, so a
   decision cannot be taken twice. Other rows stay actionable.

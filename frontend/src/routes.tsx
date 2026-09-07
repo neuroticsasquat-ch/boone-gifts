@@ -10,7 +10,7 @@ import { ResetPassword } from "./pages/ResetPassword";
 import { Lists } from "./pages/Lists";
 import { CreateList } from "./pages/CreateList";
 import { ListDetail } from "./pages/ListDetail";
-import { Connections } from "./pages/Connections";
+import { People } from "./pages/People";
 import { ConnectionProfile } from "./pages/ConnectionProfile";
 import { FamilyDetail } from "./pages/FamilyDetail";
 import { AcceptFamilyInvite } from "./pages/AcceptFamilyInvite";
@@ -49,7 +49,7 @@ export const routes: RouteObject[] = [
           { path: "lists", element: <Lists /> },
           { path: "lists/new", element: <CreateList /> },
           { path: "lists/:id", element: <ListDetail /> },
-          { path: "people", element: <Connections /> },
+          { path: "people", element: <People /> },
           { path: "people/families/:id", element: <FamilyDetail /> },
           { path: "people/:id", element: <ConnectionProfile /> },
           { path: "account", element: <Account /> },
