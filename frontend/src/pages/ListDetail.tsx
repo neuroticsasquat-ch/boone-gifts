@@ -10,8 +10,7 @@ import { isAxiosError } from "axios";
 import toast from "react-hot-toast";
 import { Spinner } from "../components/Spinner";
 import { GiftsTab } from "./list-detail/GiftsTab";
-import { SharedWithTab } from "./list-detail/SharedWithTab";
-import { FamiliesTab } from "./list-detail/FamiliesTab";
+import { SharingPanel } from "./list-detail/SharingPanel";
 import { SharingSummary } from "./list-detail/SharingSummary";
 import { attributionFor, isKeptForAbsentPerson, recipientLabel, recipientNameOf } from "../lib/attribution";
 import { RecipientFields } from "../components/RecipientFields";
@@ -83,12 +82,10 @@ export function ListDetail() {
       )}
 
       {/* Sharing panel — the only way to reach the people and family controls now
-          that the tab bar is gone. NEU-1239 replaces both halves with one
-          combined "Who can see this list" picker. */}
+          that the tab bar is gone. */}
       {isOwner && sharingOpen && (
         <SharingPanel
           listId={listId}
-          ownerName={list.owner_name}
           queryClient={queryClient}
           onClose={() => setSharingOpen(false)}
         />
@@ -97,31 +94,6 @@ export function ListDetail() {
       {/* The gifts are the page. */}
       <GiftsTab list={list} listId={listId} isOwner={isOwner} userId={user!.id} queryClient={queryClient} />
     </div>
-  );
-}
-
-function SharingPanel({
-  listId,
-  ownerName,
-  queryClient,
-  onClose,
-}: {
-  listId: number;
-  ownerName: string;
-  queryClient: ReturnType<typeof useQueryClient>;
-  onClose: () => void;
-}) {
-  return (
-    <section aria-label="Who can see this list" className="space-y-4 rounded-lg bg-gray-50 p-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-900">Who can see this list</h2>
-        <button onClick={onClose} className="text-sm font-medium text-gray-500 hover:text-gray-700">
-          Done
-        </button>
-      </div>
-      <SharedWithTab listId={listId} isOwner ownerName={ownerName} queryClient={queryClient} />
-      <FamiliesTab listId={listId} queryClient={queryClient} />
-    </section>
   );
 }
 

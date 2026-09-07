@@ -75,10 +75,10 @@ src/
                      # occasion filter is where a user meets the concept now (M5
                      # gives it a home on list detail)
     list-detail/     # GiftsTab (the page body), SharingSummary (the header's
-                     # "Shared with …" line), SharedWithTab + FamiliesTab (now
-                     # behind the header's Change control, until NEU-1239
-                     # replaces both with one picker), OccasionsTab (orphaned by
-                     # the tab bar's removal; NEU-1240 re-homes it in the ⋯ menu)
+                     # "Shared with …" line), SharingPanel (the combined people
+                     # + families picker behind the header's Change control),
+                     # OccasionsTab (orphaned by the tab bar's removal;
+                     # NEU-1240 re-homes it in the ⋯ menu)
   lib/               # attribution.ts, recipient.ts — list recipient/attribution logic
   types/index.ts     # Types mirroring the backend Pydantic schemas
   test/
@@ -155,14 +155,15 @@ in NEU-1231) and once in `PendingFamilyInvites.tsx` (replaced by this).
 - A 409 on a family invite means it was already accepted, declined, or expired: the row is refreshed
   away and the user is told the invite is no longer valid.
 
-## Per-family list sharing
+## List sharing
 
-Family visibility is an explicit per-(list, family) grant on the backend, not implied by co-membership. **The backend is always the gate — hidden or read-only UI is not.**
+Visibility is an explicit grant on the backend — per-(list, user) for people, per-(list, family) for families, never implied by co-membership. **The backend is always the gate — hidden or read-only UI is not.**
 
-- **Create form** (`CreateList.tsx`) — a "Share with families" fieldset of **unchecked** checkboxes posting `family_ids`. Hidden when the user belongs to no families, and in simple mode, where the backend shares with every family regardless and a control would be a lie.
-- **List detail** (`list-detail/FamiliesTab.tsx`) — owner-only, reached from the header's **Change** control (NEU-1236 removed the tab bar). Full mode renders one toggle per family. Simple mode never opens the panel at all: its header summary line is read-only, because the backend auto-grants its lists to every family anyway.
+- **Who can see this list** (`list-detail/SharingPanel.tsx`) — the one owner-facing sharing surface, opened by the header's **Change** control. A **People** group (one checkbox per connection, checked when shared) and a **Families** group (one per family, checked when granted), in that order — the same order the summary line reads in. It writes through the existing endpoints, `/lists/{id}/shares` and `/lists/{id}/families/{family_id}`; there is no combined sharing endpoint.
+- **Owner-only and full-mode only.** Simple mode never opens the panel: its header summary line is read-only, because the backend auto-grants its lists to every family anyway.
   - **Known cost of that line** (project spec §6.2, accepted): the auto-grant covers lists *created* in simple mode and family *joins*, so a simple-mode user who owns a list made in full mode and deliberately left unshared reads "Shared with your families" when it isn't. The retired Families tab used to show them the real state; the spec chose the fixed copy anyway.
-- **Revoke dialog** — a 409 from the DELETE means members of that family hold claims that revoking would orphan. The modal offers **Release those claims** / **Keep them claimed** / **Cancel**, re-issuing with `claims=release` or `claims=keep`. It shows **no counts and no gift or claimer names**: owners are blind to claim state on their own lists.
+- **Create form** (`CreateList.tsx`) — a "Share with families" fieldset of **unchecked** checkboxes posting `family_ids`. Hidden when the user belongs to no families, and in simple mode, where the backend shares with every family regardless and a control would be a lie.
+- **Revoke dialog** — a 409 from the family DELETE means members of that family hold claims that revoking would orphan. The modal offers **Release those claims** / **Keep them claimed** / **Cancel**, re-issuing with `claims=release` or `claims=keep`. It shows **no counts and no gift or claimer names**: owners are blind to claim state on their own lists.
 
 ## Recipients
 

@@ -183,12 +183,6 @@ export interface OccasionDetail {
 }
 
 // Shared Users
-export interface SharedUser {
-  id: number;
-  name: string;
-  email: string;
-}
-
 // URL Metadata
 export interface UrlMeta {
   title: string | null;

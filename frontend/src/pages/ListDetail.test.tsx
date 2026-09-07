@@ -90,7 +90,7 @@ describe("ListDetail sharing panel", () => {
     return screen.getByRole("region", { name: "Who can see this list" });
   }
 
-  it("renders sharing controls for the owner", async () => {
+  it("puts people and families in one panel for the owner", async () => {
     server.use(
       http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
       http.get(`${API}/connections`, () =>
@@ -99,7 +99,9 @@ describe("ListDetail sharing panel", () => {
         ])
       ),
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
-      http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/families`, () =>
+        HttpResponse.json([{ id: 7, name: "The Boones", shared: true }])
+      ),
       http.get(`${API}/occasions`, () => HttpResponse.json([])),
       http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
     );
@@ -107,9 +109,10 @@ describe("ListDetail sharing panel", () => {
     renderListDetail(ownerToken);
     const panel = await openSharingPanel();
 
-    await waitFor(() => {
-      expect(within(panel).getByText("Share")).toBeInTheDocument();
-    });
+    expect(
+      await within(panel).findByRole("checkbox", { name: /share with alice/i })
+    ).not.toBeChecked();
+    expect(within(panel).getByRole("checkbox", { name: /share with the boones/i })).toBeChecked();
   });
 
   it("gives a viewer no way into sharing", async () => {
@@ -127,91 +130,7 @@ describe("ListDetail sharing panel", () => {
     });
     expect(screen.queryByRole("button", { name: "Change" })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Who can see this list" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
-  });
-
-  it("adds a share from connections dropdown", async () => {
-    server.use(
-      http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
-      http.get(`${API}/connections`, () =>
-        HttpResponse.json([
-          { id: 5, status: "accepted", user: { id: 2, name: "Alice", email: "alice@test.com" }, created_at: "2026-01-01", accepted_at: "2026-01-02" },
-        ])
-      ),
-      http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
-      http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
-      http.post(`${API}/lists/1/shares`, () =>
-        HttpResponse.json({ id: 1, list_id: 1, user_id: 2, created_at: "2026-01-01" }, { status: 201 })
-      ),
-      http.get(`${API}/occasions`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
-    );
-
-    renderListDetail(ownerToken);
-    const panel = await openSharingPanel();
-
-    await waitFor(() => {
-      expect(within(panel).getByRole("combobox")).toBeInTheDocument();
-    });
-
-    await userEvent.selectOptions(within(panel).getByRole("combobox"), "2");
-    await userEvent.click(within(panel).getByText("Share"));
-  });
-
-  it("removes a share", async () => {
-    server.use(
-      http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
-      http.get(`${API}/connections`, () =>
-        HttpResponse.json([
-          { id: 5, status: "accepted", user: { id: 2, name: "Alice", email: "alice@test.com" }, created_at: "2026-01-01", accepted_at: "2026-01-02" },
-        ])
-      ),
-      http.get(`${API}/lists/1/shares`, () =>
-        HttpResponse.json([{ id: 1, list_id: 1, user_id: 2, created_at: "2026-01-01" }])
-      ),
-      http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
-      http.delete(`${API}/lists/1/shares/2`, () =>
-        new HttpResponse(null, { status: 204 })
-      ),
-      http.get(`${API}/occasions`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
-    );
-
-    renderListDetail(ownerToken);
-    const panel = await openSharingPanel();
-
-    await waitFor(() => {
-      expect(within(panel).getByText("Alice")).toBeInTheDocument();
-    });
-
-    await userEvent.click(within(panel).getByText("Remove"));
-  });
-
-  it("hides add share when all connections already shared", async () => {
-    server.use(
-      http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
-      http.get(`${API}/connections`, () =>
-        HttpResponse.json([
-          { id: 5, status: "accepted", user: { id: 2, name: "Alice", email: "alice@test.com" }, created_at: "2026-01-01", accepted_at: "2026-01-02" },
-        ])
-      ),
-      http.get(`${API}/lists/1/shares`, () =>
-        HttpResponse.json([{ id: 1, list_id: 1, user_id: 2, created_at: "2026-01-01" }])
-      ),
-      http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
-    );
-
-    renderListDetail(ownerToken);
-    const panel = await openSharingPanel();
-
-    await waitFor(() => {
-      expect(within(panel).getByText("Alice")).toBeInTheDocument();
-    });
-
-    // The share dropdown should not be present since Alice is already shared
-    expect(within(panel).queryByRole("combobox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
 });
 
