@@ -1,4 +1,4 @@
-import { useState, useEffect, type FormEvent } from "react";
+import { useState, useEffect, useRef, type FormEvent } from "react";
 import { useParams, useNavigate, Link } from "react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getList, updateList, deleteList } from "../api/lists";
@@ -10,9 +10,9 @@ import { isAxiosError } from "axios";
 import toast from "react-hot-toast";
 import { Spinner } from "../components/Spinner";
 import { GiftsTab } from "./list-detail/GiftsTab";
-import { OccasionsTab } from "./list-detail/OccasionsTab";
 import { SharedWithTab } from "./list-detail/SharedWithTab";
 import { FamiliesTab } from "./list-detail/FamiliesTab";
+import { SharingSummary } from "./list-detail/SharingSummary";
 import { attributionFor, isKeptForAbsentPerson, recipientLabel, recipientNameOf } from "../lib/attribution";
 import { RecipientFields } from "../components/RecipientFields";
 import {
@@ -26,23 +26,14 @@ function isOwnerView(list: GiftListDetailOwner | GiftListDetailViewer, userId: n
   return list.owner_id === userId;
 }
 
-type Tab = "gifts" | "occasions" | "shared" | "families";
-
-const TABS: { key: Tab; label: string }[] = [
-  { key: "gifts", label: "Gifts" },
-  { key: "occasions", label: "Occasions" },
-  { key: "shared", label: "Shared with" },
-  { key: "families", label: "Families" },
-];
-
 export function ListDetail() {
   const { id } = useParams();
   const listId = Number(id);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<Tab>("gifts");
   const [editing, setEditing] = useState(false);
+  const [sharingOpen, setSharingOpen] = useState(false);
 
   const { data: list, isLoading, error, refetch } = useQuery({
     queryKey: ["list", listId],
@@ -67,12 +58,6 @@ export function ListDetail() {
   );
 
   const isOwner = user !== null && isOwnerView(list, user.id);
-  // "Shared with" is hidden in simple mode; "Families" is not — a simple-mode
-  // user can own a list created in full mode and left unshared, so they need to
-  // see its real state. Neither is meaningful to a non-owner viewer.
-  const visibleTabs = TABS.filter(
-    (t) => !(user?.simple_mode && t.key === "shared") && !(!isOwner && t.key === "families"),
-  );
 
   return (
     <div className="space-y-6">
@@ -83,35 +68,60 @@ export function ListDetail() {
         editing ? (
           <EditListHeader list={list} listId={listId} queryClient={queryClient} onDone={() => setEditing(false)} />
         ) : (
-          <OwnerHeader list={list} listId={listId} queryClient={queryClient} navigate={navigate} onEdit={() => setEditing(true)} />
+          <OwnerHeader
+            list={list}
+            listId={listId}
+            queryClient={queryClient}
+            navigate={navigate}
+            onEdit={() => setEditing(true)}
+            simpleMode={!!user?.simple_mode}
+            onChangeSharing={() => setSharingOpen((open) => !open)}
+          />
         )
       ) : (
         <ViewerHeader list={list as GiftListDetailViewer} />
       )}
 
-      {/* Tab bar */}
-      <div className="flex border-b border-gray-200">
-        {visibleTabs.map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => setActiveTab(key)}
-            className={`flex-1 py-2.5 text-center text-sm font-medium ${
-              activeTab === key
-                ? "text-blue-600 border-b-2 border-blue-600"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      {/* Sharing panel — the only way to reach the people and family controls now
+          that the tab bar is gone. NEU-1239 replaces both halves with one
+          combined "Who can see this list" picker. */}
+      {isOwner && sharingOpen && (
+        <SharingPanel
+          listId={listId}
+          ownerName={list.owner_name}
+          queryClient={queryClient}
+          onClose={() => setSharingOpen(false)}
+        />
+      )}
 
-      {/* Tab content */}
-      {activeTab === "gifts" && <GiftsTab list={list} listId={listId} isOwner={isOwner} userId={user!.id} queryClient={queryClient} />}
-      {activeTab === "occasions" && <OccasionsTab listId={listId} queryClient={queryClient} />}
-      {activeTab === "shared" && <SharedWithTab listId={listId} isOwner={isOwner} ownerName={list.owner_name} queryClient={queryClient} />}
-      {activeTab === "families" && <FamiliesTab listId={listId} queryClient={queryClient} />}
+      {/* The gifts are the page. */}
+      <GiftsTab list={list} listId={listId} isOwner={isOwner} userId={user!.id} queryClient={queryClient} />
     </div>
+  );
+}
+
+function SharingPanel({
+  listId,
+  ownerName,
+  queryClient,
+  onClose,
+}: {
+  listId: number;
+  ownerName: string;
+  queryClient: ReturnType<typeof useQueryClient>;
+  onClose: () => void;
+}) {
+  return (
+    <section aria-label="Who can see this list" className="space-y-4 rounded-lg bg-gray-50 p-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-gray-900">Who can see this list</h2>
+        <button onClick={onClose} className="text-sm font-medium text-gray-500 hover:text-gray-700">
+          Done
+        </button>
+      </div>
+      <SharedWithTab listId={listId} isOwner ownerName={ownerName} queryClient={queryClient} />
+      <FamiliesTab listId={listId} queryClient={queryClient} />
+    </section>
   );
 }
 
@@ -123,12 +133,16 @@ function OwnerHeader({
   queryClient,
   navigate,
   onEdit,
+  simpleMode,
+  onChangeSharing,
 }: {
   list: GiftListDetailOwner;
   listId: number;
   queryClient: ReturnType<typeof useQueryClient>;
   navigate: ReturnType<typeof useNavigate>;
   onEdit: () => void;
+  simpleMode: boolean;
+  onChangeSharing: () => void;
 }) {
   const archiveMutation = useMutation({
     mutationFn: () => updateList(listId, { is_archived: !list.is_archived }),
@@ -139,11 +153,31 @@ function OwnerHeader({
     onError: () => toast.error("Failed to update list."),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteList(listId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["lists"] });
+      navigate("/lists", { replace: true });
+    },
+    onError: (err) => {
+      const detail = isAxiosError(err) && err.response?.status === 409
+        ? err.response.data?.detail
+        : null;
+      toast.error(detail || "Failed to delete list.");
+    },
+  });
+
   function handleArchiveToggle() {
     if (list.is_archived) {
       archiveMutation.mutate();
     } else if (window.confirm("Archive this list?")) {
       archiveMutation.mutate();
+    }
+  }
+
+  function handleDelete() {
+    if (window.confirm("Delete this list? This cannot be undone.")) {
+      deleteMutation.mutate();
     }
   }
 
@@ -162,20 +196,94 @@ function OwnerHeader({
           : undefined
       }
       isArchived={list.is_archived}
-      onEdit={onEdit}
-      onDelete={
-        <DeleteListButton listId={listId} queryClient={queryClient} navigate={navigate} />
+      sharing={
+        <SharingSummary listId={listId} simpleMode={simpleMode} onChange={onChangeSharing} />
       }
-      onArchive={
-        <button
-          onClick={handleArchiveToggle}
-          disabled={archiveMutation.isPending}
-          className={`rounded px-3 py-1 text-sm font-medium text-white disabled:opacity-50 ${list.is_archived ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700"}`}
-        >
-          {archiveMutation.isPending ? "…" : list.is_archived ? "Unarchive" : "Archive"}
-        </button>
+      actions={
+        <HeaderMenu
+          isArchived={list.is_archived}
+          pending={archiveMutation.isPending || deleteMutation.isPending}
+          onEdit={onEdit}
+          onArchive={handleArchiveToggle}
+          onDelete={handleDelete}
+        />
       }
     />
+  );
+}
+
+/**
+ * Edit, archive and delete, collapsed into one `⋯` menu so the header can lead
+ * with the list itself and its sharing line.
+ */
+function HeaderMenu({
+  isArchived,
+  pending,
+  onEdit,
+  onArchive,
+  onDelete,
+}: {
+  isArchived: boolean;
+  pending: boolean;
+  onEdit: () => void;
+  onArchive: () => void;
+  onDelete: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  function run(action: () => void) {
+    setOpen(false);
+    action();
+  }
+
+  return (
+    <div className="relative" ref={menuRef}>
+      <button
+        onClick={() => setOpen(!open)}
+        disabled={pending}
+        aria-label="List actions"
+        aria-expanded={open}
+        className="rounded px-3 py-1 text-lg font-medium leading-none text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50"
+      >
+        &#8943;
+      </button>
+
+      {open && (
+        <div className="absolute right-0 z-50 mt-2 w-48 rounded-lg bg-white py-1 shadow-lg ring-1 ring-black/5">
+          <button
+            onClick={() => run(onEdit)}
+            className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+          >
+            Edit
+          </button>
+          <button
+            onClick={() => run(onArchive)}
+            className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+          >
+            {isArchived ? "Unarchive" : "Archive"}
+          </button>
+          <hr className="my-1 border-gray-100" />
+          <button
+            onClick={() => run(onDelete)}
+            className="block w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-gray-50"
+          >
+            Delete
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -219,18 +327,16 @@ function ListHeader({
   subtitle,
   footnote,
   isArchived,
-  onEdit,
-  onDelete,
-  onArchive,
+  sharing,
+  actions,
 }: {
   name: string;
   description: string | null;
   subtitle?: React.ReactNode;
   footnote?: string;
   isArchived?: boolean;
-  onEdit?: () => void;
-  onDelete?: React.ReactNode;
-  onArchive?: React.ReactNode;
+  sharing?: React.ReactNode;
+  actions?: React.ReactNode;
 }) {
   return (
     <div className="rounded-lg bg-white p-6 shadow">
@@ -245,21 +351,9 @@ function ListHeader({
           {subtitle && <p className="mt-1 text-sm text-gray-500">{subtitle}</p>}
           {description && <p className="mt-2 text-gray-600">{description}</p>}
           {footnote && <p className="mt-2 text-sm text-gray-500">{footnote}</p>}
+          {sharing}
         </div>
-        {(onEdit || onDelete || onArchive) && (
-          <div className="flex gap-2 shrink-0">
-            {onArchive}
-            {onEdit && (
-              <button
-                onClick={onEdit}
-                className="rounded bg-gray-200 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-300"
-              >
-                Edit
-              </button>
-            )}
-            {onDelete}
-          </div>
-        )}
+        {actions && <div className="shrink-0">{actions}</div>}
       </div>
     </div>
   );
@@ -340,45 +434,5 @@ function EditListHeader({
         </button>
       </div>
     </form>
-  );
-}
-
-function DeleteListButton({
-  listId,
-  queryClient,
-  navigate,
-}: {
-  listId: number;
-  queryClient: ReturnType<typeof useQueryClient>;
-  navigate: ReturnType<typeof useNavigate>;
-}) {
-  const mutation = useMutation({
-    mutationFn: () => deleteList(listId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["lists"] });
-      navigate("/lists", { replace: true });
-    },
-    onError: (err) => {
-      const detail = isAxiosError(err) && err.response?.status === 409
-        ? err.response.data?.detail
-        : null;
-      toast.error(detail || "Failed to delete list.");
-    },
-  });
-
-  function handleDelete() {
-    if (window.confirm("Delete this list? This cannot be undone.")) {
-      mutation.mutate();
-    }
-  }
-
-  return (
-    <button
-      onClick={handleDelete}
-      disabled={mutation.isPending}
-      className="rounded bg-red-600 px-3 py-1 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
-    >
-      {mutation.isPending ? "Deleting…" : "Delete"}
-    </button>
   );
 }

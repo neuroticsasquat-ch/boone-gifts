@@ -1,6 +1,6 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
@@ -79,8 +79,18 @@ function renderListDetail(token: string) {
   );
 }
 
-describe("ListDetail Sharing Section", () => {
-  it("renders sharing controls for owner in Shared with tab", async () => {
+describe("ListDetail sharing panel", () => {
+  // The tab bar is gone: sharing is reached from the header's Change control,
+  // and that is the only way in.
+  async function openSharingPanel() {
+    await waitFor(() => {
+      expect(screen.getByText("My Wishlist")).toBeInTheDocument();
+    });
+    await userEvent.click(await screen.findByRole("button", { name: "Change" }));
+    return screen.getByRole("region", { name: "Who can see this list" });
+  }
+
+  it("renders sharing controls for the owner", async () => {
     server.use(
       http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
       http.get(`${API}/connections`, () =>
@@ -89,28 +99,23 @@ describe("ListDetail Sharing Section", () => {
         ])
       ),
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
       http.get(`${API}/occasions`, () => HttpResponse.json([])),
       http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
     );
 
     renderListDetail(ownerToken);
-
-    // Wait for the page to load, then click the Shared with tab
-    await waitFor(() => {
-      expect(screen.getByText("My Wishlist")).toBeInTheDocument();
-    });
-    await userEvent.click(screen.getByText("Shared with"));
+    const panel = await openSharingPanel();
 
     await waitFor(() => {
-      expect(screen.getByText("Share")).toBeInTheDocument();
+      expect(within(panel).getByText("Share")).toBeInTheDocument();
     });
   });
 
-  it("does not render sharing controls for viewer in Shared with tab", async () => {
+  it("gives a viewer no way into sharing", async () => {
     server.use(
       http.get(`${API}/lists/1`, () => HttpResponse.json(viewerListDetail)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
-      http.get(`${API}/lists/1/shares/users`, () => HttpResponse.json([])),
       http.get(`${API}/occasions`, () => HttpResponse.json([])),
       http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
     );
@@ -120,11 +125,8 @@ describe("ListDetail Sharing Section", () => {
     await waitFor(() => {
       expect(screen.getByText("My Wishlist")).toBeInTheDocument();
     });
-    await userEvent.click(screen.getByText("Shared with"));
-
-    await waitFor(() => {
-      expect(screen.getByText("Owner hasn't shared this list with anyone else.")).toBeInTheDocument();
-    });
+    expect(screen.queryByRole("button", { name: "Change" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Who can see this list" })).not.toBeInTheDocument();
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
   });
 
@@ -137,6 +139,7 @@ describe("ListDetail Sharing Section", () => {
         ])
       ),
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
       http.post(`${API}/lists/1/shares`, () =>
         HttpResponse.json({ id: 1, list_id: 1, user_id: 2, created_at: "2026-01-01" }, { status: 201 })
       ),
@@ -145,18 +148,14 @@ describe("ListDetail Sharing Section", () => {
     );
 
     renderListDetail(ownerToken);
+    const panel = await openSharingPanel();
 
     await waitFor(() => {
-      expect(screen.getByText("My Wishlist")).toBeInTheDocument();
-    });
-    await userEvent.click(screen.getByText("Shared with"));
-
-    await waitFor(() => {
-      expect(screen.getByRole("combobox")).toBeInTheDocument();
+      expect(within(panel).getByRole("combobox")).toBeInTheDocument();
     });
 
-    await userEvent.selectOptions(screen.getByRole("combobox"), "2");
-    await userEvent.click(screen.getByText("Share"));
+    await userEvent.selectOptions(within(panel).getByRole("combobox"), "2");
+    await userEvent.click(within(panel).getByText("Share"));
   });
 
   it("removes a share", async () => {
@@ -170,6 +169,7 @@ describe("ListDetail Sharing Section", () => {
       http.get(`${API}/lists/1/shares`, () =>
         HttpResponse.json([{ id: 1, list_id: 1, user_id: 2, created_at: "2026-01-01" }])
       ),
+      http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
       http.delete(`${API}/lists/1/shares/2`, () =>
         new HttpResponse(null, { status: 204 })
       ),
@@ -178,19 +178,13 @@ describe("ListDetail Sharing Section", () => {
     );
 
     renderListDetail(ownerToken);
+    const panel = await openSharingPanel();
 
     await waitFor(() => {
-      expect(screen.getByText("My Wishlist")).toBeInTheDocument();
-    });
-    await userEvent.click(screen.getByText("Shared with"));
-
-    await waitFor(() => {
-      expect(screen.getByText("Alice")).toBeInTheDocument();
+      expect(within(panel).getByText("Alice")).toBeInTheDocument();
     });
 
-    // The "Remove" button in the sharing section
-    const removeButtons = screen.getAllByText("Remove");
-    await userEvent.click(removeButtons[removeButtons.length - 1]);
+    await userEvent.click(within(panel).getByText("Remove"));
   });
 
   it("hides add share when all connections already shared", async () => {
@@ -204,23 +198,20 @@ describe("ListDetail Sharing Section", () => {
       http.get(`${API}/lists/1/shares`, () =>
         HttpResponse.json([{ id: 1, list_id: 1, user_id: 2, created_at: "2026-01-01" }])
       ),
+      http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
       http.get(`${API}/occasions`, () => HttpResponse.json([])),
       http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
     );
 
     renderListDetail(ownerToken);
+    const panel = await openSharingPanel();
 
     await waitFor(() => {
-      expect(screen.getByText("My Wishlist")).toBeInTheDocument();
-    });
-    await userEvent.click(screen.getByText("Shared with"));
-
-    await waitFor(() => {
-      expect(screen.getByText("Alice")).toBeInTheDocument();
+      expect(within(panel).getByText("Alice")).toBeInTheDocument();
     });
 
     // The share dropdown should not be present since Alice is already shared
-    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(within(panel).queryByRole("combobox")).not.toBeInTheDocument();
   });
 });
 
@@ -237,6 +228,7 @@ describe("AddGiftForm URL Auto-Populate", () => {
       http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
       http.get(`${API}/occasions`, () => HttpResponse.json([])),
       http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
       http.get(`${API}/meta`, () =>
@@ -267,6 +259,7 @@ describe("AddGiftForm URL Auto-Populate", () => {
       http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
       http.get(`${API}/occasions`, () => HttpResponse.json([])),
       http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
       http.get(`${API}/meta`, () =>
@@ -302,6 +295,7 @@ describe("AddGiftForm URL Auto-Populate", () => {
       http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
       http.get(`${API}/occasions`, () => HttpResponse.json([])),
       http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
       http.get(`${API}/meta`, () => HttpResponse.error()),
@@ -342,6 +336,7 @@ describe("Gift list item responsive layout", () => {
       http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListWithGift)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
       http.get(`${API}/occasions`, () => HttpResponse.json([])),
       http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
     );
@@ -373,6 +368,7 @@ describe("Gift list item responsive layout", () => {
       http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListWithGift)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
       http.get(`${API}/occasions`, () => HttpResponse.json([])),
       http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
     );
@@ -389,6 +385,7 @@ describe("Gift list item responsive layout", () => {
       http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListWithGift)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
       http.get(`${API}/occasions`, () => HttpResponse.json([])),
       http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
     );
@@ -415,62 +412,82 @@ describe("Gift list item responsive layout", () => {
   });
 });
 
-describe("ListDetail — simple mode tab visibility", () => {
-  it("hides the Shared with tab when user is in simple mode", async () => {
+describe("ListDetail — no tab bar", () => {
+  it("renders the gifts as the page body, with no tabs", async () => {
     server.use(
       http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
-      http.get(`${API}/connections`, () => HttpResponse.json([]))
-    );
-
-    renderListDetail(simpleModeOwnerToken);
-
-    await screen.findByText("My Wishlist");
-    expect(screen.queryByRole("button", { name: /shared with/i })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /gifts/i })).toBeInTheDocument();
-  });
-
-  it("shows the Shared with tab when user is in full mode", async () => {
-    server.use(
-      http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
-      http.get(`${API}/connections`, () => HttpResponse.json([]))
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
     );
 
     renderListDetail(ownerToken);
 
     await screen.findByText("My Wishlist");
-    expect(screen.getByRole("button", { name: /shared with/i })).toBeInTheDocument();
+    expect(screen.getByText("Add a gift")).toBeInTheDocument();
+    for (const tab of [/^gifts$/i, /^occasions$/i, /^shared with$/i, /^families$/i]) {
+      expect(screen.queryByRole("button", { name: tab })).not.toBeInTheDocument();
+    }
   });
 
-  it("keeps the Families tab visible in simple mode", async () => {
-    // Unlike "Shared with": a simple-mode user can own a list created in full
-    // mode and left unshared, so they need to see its real state.
+  it("summarises people and families on one line", async () => {
     server.use(
       http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
-      http.get(`${API}/connections`, () => HttpResponse.json([]))
+      http.get(`${API}/connections`, () =>
+        HttpResponse.json([
+          { id: 5, status: "accepted", user: { id: 2, name: "Alice", email: "alice@test.com" }, created_at: "2026-01-01", accepted_at: "2026-01-02" },
+        ])
+      ),
+      http.get(`${API}/lists/1/shares`, () =>
+        HttpResponse.json([{ id: 1, list_id: 1, user_id: 2, created_at: "2026-01-01" }])
+      ),
+      http.get(`${API}/lists/1/families`, () =>
+        HttpResponse.json([
+          { id: 7, name: "The Boones", shared: true },
+          { id: 8, name: "The Smiths", shared: false },
+        ])
+      ),
+    );
+
+    renderListDetail(ownerToken);
+
+    expect(await screen.findByText("Shared with Alice, The Boones")).toBeInTheDocument();
+  });
+
+  it("says so when a list is shared with nobody", async () => {
+    server.use(
+      http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/families`, () =>
+        HttpResponse.json([{ id: 7, name: "The Boones", shared: false }])
+      ),
+    );
+
+    renderListDetail(ownerToken);
+
+    expect(await screen.findByText("Not shared with anyone yet")).toBeInTheDocument();
+  });
+
+  it("shows simple mode a read-only summary with no Change control", async () => {
+    // The backend auto-grants a simple-mode user's lists to their families, so
+    // there is nothing here for them to change.
+    server.use(
+      http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
     );
 
     renderListDetail(simpleModeOwnerToken);
 
-    await screen.findByText("My Wishlist");
-    expect(screen.getByRole("button", { name: /^families$/i })).toBeInTheDocument();
+    expect(await screen.findByText("Shared with your families")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Change" })).not.toBeInTheDocument();
   });
 
-  it("hides the Families tab from a non-owner viewer", async () => {
-    server.use(
-      http.get(`${API}/lists/1`, () => HttpResponse.json(viewerListDetail)),
-      http.get(`${API}/connections`, () => HttpResponse.json([]))
-    );
-
-    renderListDetail(viewerToken);
-
-    await screen.findByText("My Wishlist");
-    expect(screen.queryByRole("button", { name: /^families$/i })).not.toBeInTheDocument();
-  });
-
-  it("renders the Families tab content when selected", async () => {
+  it("opens the family controls from Change", async () => {
     server.use(
       http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/families`, () =>
         HttpResponse.json([{ id: 7, name: "The Boones", shared: true }])
       ),
@@ -479,11 +496,92 @@ describe("ListDetail — simple mode tab visibility", () => {
     renderListDetail(ownerToken);
 
     await screen.findByText("My Wishlist");
-    await userEvent.click(screen.getByRole("button", { name: /^families$/i }));
+    await userEvent.click(await screen.findByRole("button", { name: "Change" }));
 
     expect(
       await screen.findByRole("checkbox", { name: /share with the boones/i })
     ).toBeChecked();
+  });
+});
+
+describe("ListDetail — header actions menu", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  function serveOwnerList() {
+    server.use(
+      http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
+    );
+  }
+
+  it("keeps edit, archive and delete behind the menu", async () => {
+    serveOwnerList();
+    renderListDetail(ownerToken);
+
+    await screen.findByText("My Wishlist");
+    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Archive" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "List actions" }));
+
+    expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Archive" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
+  });
+
+  it("archives from the menu once confirmed", async () => {
+    serveOwnerList();
+    let archived: unknown = null;
+    server.use(
+      http.put(`${API}/lists/1`, async ({ request }) => {
+        archived = ((await request.json()) as { is_archived?: boolean }).is_archived;
+        return HttpResponse.json({ ...ownerListDetail, is_archived: true });
+      }),
+    );
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    renderListDetail(ownerToken);
+
+    await screen.findByText("My Wishlist");
+    await userEvent.click(screen.getByRole("button", { name: "List actions" }));
+    await userEvent.click(screen.getByRole("button", { name: "Archive" }));
+
+    await waitFor(() => expect(archived).toBe(true));
+  });
+
+  it("deletes from the menu once confirmed", async () => {
+    serveOwnerList();
+    let deleted = false;
+    server.use(
+      http.delete(`${API}/lists/1`, () => {
+        deleted = true;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    renderListDetail(ownerToken);
+
+    await screen.findByText("My Wishlist");
+    await userEvent.click(screen.getByRole("button", { name: "List actions" }));
+    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => expect(deleted).toBe(true));
+  });
+
+  it("gives a viewer no actions menu", async () => {
+    server.use(
+      http.get(`${API}/lists/1`, () => HttpResponse.json(viewerListDetail)),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+    );
+
+    renderListDetail(viewerToken);
+
+    await screen.findByText("My Wishlist");
+    expect(screen.queryByRole("button", { name: "List actions" })).not.toBeInTheDocument();
   });
 });
 
@@ -498,6 +596,8 @@ describe("ListDetail — list recipients", () => {
     server.use(
       http.get(`${API}/lists/1`, () => HttpResponse.json(list)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
     );
   }
 
@@ -587,7 +687,8 @@ describe("ListDetail — list recipients", () => {
 
     renderListDetail(ownerToken);
 
-    await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    await userEvent.click(await screen.findByRole("button", { name: "List actions" }));
+    await userEvent.click(screen.getByRole("button", { name: "Edit" }));
 
     const disclosure = screen.getByRole("checkbox", {
       name: "This list is for someone else",
@@ -620,7 +721,8 @@ describe("ListDetail — list recipients", () => {
 
     renderListDetail(ownerToken);
 
-    await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    await userEvent.click(await screen.findByRole("button", { name: "List actions" }));
+    await userEvent.click(screen.getByRole("button", { name: "Edit" }));
     await userEvent.click(
       screen.getByRole("checkbox", { name: "This list is for someone else" }),
     );
@@ -642,7 +744,8 @@ describe("ListDetail — list recipients", () => {
     serveList(withRecipient(ownerListDetail, null, null));
     renderListDetail(ownerToken);
 
-    await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    await userEvent.click(await screen.findByRole("button", { name: "List actions" }));
+    await userEvent.click(screen.getByRole("button", { name: "Edit" }));
     await userEvent.click(
       screen.getByRole("checkbox", { name: "This list is for someone else" }),
     );
@@ -683,7 +786,8 @@ describe("ListDetail — list recipients", () => {
     serveList(withRecipient(ownerListDetail, null, null));
     renderListDetail(ownerToken);
 
-    await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    await userEvent.click(await screen.findByRole("button", { name: "List actions" }));
+    await userEvent.click(screen.getByRole("button", { name: "Edit" }));
     await userEvent.click(
       screen.getByRole("checkbox", { name: "This list is for someone else" }),
     );

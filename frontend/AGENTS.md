@@ -74,7 +74,11 @@ src/
                      # OccasionDetail.tsx — still unrouted; the Lists page's
                      # occasion filter is where a user meets the concept now (M5
                      # gives it a home on list detail)
-    list-detail/     # GiftsTab, SharedWithTab, FamiliesTab, OccasionsTab
+    list-detail/     # GiftsTab (the page body), SharingSummary (the header's
+                     # "Shared with …" line), SharedWithTab + FamiliesTab (now
+                     # behind the header's Change control, until NEU-1239
+                     # replaces both with one picker), OccasionsTab (orphaned by
+                     # the tab bar's removal; NEU-1240 re-homes it in the ⋯ menu)
   lib/               # attribution.ts, recipient.ts — list recipient/attribution logic
   types/index.ts     # Types mirroring the backend Pydantic schemas
   test/
@@ -94,7 +98,7 @@ src/
 | `/` | — | Redirects to `/lists`; the app's entry point, not a page |
 | `/lists` | `Lists` | My lists + everything shared with me, under the actionable banner. Header controls: occasion filter, sort, archive (full mode only) |
 | `/lists/new` | `CreateList` | Full mode also shows "Share with families" checkboxes |
-| `/lists/:id` | `ListDetail` | Owner view or viewer/claimer view |
+| `/lists/:id` | `ListDetail` | Owner view or viewer/claimer view. No tab bar: header, then the gifts. Owner header carries the sharing summary line (+ **Change**) and a `⋯` menu holding Edit, Archive and Delete |
 | `/people` | `People` | The People tab: families, then individuals, under the actionable banner |
 | `/people/:id` | `ConnectionProfile` | |
 | `/people/families/:id` | `FamilyDetail` | Members, invites, rename, delete, leave |
@@ -156,7 +160,8 @@ in NEU-1231) and once in `PendingFamilyInvites.tsx` (replaced by this).
 Family visibility is an explicit per-(list, family) grant on the backend, not implied by co-membership. **The backend is always the gate — hidden or read-only UI is not.**
 
 - **Create form** (`CreateList.tsx`) — a "Share with families" fieldset of **unchecked** checkboxes posting `family_ids`. Hidden when the user belongs to no families, and in simple mode, where the backend shares with every family regardless and a control would be a lie.
-- **List detail** (`list-detail/FamiliesTab.tsx`) — owner-only. Full mode renders one toggle per family. Simple mode **still shows the tab** — unlike "Shared with", which stays hidden — read-only, plus a link to Account settings, because a simple-mode user can own a list created in full mode and deliberately left unshared.
+- **List detail** (`list-detail/FamiliesTab.tsx`) — owner-only, reached from the header's **Change** control (NEU-1236 removed the tab bar). Full mode renders one toggle per family. Simple mode never opens the panel at all: its header summary line is read-only, because the backend auto-grants its lists to every family anyway.
+  - **Known cost of that line** (project spec §6.2, accepted): the auto-grant covers lists *created* in simple mode and family *joins*, so a simple-mode user who owns a list made in full mode and deliberately left unshared reads "Shared with your families" when it isn't. The retired Families tab used to show them the real state; the spec chose the fixed copy anyway.
 - **Revoke dialog** — a 409 from the DELETE means members of that family hold claims that revoking would orphan. The modal offers **Release those claims** / **Keep them claimed** / **Cancel**, re-issuing with `claims=release` or `claims=keep`. It shows **no counts and no gift or claimer names**: owners are blind to claim state on their own lists.
 
 ## Recipients
@@ -184,7 +189,7 @@ has. This deliberately diverges from the project spec §4.2 wireframe, which sti
 against each section heading.
 
 ## Testing
-- ~256 test cases across 25 files, run inside the container via `task test`
+- ~260 test cases across 25 files, run inside the container via `task test`
 - MSW mocks live in `src/test/mocks/handlers.ts` (default `/auth/refresh → 401`); setup in `src/test/setup.ts`
 
 ## Critical conventions
