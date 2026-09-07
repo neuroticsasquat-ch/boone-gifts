@@ -33,6 +33,9 @@ export function Lists() {
   });
 
   const sortedOwned = useMemo(() => sortLists(ownedLists.data ?? [], ownedSort), [ownedLists.data, ownedSort]);
+  // "Most recent" is the order the server already returns, so the section renders
+  // the server's merge of the direct and family grants until the viewer says
+  // otherwise. Sorting is a viewer's choice; grouping is not on offer (ADR 0001).
   const sortedShared = useMemo(() => sortLists(sharedLists.data ?? [], sharedSort), [sharedLists.data, sharedSort]);
 
   if (ownedLists.isPending || sharedLists.isPending) return (
@@ -127,6 +130,10 @@ export function Lists() {
               <option value="created">Oldest first</option>
             </select>
           </div>
+          {/* One flat section for every list shared with the viewer, whatever path
+              it took — the backend has already merged the direct and family grants
+              and ordered them (NEU-1227). The source shows as a label on the row and
+              nothing more: no per-family heading, no grouping, no link to the family. */}
           <ul className="mt-3 divide-y divide-gray-200 rounded-lg bg-white shadow">
             {sortedShared.map((list) => (
               <li key={list.id} className={showArchived ? "opacity-60" : undefined}>

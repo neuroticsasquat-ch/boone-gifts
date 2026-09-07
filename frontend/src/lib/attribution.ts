@@ -9,6 +9,8 @@
  * warning would get shown by mistake.
  */
 
+import type { SharedVia } from "../types";
+
 /** The fields of a list this module reads. Structural, so every list shape fits. */
 export interface ListLike {
   owner_name: string;
@@ -16,13 +18,20 @@ export interface ListLike {
   // before these columns existed does.
   recipient_name?: string | null;
   recipient_has_account?: boolean | null;
+  /** How a shared list reached the viewer (NEU-1227). Absent on an owned list,
+   * and on the detail responses, which do not carry it. */
+  shared_via?: SharedVia | null;
 }
 
 export type ListAttribution =
-  /** No recipient: the owner is the person the list is for. "from {subject}" */
+  /** No recipient: the person the list came from — the sharing user when the
+   *  list carries one, else its owner. "from {subject}" */
   | { kind: "owner"; subject: string; keeper: null }
   /** A recipient who has an account — typically a shared login. "from {subject}" */
   | { kind: "shared"; subject: string; keeper: null }
+  /** Reached the viewer through a family they belong to. The family is a source,
+   *  not a person, so it reads as a bare label: "{subject}" */
+  | { kind: "family"; subject: string; keeper: null }
   /** A recipient with no account, whose list someone else keeps.
    *  "for {subject} · kept by {keeper}" */
   | { kind: "absent"; subject: string; keeper: string };
@@ -31,17 +40,29 @@ export type ListAttribution =
  * How a *viewer* sees this list. `kind` selects the preposition and tells the
  * caller which half to link: `subject` for "owner"/"shared", `keeper` for
  * "absent" — linking the absent recipient's name to the keeper's profile would
- * simply be wrong.
+ * simply be wrong. "family" names a group, so it has no profile to link at all.
+ *
+ * Who the list is *for* still comes first: a recipient — absent or not — outranks
+ * `shared_via`, which replaces only the line that used to name the owner and
+ * nothing else (NEU-1235). So a list kept for Beth reads "for Beth · kept by Tom"
+ * however it reached the viewer, and a shared login's list still reads "from Jane"
+ * rather than naming the account or the family it came through.
  */
 export function attributionFor(list: ListLike): ListAttribution {
   const recipient = recipientNameOf(list);
-  if (recipient === null) {
-    return { kind: "owner", subject: list.owner_name, keeper: null };
+  if (recipient !== null) {
+    if (list.recipient_has_account === false) {
+      return { kind: "absent", subject: recipient, keeper: list.owner_name };
+    }
+    return { kind: "shared", subject: recipient, keeper: null };
   }
-  if (list.recipient_has_account === false) {
-    return { kind: "absent", subject: recipient, keeper: list.owner_name };
+  if (list.shared_via?.kind === "family") {
+    return { kind: "family", subject: list.shared_via.name, keeper: null };
   }
-  return { kind: "shared", subject: recipient, keeper: null };
+  // A direct share names the account that shared it, which *is* this list's owner
+  // — `shared_via` is simply the authoritative statement of it. The owner's own
+  // name stands in on a list that carries no source at all.
+  return { kind: "owner", subject: list.shared_via?.name ?? list.owner_name, keeper: null };
 }
 
 /**

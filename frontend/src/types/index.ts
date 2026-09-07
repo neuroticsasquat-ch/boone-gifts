@@ -30,6 +30,18 @@ export interface User {
 }
 
 // Gift Lists
+/**
+ * How a shared list reached the viewer: a direct share from a person, or a grant
+ * to a family they belong to. A list reachable both ways reports `kind: "user"`
+ * — the backend resolves that (NEU-1227), the client never re-derives it.
+ */
+export interface SharedVia {
+  kind: "user" | "family";
+  /** The sharing user, or the family — whichever `kind` names. */
+  id: number;
+  name: string;
+}
+
 export interface GiftList {
   id: number;
   name: string;
@@ -47,6 +59,9 @@ export interface GiftList {
   claimed_count: number;
   created_at: string;
   updated_at: string;
+  /** Present only on a list in the `shared` scope — null on one the caller owns,
+   * absent on a response cached from before the field existed. */
+  shared_via?: SharedVia | null;
   families?: FamilyRef[];
 }
 

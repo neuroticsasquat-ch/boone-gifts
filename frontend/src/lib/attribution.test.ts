@@ -49,6 +49,57 @@ describe("attributionFor", () => {
     // The safe branch: never claims someone is absent without being told so.
     expect(attributionFor(list({ recipient_name: "Jane" })).kind).toBe("shared");
   });
+
+  it("names the sharing person on a direct share", () => {
+    expect(
+      attributionFor(list({ shared_via: { kind: "user", id: 2, name: "Jane Boone" } })),
+    ).toEqual({ kind: "owner", subject: "Jane Boone", keeper: null });
+  });
+
+  it("names the family on a family share", () => {
+    // Its own kind, because the family is a source and not a person: the row
+    // reads "Boone Family", never "from Boone Family".
+    expect(
+      attributionFor(list({ shared_via: { kind: "family", id: 1, name: "Boone Family" } })),
+    ).toEqual({ kind: "family", subject: "Boone Family", keeper: null });
+  });
+
+  it("prefers the absent-person form over the source label", () => {
+    // Who the list is *for* outranks how it reached the viewer: a family share
+    // of a list kept for Beth still reads "for Beth · kept by Tom".
+    expect(
+      attributionFor(
+        list({
+          recipient_name: "Beth",
+          recipient_has_account: false,
+          shared_via: { kind: "family", id: 1, name: "Boone Family" },
+        }),
+      ),
+    ).toEqual({ kind: "absent", subject: "Beth", keeper: "Tom" });
+  });
+
+  it("prefers a recipient who has an account over the source label", () => {
+    // `shared_via` replaces the line that named the owner, and nothing else: on a
+    // shared login Jane is still the person a viewer would talk to.
+    expect(
+      attributionFor(
+        list({
+          recipient_name: "Jane",
+          recipient_has_account: true,
+          shared_via: { kind: "family", id: 1, name: "Boone Family" },
+        }),
+      ),
+    ).toEqual({ kind: "shared", subject: "Jane", keeper: null });
+  });
+
+  it("falls back to the owner when the list carries no source", () => {
+    // An owned list, or a response cached from before `shared_via` existed.
+    expect(attributionFor(list({ shared_via: null }))).toEqual({
+      kind: "owner",
+      subject: "Tom",
+      keeper: null,
+    });
+  });
 });
 
 describe("recipientLabel", () => {
