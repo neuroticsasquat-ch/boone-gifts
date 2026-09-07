@@ -23,8 +23,8 @@ export function PendingFamilyInvites() {
   const invalidateAll = () => {
     queryClient.invalidateQueries({ queryKey: ["familyInvites"] });
     queryClient.invalidateQueries({ queryKey: ["families"] });
-    // ["lists","family"] targets the family-lists view (NEU-351); invalidate now so it refreshes on accept
-    queryClient.invalidateQueries({ queryKey: ["lists", "family"] });
+    // Joining a family surfaces its lists through the combined shared scope
+    queryClient.invalidateQueries({ queryKey: ["lists", "shared"] });
   };
 
   const handleMutationError = (err: unknown, action: "accept" | "decline") => {

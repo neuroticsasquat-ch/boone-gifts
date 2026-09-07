@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Link } from "react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getOccasions, createOccasion, addOccasionItem, removeOccasionItem, getOccasionIdsForList } from "../../api/occasions";
 import toast from "react-hot-toast";
@@ -75,9 +74,7 @@ export function OccasionsTab({ listId, queryClient }: OccasionsTabProps) {
         <ul className="divide-y divide-gray-200 rounded-lg bg-white shadow">
           {containingOccasions.map((occ) => (
             <li key={occ.id} className="flex items-center justify-between px-4 py-3">
-              <Link to={`/occasions/${occ.id}`} className="font-medium text-blue-600 hover:underline">
-                {occ.name}
-              </Link>
+              <span className="font-medium text-gray-900">{occ.name}</span>
               <button
                 onClick={() => removeMutation.mutate(occ.id)}
                 disabled={removeMutation.isPending}

@@ -191,7 +191,7 @@ function ViewerHeader({ list }: { list: GiftListDetailViewer }) {
   // be wrong.
   const linkToOwner = (label: string) =>
     connectionId ? (
-      <Link to={`/connections/${connectionId}`} className="text-blue-600 hover:underline">{label}</Link>
+      <Link to={`/people/${connectionId}`} className="text-blue-600 hover:underline">{label}</Link>
     ) : (
       label
     );

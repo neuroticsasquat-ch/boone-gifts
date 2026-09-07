@@ -145,7 +145,7 @@ export function Lists() {
           <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900"><HandshakeIcon className="h-5 w-5" /> Shared with Me</h2>
           <p className="mt-3 text-gray-500">
             No one has shared a list with you yet.{" "}
-            <Link to="/connections" className="text-blue-600 hover:underline">Add a connection</Link> to get started.
+            <Link to="/people" className="text-blue-600 hover:underline">Add a connection</Link> to get started.
           </p>
         </section>
       )}

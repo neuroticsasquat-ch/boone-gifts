@@ -54,7 +54,7 @@ src/
   api/
     client.ts        # Axios instance, JWT interceptors (set/get/clearAccessToken)
     auth.ts          # login, register, refresh, logout, updateProfile, changePassword, toggleSimpleMode
-    lists.ts         # getLists("owned"|"shared"|"family"), createList (family_ids),
+    lists.ts         # getLists("owned"|"shared"), createList (family_ids),
                      # getListFamilies / shareListWithFamily / unshareListFromFamily
     gifts.ts         # Gift CRUD + claim/unclaim
     families.ts      # 13 functions — see "Families" below
@@ -62,14 +62,16 @@ src/
   contexts/AuthContext.tsx   # Access token in memory, silent refresh on mount, toggleSimpleMode
   hooks/             # useAuth, useTitle
   components/
-    Layout.tsx            # App shell: nav + outlet, simple-mode branching, badge queries
+    Layout.tsx            # App shell: one tab set (Lists · People) + outlet, badge queries
     ProtectedRoute.tsx    # Auth guard        AdminRoute.tsx — admin guard for /admin/*
     Badge.tsx             # Numeric badge overlay for nav icons
     Icons.tsx, Spinner.tsx
     PendingFamilyInvites.tsx  # Inline accept/decline for incoming family invites
     ListAttribution.tsx   # "from Jane" / "for Beth · kept by Tom" row lines
     RecipientFields.tsx   # The "this list is for someone else" control
-  pages/             # One per route (see table below)
+  pages/             # One per route (see table below), plus Families.tsx,
+                     # Occasions.tsx and OccasionDetail.tsx — currently unrouted,
+                     # kept for the People page and the occasion filter (M3-M5)
     list-detail/     # GiftsTab, SharedWithTab, FamiliesTab, OccasionsTab
   lib/               # attribution.ts, recipient.ts — list recipient/attribution logic
   types/index.ts     # Types mirroring the backend Pydantic schemas
@@ -87,17 +89,13 @@ src/
 | `/forgot-password` | `ForgotPassword` | Public |
 | `/reset-password` | `ResetPassword` | Public |
 | `/family-invites/:token` | `AcceptFamilyInvite` | Authenticated, outside `Layout` |
-| `/` | `Dashboard` | Summary + connection requests; no nav entry in simple mode |
+| `/` | — | Redirects to `/lists`; the app's entry point, not a page |
 | `/lists` | `Lists` | Owned + directly shared lists |
 | `/lists/new` | `CreateList` | Full mode also shows "Share with families" checkboxes |
 | `/lists/:id` | `ListDetail` | Owner view or viewer/claimer view |
-| `/connections` | `Connections` | Hidden from simple-mode nav |
-| `/connections/:id` | `ConnectionProfile` | |
-| `/occasions` | `Occasions` | Hidden from simple-mode nav |
-| `/occasions/:id` | `OccasionDetail` | |
-| `/families` | `Families` | Hidden from simple-mode nav |
-| `/families/:id` | `FamilyDetail` | Members, invites, rename, delete, leave |
-| `/family-lists` | `FamilyLists` | Co-members' lists grouped by family; simple mode's second tab |
+| `/people` | `Connections` | The People tab. Merging families in is NEU-1234 |
+| `/people/:id` | `ConnectionProfile` | |
+| `/people/families/:id` | `FamilyDetail` | Members, invites, rename, delete, leave |
 | `/account` | `Account` | Both modes, via the user menu |
 | `/admin/invites`, `/admin/users` | `AdminInvites`, `AdminUsers` | Admin-only |
 
@@ -111,10 +109,12 @@ A reduced navigation for users who only need their own lists and their family's.
 
 | Mode | Tabs (desktop and mobile) |
 |---|---|
-| Full | Home · Lists · Connect · Families · Occasions |
-| Simple | My Lists · Family Lists |
+| Full | Lists · People |
+| Simple | Lists (People moves into the account menu) |
 
-`Layout.tsx` picks `simpleTabs` or `fullTabs` from `user?.simple_mode` for the mobile bottom bar, and renders the same split inline in the desktop nav.
+`Layout.tsx` holds **one** `tabs` array driving both the mobile bottom bar and the desktop nav. Simple
+mode is purely subtractive — it filters People out of that array and adds a People link to the account
+menu. It never changes a label or a destination.
 
 ## Families
 
@@ -122,7 +122,7 @@ A reduced navigation for users who only need their own lists and their family's.
 
 Types: `Family` (summary with `role`, `member_count`), `FamilyMember`, `FamilyDetail`, `FamilyRef` (lightweight, embedded in `GiftList.families`), `FamilyInvite`, `IncomingFamilyInvite`. `ListFamilyShareState` is `{ id, name, shared }`, one per family the list's owner belongs to. `InviteInfo.family_name` is `null` for admin invites and the family name for family invites.
 
-**Badges**: `Layout.tsx` runs three background queries on every page — `["connectionRequests"]` → Connections, `["unseen-shares"]` → Lists, `["familyInvites"]` → Families — rendered as `<Badge count={n}>` inside each mobile tab icon and inline in the desktop links.
+**Badges**: `Layout.tsx` runs three background queries on every page — `["unseen-shares"]` badges **Lists**, while `["connectionRequests"]` and `["familyInvites"]` are **summed into the single People badge**. Rendered as `<Badge count={n}>` inside each mobile tab icon and inline in the desktop links.
 
 **Register via family invite**: `Register.tsx` reads `?family_invite=<token>`; `getInviteInfo(token)` then returns a non-null `family_name`, the email field is pre-filled and locked, and a "Join the \<family\> family" subtitle is shown.
 

@@ -14,7 +14,7 @@ export function AdminRoute() {
   }
 
   if (user.role !== "admin") {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/lists" replace />;
   }
 
   return <Outlet />;

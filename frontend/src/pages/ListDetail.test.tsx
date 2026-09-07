@@ -657,7 +657,7 @@ describe("ListDetail — list recipients", () => {
     renderListDetail(viewerToken);
 
     const link = await screen.findByRole("link", { name: "Owner" });
-    expect(link).toHaveAttribute("href", "/connections/55");
+    expect(link).toHaveAttribute("href", "/people/55");
   });
 
   it("links the recipient's name on a shared-account list — same owner profile", async () => {
@@ -666,7 +666,7 @@ describe("ListDetail — list recipients", () => {
 
     // Jane is the name showing, but the account behind the list is still the owner's.
     const link = await screen.findByRole("link", { name: "Jane" });
-    expect(link).toHaveAttribute("href", "/connections/55");
+    expect(link).toHaveAttribute("href", "/people/55");
   });
 
   it("puts the link on the keeper, leaving the absent recipient plain text", async () => {
@@ -674,7 +674,7 @@ describe("ListDetail — list recipients", () => {
     renderListDetail(viewerToken);
 
     const link = await screen.findByRole("link", { name: "Owner" });
-    expect(link).toHaveAttribute("href", "/connections/55");
+    expect(link).toHaveAttribute("href", "/people/55");
     // Linking "Beth" to the keeper's profile would simply be wrong.
     expect(screen.queryByRole("link", { name: "Beth" })).not.toBeInTheDocument();
   });

@@ -22,10 +22,27 @@ const simpleModeToken = [
   "fake-signature",
 ].join(".");
 
-function renderLayout() {
+const familyInvite = {
+  id: 1,
+  token: "tok-abc",
+  role: "member",
+  family: { id: 10, name: "Smith Family" },
+  invited_by: { id: 20, name: "Alice" },
+  expires_at: "2026-07-05T00:00:00Z",
+  created_at: "2026-06-28T00:00:00Z",
+};
+
+const connectionRequest = {
+  id: 5,
+  status: "pending",
+  user: { id: 20, name: "Alice", email: "alice@test.com" },
+  created_at: "2026-06-28T00:00:00Z",
+};
+
+function renderLayout(sessionToken = token, initialEntry = "/lists") {
   server.use(
     http.post(`${API}/auth/refresh`, () =>
-      HttpResponse.json({ access_token: token, token_type: "bearer" })
+      HttpResponse.json({ access_token: sessionToken, token_type: "bearer" })
     ),
   );
 
@@ -36,11 +53,14 @@ function renderLayout() {
   return render(
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <MemoryRouter initialEntries={["/"]}>
+        <MemoryRouter initialEntries={[initialEntry]}>
           <Routes>
             <Route element={<Layout />}>
-              <Route index element={<div>Home Content</div>} />
               <Route path="/lists" element={<div>Lists Content</div>} />
+              <Route path="/lists/:id" element={<div>List Detail Content</div>} />
+              <Route path="/people" element={<div>People Content</div>} />
+              <Route path="/people/:id" element={<div>Person Content</div>} />
+              <Route path="/people/families/:id" element={<div>Family Content</div>} />
             </Route>
           </Routes>
         </MemoryRouter>
@@ -49,55 +69,76 @@ function renderLayout() {
   );
 }
 
-function renderSimpleLayout() {
-  server.use(
-    http.post(`${API}/auth/refresh`, () =>
-      HttpResponse.json({ access_token: simpleModeToken, token_type: "bearer" })
-    ),
-  );
+const renderSimpleLayout = () => renderLayout(simpleModeToken);
 
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
+function topNav() {
+  return screen.getByRole("navigation", { name: "Primary navigation" });
+}
 
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <MemoryRouter initialEntries={["/lists"]}>
-          <Routes>
-            <Route element={<Layout />}>
-              <Route path="/lists" element={<div>Lists Content</div>} />
-              <Route path="/family-lists" element={<div>Family Lists Content</div>} />
-            </Route>
-          </Routes>
-        </MemoryRouter>
-      </AuthProvider>
-    </QueryClientProvider>
-  );
+function bottomNav() {
+  return screen.getByRole("navigation", { name: "Mobile navigation" });
 }
 
 describe("Layout", () => {
-  it("renders bottom tab bar with nav links", async () => {
+  it("renders the same two tabs in the bottom tab bar and the top nav", async () => {
     renderLayout();
     await screen.findByLabelText("Account menu");
-    const bottomNav = screen.getByRole("navigation", { name: "Mobile navigation" });
-    expect(within(bottomNav).getByText("Home")).toBeInTheDocument();
-    expect(within(bottomNav).getByText("Lists")).toBeInTheDocument();
-    expect(within(bottomNav).getByText("Connect")).toBeInTheDocument();
-    expect(within(bottomNav).getByText("Occasions")).toBeInTheDocument();
+
+    expect(within(bottomNav()).getByText("Lists")).toBeInTheDocument();
+    expect(within(bottomNav()).getByText("People")).toBeInTheDocument();
+    expect(within(topNav()).getByText("Lists")).toBeInTheDocument();
+    expect(within(topNav()).getByText("People")).toBeInTheDocument();
+  });
+
+  it("no longer renders the retired destinations", async () => {
+    renderLayout();
+    await screen.findByLabelText("Account menu");
+
+    for (const label of ["Home", "Connect", "Connections", "Families", "Family Lists", "Occasions"]) {
+      expect(within(bottomNav()).queryByText(label)).not.toBeInTheDocument();
+      expect(within(topNav()).queryByText(label)).not.toBeInTheDocument();
+    }
+  });
+
+  it("points the brand link at /lists", async () => {
+    renderLayout();
+    const brand = await screen.findByRole("link", { name: /Boone Gifts/ });
+    expect(brand).toHaveAttribute("href", "/lists");
+  });
+
+  it("highlights the tab matching the current route", async () => {
+    renderLayout(token, "/people");
+    await screen.findByText("People Content");
+
+    const peopleTab = within(bottomNav()).getByRole("link", { name: /People/ });
+    const listsTab = within(bottomNav()).getByRole("link", { name: /Lists/ });
+    expect(peopleTab).toHaveClass("text-blue-600");
+    expect(listsTab).not.toHaveClass("text-blue-600");
+  });
+
+  // "Every remaining route highlights a tab" — the sub-paths are the whole
+  // point of matching on a prefix rather than an exact path.
+  it.each([
+    ["/lists", "Lists Content", /Lists/],
+    ["/lists/5", "List Detail Content", /Lists/],
+    ["/people", "People Content", /People/],
+    ["/people/7", "Person Content", /People/],
+    ["/people/families/3", "Family Content", /People/],
+  ])("highlights a tab on %s", async (path, content, tabName) => {
+    renderLayout(token, path);
+    await screen.findByText(content);
+    expect(within(bottomNav()).getByRole("link", { name: tabName })).toHaveClass("text-blue-600");
   });
 
   it("renders account menu button", async () => {
     renderLayout();
-    const accountButton = await screen.findByLabelText("Account menu");
-    expect(accountButton).toBeInTheDocument();
+    expect(await screen.findByLabelText("Account menu")).toBeInTheDocument();
   });
 
   it("opens account dropdown when clicked", async () => {
     const user = userEvent.setup();
     renderLayout();
-    const accountButton = await screen.findByLabelText("Account menu");
-    await user.click(accountButton);
+    await user.click(await screen.findByLabelText("Account menu"));
     expect(screen.getByText("Account Settings")).toBeInTheDocument();
     expect(screen.getByText("Logout")).toBeInTheDocument();
   });
@@ -105,17 +146,14 @@ describe("Layout", () => {
   it("shows email in account dropdown", async () => {
     const user = userEvent.setup();
     renderLayout();
-    const accountButton = await screen.findByLabelText("Account menu");
-    await user.click(accountButton);
-    const emails = screen.getAllByText("user@test.com");
-    expect(emails.length).toBeGreaterThanOrEqual(1);
+    await user.click(await screen.findByLabelText("Account menu"));
+    expect(screen.getAllByText("user@test.com").length).toBeGreaterThanOrEqual(1);
   });
 
   it("closes dropdown when clicking outside", async () => {
     const user = userEvent.setup();
     renderLayout();
-    const accountButton = await screen.findByLabelText("Account menu");
-    await user.click(accountButton);
+    await user.click(await screen.findByLabelText("Account menu"));
     expect(screen.getByText("Account Settings")).toBeInTheDocument();
     await user.click(document.body);
     await waitFor(() => {
@@ -123,96 +161,79 @@ describe("Layout", () => {
     });
   });
 
-  it("renders desktop nav links in the header", async () => {
-    renderLayout();
-    await screen.findByText("Home Content");
-    const topNav = screen.getByRole("navigation", { name: "Primary navigation" });
-    expect(topNav).toHaveTextContent("Lists");
-    expect(topNav).toHaveTextContent("Connections");
-    expect(topNav).toHaveTextContent("Occasions");
-  });
-
-  it("renders Boone Gifts brand link", async () => {
-    renderLayout();
-    await screen.findByText("Boone Gifts");
-    expect(screen.getByText("Boone Gifts")).toBeInTheDocument();
-  });
-
-  it("shows family invite badge on Families tab in bottom nav when invites are pending", async () => {
+  it("badges Lists with the unseen share count", async () => {
     server.use(
-      http.get(`${API}/families/invites`, () =>
-        HttpResponse.json([{
-          id: 1, token: "tok-abc", role: "member",
-          family: { id: 10, name: "Smith Family" },
-          invited_by: { id: 20, name: "Alice" },
-          expires_at: "2026-07-05T00:00:00Z",
-          created_at: "2026-06-28T00:00:00Z",
-        }])
-      ),
+      http.get(`${API}/lists/unseen-count`, () => HttpResponse.json({ count: 3 })),
     );
     renderLayout();
     await screen.findByLabelText("Account menu");
+
     await waitFor(() => {
-      // Badge with count 1 should appear in the bottom mobile nav bar
-      const bottomNav = screen.getByRole("navigation", { name: "Mobile navigation" });
-      expect(within(bottomNav).getByText("1")).toBeInTheDocument();
+      const listsTab = within(bottomNav()).getByRole("link", { name: /Lists/ });
+      expect(within(listsTab).getByText("3")).toBeInTheDocument();
     });
+    const listsLink = within(topNav()).getByRole("link", { name: /Lists/ });
+    expect(within(listsLink).getByText("3")).toBeInTheDocument();
   });
 
-  it("hides family invite badge on Families tab when no invites are pending", async () => {
-    // Default handler returns [] — badge must not appear
-    renderLayout();
-    await screen.findByLabelText("Account menu");
-    // Wait for queries to settle then verify no badge with count appears in either nav
-    await waitFor(() => {
-      const topNav = screen.getByRole("navigation", { name: "Primary navigation" });
-      const bottomNav = screen.getByRole("navigation", { name: "Mobile navigation" });
-      expect(within(topNav).queryByText("1")).not.toBeInTheDocument();
-      expect(within(bottomNav).queryByText("1")).not.toBeInTheDocument();
-    });
-  });
-
-  it("shows family invite badge on Families link in top nav when invites are pending", async () => {
+  it("badges People with connection requests plus family invites combined", async () => {
     server.use(
-      http.get(`${API}/families/invites`, () =>
-        HttpResponse.json([{
-          id: 1, token: "tok-abc", role: "member",
-          family: { id: 10, name: "Smith Family" },
-          invited_by: { id: 20, name: "Alice" },
-          expires_at: "2026-07-05T00:00:00Z",
-          created_at: "2026-06-28T00:00:00Z",
-        }])
-      ),
+      http.get(`${API}/connections/requests`, () => HttpResponse.json([connectionRequest])),
+      http.get(`${API}/families/invites`, () => HttpResponse.json([familyInvite])),
     );
     renderLayout();
     await screen.findByLabelText("Account menu");
+
     await waitFor(() => {
-      // The top nav Families link has an inline badge span
-      const topNav = screen.getByRole("navigation", { name: "Primary navigation" });
-      expect(topNav).toHaveTextContent("Families");
-      expect(within(topNav).getByText("1")).toBeInTheDocument();
+      const peopleTab = within(bottomNav()).getByRole("link", { name: /People/ });
+      expect(within(peopleTab).getByText("2")).toBeInTheDocument();
+    });
+    const peopleLink = within(topNav()).getByRole("link", { name: /People/ });
+    expect(within(peopleLink).getByText("2")).toBeInTheDocument();
+  });
+
+  it("shows no badges when nothing is pending", async () => {
+    renderLayout();
+    await screen.findByLabelText("Account menu");
+    await waitFor(() => {
+      expect(within(topNav()).queryByText("1")).not.toBeInTheDocument();
+      expect(within(bottomNav()).queryByText("1")).not.toBeInTheDocument();
     });
   });
 
-  it("simple-mode: bottom tab bar shows only My Lists and Family Lists", async () => {
+  it("simple-mode: renders only the Lists tab in both navs", async () => {
     renderSimpleLayout();
     await screen.findByLabelText("Account menu");
-    const bottomNav = screen.getByRole("navigation", { name: "Mobile navigation" });
-    expect(within(bottomNav).getByText("My Lists")).toBeInTheDocument();
-    expect(within(bottomNav).getByText("Family Lists")).toBeInTheDocument();
-    expect(within(bottomNav).queryByText("Home")).not.toBeInTheDocument();
-    expect(within(bottomNav).queryByText("Connect")).not.toBeInTheDocument();
-    expect(within(bottomNav).queryByText("Families")).not.toBeInTheDocument();
-    expect(within(bottomNav).queryByText("Occasions")).not.toBeInTheDocument();
+
+    expect(within(bottomNav()).getByText("Lists")).toBeInTheDocument();
+    expect(within(bottomNav()).queryByText("People")).not.toBeInTheDocument();
+    expect(within(topNav()).getByText("Lists")).toBeInTheDocument();
+    expect(within(topNav()).queryByText("People")).not.toBeInTheDocument();
   });
 
-  it("simple-mode: top nav shows My Lists and Family Lists links only", async () => {
+  it("simple-mode: keeps the same label, not a simple-mode-only one", async () => {
     renderSimpleLayout();
     await screen.findByLabelText("Account menu");
-    const topNav = screen.getByRole("navigation", { name: "Primary navigation" });
-    expect(topNav).toHaveTextContent("My Lists");
-    expect(topNav).toHaveTextContent("Family Lists");
-    expect(topNav).not.toHaveTextContent("Connections");
-    expect(topNav).not.toHaveTextContent("Occasions");
+    expect(within(bottomNav()).queryByText("My Lists")).not.toBeInTheDocument();
+  });
+
+  it("simple-mode: People collapses into the account menu", async () => {
+    const user = userEvent.setup();
+    renderSimpleLayout();
+    await screen.findByLabelText("Account menu");
+    expect(screen.queryByRole("link", { name: "People" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByLabelText("Account menu"));
+    expect(screen.getByRole("link", { name: "People" })).toHaveAttribute("href", "/people");
+  });
+
+  it("full mode: opening the account menu adds no second People link", async () => {
+    const user = userEvent.setup();
+    renderLayout();
+    await screen.findByLabelText("Account menu");
+    const before = screen.getAllByRole("link", { name: "People" }).length;
+
+    await user.click(screen.getByLabelText("Account menu"));
+    expect(screen.getAllByRole("link", { name: "People" })).toHaveLength(before);
   });
 });

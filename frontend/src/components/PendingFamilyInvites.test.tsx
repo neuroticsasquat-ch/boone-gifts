@@ -179,7 +179,7 @@ describe("PendingFamilyInvites", () => {
     expect((await screen.findAllByText("Failed to decline invite.")).length).toBeGreaterThan(0);
   });
 
-  it("invalidates familyInvites, families, and lists/family queries on decline", async () => {
+  it("invalidates familyInvites, families, and lists/shared queries on decline", async () => {
     server.use(
       http.get(`${API}/families/invites`, () => HttpResponse.json([testInvite])),
       http.post(`${API}/families/invites/:token/decline`, () =>
@@ -198,11 +198,11 @@ describe("PendingFamilyInvites", () => {
       const keys = calls.map((c) => (c as { queryKey: unknown }).queryKey);
       expect(keys).toContainEqual(["familyInvites"]);
       expect(keys).toContainEqual(["families"]);
-      expect(keys).toContainEqual(["lists", "family"]);
+      expect(keys).toContainEqual(["lists", "shared"]);
     });
   });
 
-  it("invalidates familyInvites, families, and lists/family queries on accept", async () => {
+  it("invalidates familyInvites, families, and lists/shared queries on accept", async () => {
     server.use(
       http.get(`${API}/families/invites`, () => HttpResponse.json([testInvite])),
       http.post(`${API}/families/invites/:token/accept`, () =>
@@ -221,7 +221,7 @@ describe("PendingFamilyInvites", () => {
       const keys = calls.map((c) => (c as { queryKey: unknown }).queryKey);
       expect(keys).toContainEqual(["familyInvites"]);
       expect(keys).toContainEqual(["families"]);
-      expect(keys).toContainEqual(["lists", "family"]);
+      expect(keys).toContainEqual(["lists", "shared"]);
     });
   });
 

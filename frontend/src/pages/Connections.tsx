@@ -105,7 +105,7 @@ export function Connections() {
             {connections.data.map((conn) => (
               <li key={conn.id} className="flex items-center justify-between px-4 py-3">
                 <div>
-                  <Link to={`/connections/${conn.id}`} className="font-medium text-blue-600 hover:underline">{conn.user.name}</Link>
+                  <Link to={`/people/${conn.id}`} className="font-medium text-blue-600 hover:underline">{conn.user.name}</Link>
                   <p className="text-sm text-gray-500">{conn.user.email}</p>
                 </div>
                 <button

@@ -76,7 +76,7 @@ export function FamiliesTab({ listId, queryClient }: FamiliesTabProps) {
     return (
       <p className="text-sm text-gray-500">
         You don't belong to any families yet.{" "}
-        {!readOnly && <Link to="/families" className="text-blue-600 hover:underline">Manage families</Link>}
+        {!readOnly && <Link to="/people" className="text-blue-600 hover:underline">Manage families</Link>}
       </p>
     );
   }

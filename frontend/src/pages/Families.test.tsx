@@ -16,10 +16,10 @@ function renderFamilies() {
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={["/families"]}>
+      <MemoryRouter initialEntries={["/people"]}>
         <Routes>
-          <Route path="/families" element={<Families />} />
-          <Route path="/families/:id" element={<div>Detail Page</div>} />
+          <Route path="/people" element={<Families />} />
+          <Route path="/people/families/:id" element={<div>Detail Page</div>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>
@@ -28,17 +28,6 @@ function renderFamilies() {
 
 describe("Families", () => {
   afterEach(() => vi.restoreAllMocks());
-
-  it("renders link to Family Lists page", async () => {
-    server.use(
-      http.get(`${API}/families`, () => HttpResponse.json([])),
-    );
-
-    renderFamilies();
-
-    const link = await screen.findByRole("link", { name: /View Family Lists/ });
-    expect(link).toHaveAttribute("href", "/family-lists");
-  });
 
   it("renders list of families with name, role, and member count", async () => {
     server.use(
@@ -62,7 +51,7 @@ describe("Families", () => {
     expect(screen.getByText(/2 members/i)).toBeInTheDocument();
   });
 
-  it("renders links to /families/:id for each family", async () => {
+  it("renders links to /people/families/:id for each family", async () => {
     server.use(
       http.get(`${API}/families`, () =>
         HttpResponse.json([
@@ -74,7 +63,7 @@ describe("Families", () => {
     renderFamilies();
 
     const link = await screen.findByRole("link", { name: /The Boones/ });
-    expect(link).toHaveAttribute("href", "/families/1");
+    expect(link).toHaveAttribute("href", "/people/families/1");
   });
 
   it("creates a family, clears input, and navigates to detail page", async () => {

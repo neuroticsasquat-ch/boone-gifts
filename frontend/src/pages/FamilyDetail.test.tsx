@@ -47,10 +47,10 @@ function renderFamilyDetail(token: string, id = "1") {
   return render(
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <MemoryRouter initialEntries={[`/families/${id}`]}>
+        <MemoryRouter initialEntries={[`/people/families/${id}`]}>
           <Routes>
-            <Route path="/families/:id" element={<FamilyDetail />} />
-            <Route path="/families" element={<div>Families List</div>} />
+            <Route path="/people/families/:id" element={<FamilyDetail />} />
+            <Route path="/people" element={<div>People Page</div>} />
           </Routes>
         </MemoryRouter>
       </AuthProvider>
@@ -132,7 +132,7 @@ describe("FamilyDetail", () => {
     });
   });
 
-  it("delete: click Delete Family then Confirm Delete → navigates to /families", async () => {
+  it("delete: click Delete Family then Confirm Delete → navigates to /people", async () => {
     server.use(
       http.get(`${API}/families/1`, () => HttpResponse.json(sampleFamily)),
       http.delete(`${API}/families/1`, () => new HttpResponse(null, { status: 204 })),
@@ -148,11 +148,11 @@ describe("FamilyDetail", () => {
     await userEvent.click(screen.getByRole("button", { name: "Confirm Delete" }));
 
     await waitFor(() => {
-      expect(screen.getByText("Families List")).toBeInTheDocument();
+      expect(screen.getByText("People Page")).toBeInTheDocument();
     });
   });
 
-  it("leave: click Leave Family → calls DELETE /families/:id/members/:userId → navigates to /families", async () => {
+  it("leave: click Leave Family → calls DELETE /families/:id/members/:userId → navigates to /people", async () => {
     server.use(
       http.get(`${API}/families/1`, () => HttpResponse.json(sampleFamily)),
       http.delete(`${API}/families/1/members/2`, () => new HttpResponse(null, { status: 204 })),
@@ -167,7 +167,7 @@ describe("FamilyDetail", () => {
     await userEvent.click(screen.getByText("Leave Family"));
 
     await waitFor(() => {
-      expect(screen.getByText("Families List")).toBeInTheDocument();
+      expect(screen.getByText("People Page")).toBeInTheDocument();
     });
   });
 
@@ -289,7 +289,7 @@ describe("FamilyDetail", () => {
     });
   });
 
-  it("shows back link to /families", async () => {
+  it("shows back link to /people", async () => {
     server.use(
       http.get(`${API}/families/1`, () => HttpResponse.json(sampleFamily)),
     );
@@ -301,7 +301,7 @@ describe("FamilyDetail", () => {
     });
 
     const backLink = screen.getByRole("link", { name: /Back to families/i });
-    expect(backLink).toHaveAttribute("href", "/families");
+    expect(backLink).toHaveAttribute("href", "/people");
   });
 
   // --- Invite UI tests ---

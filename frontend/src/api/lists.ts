@@ -6,7 +6,7 @@ import type {
   ListFamilyShareState,
 } from "../types";
 
-export async function getLists(filter?: "owned" | "shared" | "family", archived?: boolean): Promise<GiftList[]> {
+export async function getLists(filter?: "owned" | "shared", archived?: boolean): Promise<GiftList[]> {
   const params: Record<string, string> = {};
   if (filter) params.filter = filter;
   if (archived !== undefined) params.archived = String(archived);

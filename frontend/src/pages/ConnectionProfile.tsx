@@ -25,13 +25,13 @@ export function ConnectionProfile() {
   if (!connection) return (
     <div className="text-center py-12">
       <p className="text-red-600">Connection not found.</p>
-      <Link to="/connections" className="mt-2 text-sm text-blue-600 hover:underline">Back to connections</Link>
+      <Link to="/people" className="mt-2 text-sm text-blue-600 hover:underline">Back to connections</Link>
     </div>
   );
 
   return (
     <div className="space-y-6">
-      <Link to="/connections" className="text-sm text-blue-600 hover:underline">&larr; Back to connections</Link>
+      <Link to="/people" className="text-sm text-blue-600 hover:underline">&larr; Back to connections</Link>
 
       <div>
         <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900">

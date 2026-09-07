@@ -178,7 +178,7 @@ export function Account() {
         {modeError && <p className="text-red-600 text-sm mb-4">{modeError}</p>}
         <p className="text-sm text-gray-600 mb-4">
           {user?.simple_mode
-            ? "Simple mode is on. You see My Lists and Family Lists only."
+            ? "Simple mode is on. You see Lists only; People is in this menu."
             : "Full mode is on. You see all sections."}
         </p>
         <button

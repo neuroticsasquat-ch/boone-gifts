@@ -20,7 +20,7 @@ export function Families() {
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["families"] });
       setName("");
-      navigate(`/families/${result.id}`);
+      navigate(`/people/families/${result.id}`);
     },
     onError: () => toast.error("Failed to create family."),
   });
@@ -33,12 +33,7 @@ export function Families() {
 
   return (
     <div className="space-y-8">
-      <div className="space-y-2">
-        <h1 className="text-2xl font-bold text-gray-900">Families</h1>
-        <Link to="/family-lists" className="inline-block text-sm text-blue-600 hover:underline">
-          View Family Lists →
-        </Link>
-      </div>
+      <h1 className="text-2xl font-bold text-gray-900">Families</h1>
 
       <PendingFamilyInvites />
 
@@ -75,7 +70,7 @@ export function Families() {
               <ul className="divide-y divide-gray-200 rounded-lg bg-white shadow">
                 {families.data.map((family) => (
                   <li key={family.id} className="flex items-center justify-between px-4 py-3">
-                    <Link to={`/families/${family.id}`} className="min-w-0 flex-1 hover:opacity-75">
+                    <Link to={`/people/families/${family.id}`} className="min-w-0 flex-1 hover:opacity-75">
                       <p className="font-medium text-gray-900">{family.name}</p>
                       <p className="text-sm text-gray-500 capitalize">{family.role} &middot; {family.member_count} {family.member_count === 1 ? "member" : "members"}</p>
                     </Link>

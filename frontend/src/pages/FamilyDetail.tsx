@@ -96,7 +96,7 @@ export function FamilyDetail() {
     mutationFn: () => deleteFamily(familyId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["families"] });
-      navigate("/families");
+      navigate("/people");
     },
     onError: () => {
       toast.error("Failed to delete family.");
@@ -109,7 +109,7 @@ export function FamilyDetail() {
     onSuccess: (_data, userId) => {
       if (userId === user?.id) {
         queryClient.invalidateQueries({ queryKey: ["families"] });
-        navigate("/families");
+        navigate("/people");
       } else {
         invalidate();
       }
@@ -152,7 +152,7 @@ export function FamilyDetail() {
     return (
       <div className="text-center py-12">
         <p className="text-red-600">Family not found.</p>
-        <Link to="/families" className="mt-2 text-sm text-blue-600 hover:underline">
+        <Link to="/people" className="mt-2 text-sm text-blue-600 hover:underline">
           Back to families
         </Link>
       </div>
@@ -163,7 +163,7 @@ export function FamilyDetail() {
 
   return (
     <div className="space-y-6">
-      <Link to="/families" className="text-sm text-blue-600 hover:underline">
+      <Link to="/people" className="text-sm text-blue-600 hover:underline">
         &larr; Back to families
       </Link>
 

@@ -8,14 +8,6 @@ import { getUnseenShareCount } from "../api/lists";
 import { getIncomingFamilyInvites } from "../api/families";
 import { Badge } from "./Badge";
 
-function HomeIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1" />
-    </svg>
-  );
-}
-
 function ListIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -32,26 +24,10 @@ function PeopleIcon({ className }: { className?: string }) {
   );
 }
 
-function FolderIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-    </svg>
-  );
-}
-
 function UserIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0z" />
-    </svg>
-  );
-}
-
-function FamiliesIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
     </svg>
   );
 }
@@ -70,18 +46,26 @@ export function Layout() {
   const unseenCount = unseenShares.data ?? 0;
   const familyInviteCount = familyInvites.data?.length ?? 0;
 
-  const fullTabs = [
-    { to: "/", label: "Home", Icon: HomeIcon, match: (p: string) => p === "/" },
-    { to: "/lists", label: "Lists", Icon: ListIcon, match: (p: string) => p.startsWith("/lists") },
-    { to: "/connections", label: "Connect", Icon: PeopleIcon, match: (p: string) => p.startsWith("/connections") },
-    { to: "/families", label: "Families", Icon: FamiliesIcon, match: (p: string) => p.startsWith("/families") },
-    { to: "/occasions", label: "Occasions", Icon: FolderIcon, match: (p: string) => p.startsWith("/occasions") },
+  // One tab set, same labels and destinations at every screen size and in both
+  // modes. Simple mode is purely subtractive: it drops People, which moves into
+  // the account menu below.
+  const tabs = [
+    {
+      to: "/lists",
+      label: "Lists",
+      Icon: ListIcon,
+      match: (p: string) => p.startsWith("/lists"),
+      badgeCount: unseenCount,
+    },
+    {
+      to: "/people",
+      label: "People",
+      Icon: PeopleIcon,
+      match: (p: string) => p.startsWith("/people"),
+      badgeCount: requestCount + familyInviteCount,
+    },
   ];
-  const simpleTabs = [
-    { to: "/lists", label: "My Lists", Icon: ListIcon, match: (p: string) => p.startsWith("/lists") },
-    { to: "/family-lists", label: "Family Lists", Icon: FamiliesIcon, match: (p: string) => p.startsWith("/family-lists") },
-  ];
-  const tabs = user?.simple_mode ? simpleTabs : fullTabs;
+  const visibleTabs = user?.simple_mode ? tabs.filter((tab) => tab.to !== "/people") : tabs;
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -100,54 +84,19 @@ export function Layout() {
       <nav className="bg-white shadow" aria-label="Primary navigation">
         <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-6">
-            <Link to="/" className="flex items-center gap-1.5 text-xl font-bold text-gray-900">
+            <Link to="/lists" className="flex items-center gap-1.5 text-xl font-bold text-gray-900">
               <GiftIcon className="h-6 w-6" /> Boone Gifts
             </Link>
-            {user?.simple_mode ? (
-              <>
-                <Link to="/lists" className="hidden md:inline relative text-gray-600 hover:text-gray-900">
-                  My Lists
-                  {unseenCount > 0 && (
-                    <span className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
-                      {unseenCount > 9 ? "9+" : unseenCount}
-                    </span>
-                  )}
-                </Link>
-                <Link to="/family-lists" className="hidden md:inline text-gray-600 hover:text-gray-900">
-                  Family Lists
-                </Link>
-              </>
-            ) : (
-              <>
-                <Link to="/lists" className="hidden md:inline relative text-gray-600 hover:text-gray-900">
-                  Lists
-                  {unseenCount > 0 && (
-                    <span className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
-                      {unseenCount > 9 ? "9+" : unseenCount}
-                    </span>
-                  )}
-                </Link>
-                <Link to="/connections" className="hidden md:inline relative text-gray-600 hover:text-gray-900">
-                  Connections
-                  {requestCount > 0 && (
-                    <span className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
-                      {requestCount > 9 ? "9+" : requestCount}
-                    </span>
-                  )}
-                </Link>
-                <Link to="/families" className="hidden md:inline relative text-gray-600 hover:text-gray-900">
-                  Families
-                  {familyInviteCount > 0 && (
-                    <span className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
-                      {familyInviteCount > 9 ? "9+" : familyInviteCount}
-                    </span>
-                  )}
-                </Link>
-                <Link to="/occasions" className="hidden md:inline text-gray-600 hover:text-gray-900">
-                  Occasions
-                </Link>
-              </>
-            )}
+            {visibleTabs.map(({ to, label, badgeCount }) => (
+              <Link key={to} to={to} className="hidden md:inline relative text-gray-600 hover:text-gray-900">
+                {label}
+                {badgeCount > 0 && (
+                  <span className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+                    {badgeCount > 9 ? "9+" : badgeCount}
+                  </span>
+                )}
+              </Link>
+            ))}
           </div>
 
           {/* Account dropdown — all screen sizes */}
@@ -168,6 +117,11 @@ export function Layout() {
                   <p className="text-sm font-medium text-gray-900 truncate">{user?.email}</p>
                 </div>
                 <div className="py-1">
+                  {user?.simple_mode && (
+                    <Link to="/people" onClick={() => setMenuOpen(false)} className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                      People
+                    </Link>
+                  )}
                   <Link to="/account" onClick={() => setMenuOpen(false)} className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
                     Account Settings
                   </Link>
@@ -203,12 +157,8 @@ export function Layout() {
       {/* Bottom tab bar — mobile only */}
       <nav className="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-200 md:hidden" aria-label="Mobile navigation">
         <div className="flex justify-around">
-          {tabs.map(({ to, label, Icon, match }) => {
+          {visibleTabs.map(({ to, label, Icon, match, badgeCount }) => {
             const active = match(location.pathname);
-            let badgeCount = 0;
-            if (to === "/connections") badgeCount = requestCount;
-            if (to === "/lists") badgeCount = unseenCount;
-            if (to === "/families") badgeCount = familyInviteCount;
             return (
               <Link
                 key={to}
