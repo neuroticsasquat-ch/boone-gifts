@@ -58,8 +58,8 @@ describe("Connections", () => {
       expect(screen.getByText("Bob")).toBeInTheDocument();
     });
     expect(screen.getByText("bob@test.com")).toBeInTheDocument();
-    expect(screen.getByText("Accept")).toBeInTheDocument();
-    expect(screen.getByText("Decline")).toBeInTheDocument();
+    expect(screen.getByLabelText("Accept connection request from Bob")).toBeInTheDocument();
+    expect(screen.getByLabelText("Decline connection request from Bob")).toBeInTheDocument();
   });
 
   it("sends a connection request", async () => {
@@ -130,6 +130,6 @@ describe("Connections", () => {
     await waitFor(() => {
       expect(screen.getByText("You don't have any connections yet. Use the form above to send a request.")).toBeInTheDocument();
     });
-    expect(screen.queryByText("Pending Requests")).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Waiting on you" })).not.toBeInTheDocument();
   });
 });

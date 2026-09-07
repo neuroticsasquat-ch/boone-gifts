@@ -5,7 +5,7 @@ import { getFamilies, createFamily } from "../api/families";
 import { useTitle } from "../hooks/useTitle";
 import toast from "react-hot-toast";
 import { Spinner } from "../components/Spinner";
-import { PendingFamilyInvites } from "../components/PendingFamilyInvites";
+import { ActionableBanner } from "../components/ActionableBanner";
 
 export function Families() {
   useTitle("Families");
@@ -35,7 +35,7 @@ export function Families() {
     <div className="space-y-8">
       <h1 className="text-2xl font-bold text-gray-900">Families</h1>
 
-      <PendingFamilyInvites />
+      <ActionableBanner />
 
       {families.isPending && <Spinner />}
       {families.isError && <p className="text-red-600">Failed to load families.</p>}

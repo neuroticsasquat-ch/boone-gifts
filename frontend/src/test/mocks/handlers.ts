@@ -17,7 +17,7 @@ export const handlers = [
   http.get("https://boone-gifts-api.localhost/families/:familyId/invites", () => {
     return HttpResponse.json([]);
   }),
-  // Default handler: no incoming family invites (PendingFamilyInvites mounts on Families page)
+  // Default handler: no incoming family invites (ActionableBanner mounts on Lists and People)
   http.get("https://boone-gifts-api.localhost/families/invites", () => {
     return HttpResponse.json([]);
   }),

@@ -7,6 +7,7 @@ import { Spinner } from "../components/Spinner";
 import { ClipboardIcon, HandshakeIcon } from "../components/Icons";
 import type { GiftList } from "../types";
 import { ListAttributionLine, RecipientLine } from "../components/ListAttribution";
+import { ActionableBanner } from "../components/ActionableBanner";
 
 function sortLists(lists: GiftList[], sortBy: "updated" | "name" | "created") {
   return [...lists].sort((a, b) => {
@@ -43,6 +44,10 @@ export function Lists() {
 
   return (
     <div className="space-y-8">
+      {/* Anything awaiting a decision, above the lists. Rendered in both modes:
+          in simple mode this is the only route to these items. */}
+      <ActionableBanner />
+
       {/* My Lists */}
       <section>
         <div className="flex items-center justify-between">

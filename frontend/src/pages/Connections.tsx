@@ -3,9 +3,7 @@ import { Link } from "react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getConnections,
-  getConnectionRequests,
   sendConnectionRequest,
-  acceptConnection,
   deleteConnection,
 } from "../api/connections";
 import { searchUsers } from "../api/users";
@@ -14,6 +12,7 @@ import { useTitle } from "../hooks/useTitle";
 import toast from "react-hot-toast";
 import { Spinner } from "../components/Spinner";
 import { HandshakeIcon } from "../components/Icons";
+import { ActionableBanner } from "../components/ActionableBanner";
 import type { UserSearchResult } from "../types";
 
 export function Connections() {
@@ -21,7 +20,6 @@ export function Connections() {
   const queryClient = useQueryClient();
 
   const connections = useQuery({ queryKey: ["connections"], queryFn: getConnections });
-  const requests = useQuery({ queryKey: ["connectionRequests"], queryFn: getConnectionRequests });
 
   const invalidateAll = () => {
     queryClient.invalidateQueries({ queryKey: ["connections"] });
@@ -30,25 +28,13 @@ export function Connections() {
     queryClient.invalidateQueries({ queryKey: ["occasions"] });
   };
 
-  const acceptMutation = useMutation({
-    mutationFn: acceptConnection,
-    onSuccess: invalidateAll,
-    onError: () => toast.error("Failed to accept request."),
-  });
-
-  const declineMutation = useMutation({
-    mutationFn: deleteConnection,
-    onSuccess: invalidateAll,
-    onError: () => toast.error("Failed to decline request."),
-  });
-
   const removeMutation = useMutation({
     mutationFn: deleteConnection,
     onSuccess: invalidateAll,
     onError: () => toast.error("Failed to remove connection."),
   });
 
-  if (connections.isPending || requests.isPending) return (
+  if (connections.isPending) return (
     <div className="space-y-8">
       <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900"><HandshakeIcon className="h-6 w-6" /> Connections</h1>
       <Spinner />
@@ -59,39 +45,9 @@ export function Connections() {
     <div className="space-y-8">
       <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900"><HandshakeIcon className="h-6 w-6" /> Connections</h1>
 
-      <SendRequestForm onSuccess={invalidateAll} />
+      <ActionableBanner />
 
-      {requests.data && requests.data.length > 0 && (
-        <section>
-          <h2 className="text-lg font-semibold text-gray-900">Pending Requests</h2>
-          <ul className="mt-3 divide-y divide-gray-200 rounded-lg bg-white shadow">
-            {requests.data.map((req) => (
-              <li key={req.id} className="flex items-center justify-between px-4 py-3">
-                <div>
-                  <p className="font-medium text-gray-900">{req.user.name}</p>
-                  <p className="text-sm text-gray-500">{req.user.email}</p>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => acceptMutation.mutate(req.id)}
-                    disabled={acceptMutation.isPending}
-                    className="rounded bg-green-600 px-3 py-1 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
-                  >
-                    Accept
-                  </button>
-                  <button
-                    onClick={() => declineMutation.mutate(req.id)}
-                    disabled={declineMutation.isPending}
-                    className="rounded bg-gray-200 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-300 disabled:opacity-50"
-                  >
-                    Decline
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      <SendRequestForm onSuccess={invalidateAll} />
 
       <section>
         <h2 className="text-lg font-semibold text-gray-900">My Connections</h2>

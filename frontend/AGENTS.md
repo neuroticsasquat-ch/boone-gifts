@@ -66,7 +66,8 @@ src/
     ProtectedRoute.tsx    # Auth guard        AdminRoute.tsx — admin guard for /admin/*
     Badge.tsx             # Numeric badge overlay for nav icons
     Icons.tsx, Spinner.tsx
-    PendingFamilyInvites.tsx  # Inline accept/decline for incoming family invites
+    ActionableBanner.tsx  # Pending connection requests + family invites, accept/decline
+                          # inline. The one implementation; renders nothing when empty
     ListAttribution.tsx   # "from Jane" / "for Beth · kept by Tom" row lines
     RecipientFields.tsx   # The "this list is for someone else" control
   pages/             # One per route (see table below), plus Families.tsx,
@@ -90,7 +91,7 @@ src/
 | `/reset-password` | `ResetPassword` | Public |
 | `/family-invites/:token` | `AcceptFamilyInvite` | Authenticated, outside `Layout` |
 | `/` | — | Redirects to `/lists`; the app's entry point, not a page |
-| `/lists` | `Lists` | Owned + directly shared lists |
+| `/lists` | `Lists` | Owned + directly shared lists, under the actionable banner |
 | `/lists/new` | `CreateList` | Full mode also shows "Share with families" checkboxes |
 | `/lists/:id` | `ListDetail` | Owner view or viewer/claimer view |
 | `/people` | `Connections` | The People tab. Merging families in is NEU-1234 |
@@ -112,6 +113,9 @@ A reduced navigation for users who only need their own lists and their family's.
 | Full | Lists · People |
 | Simple | Lists (People moves into the account menu) |
 
+`ActionableBanner` is deliberately **not** subtracted in simple mode: with People hidden, the banner
+on `/lists` is the only route to a pending connection request or family invite.
+
 `Layout.tsx` holds **one** `tabs` array driving both the mobile bottom bar and the desktop nav. Simple
 mode is purely subtractive — it filters People out of that array and adds a People link to the account
 menu. It never changes a label or a destination.
@@ -123,8 +127,23 @@ menu. It never changes a label or a destination.
 Types: `Family` (summary with `role`, `member_count`), `FamilyMember`, `FamilyDetail`, `FamilyRef` (lightweight, embedded in `GiftList.families`), `FamilyInvite`, `IncomingFamilyInvite`. `ListFamilyShareState` is `{ id, name, shared }`, one per family the list's owner belongs to. `InviteInfo.family_name` is `null` for admin invites and the family name for family invites.
 
 **Badges**: `Layout.tsx` runs three background queries on every page — `["unseen-shares"]` badges **Lists**, while `["connectionRequests"]` and `["familyInvites"]` are **summed into the single People badge**. Rendered as `<Badge count={n}>` inside each mobile tab icon and inline in the desktop links.
+`ActionableBanner` invalidates both keys after an accept or decline, so acting on an item clears its
+row and drops the badge.
 
 **Register via family invite**: `Register.tsx` reads `?family_invite=<token>`; `getInviteInfo(token)` then returns a non-null `family_name`, the email field is pre-filled and locked, and a "Join the \<family\> family" subtitle is shown.
+
+## Actionable items
+
+`components/ActionableBanner.tsx` is the **single** implementation of accept/decline for incoming
+connection requests and family invites — the logic that used to live once in `Dashboard.tsx` (deleted
+in NEU-1231) and once in `PendingFamilyInvites.tsx` (replaced by this).
+
+- Mounted on `/lists` above the lists, on `/people`, and on the unrouted `Families` page.
+- Renders **nothing** when nothing is pending — no empty card, no heading.
+- While an item's accept/decline is in flight, both of that item's buttons are disabled, so a
+  decision cannot be taken twice. Other rows stay actionable.
+- A 409 on a family invite means it was already accepted, declined, or expired: the row is refreshed
+  away and the user is told the invite is no longer valid.
 
 ## Per-family list sharing
 
@@ -139,7 +158,7 @@ Family visibility is an explicit per-(list, family) grant on the backend, not im
 A list can name a recipient. `RecipientFields.tsx` is the shared "this list is for someone else" control (create form and edit header); `lib/recipient.ts` holds its value type and payload mapping, `lib/attribution.ts` turns a list into its display line, and `ListAttribution.tsx` renders it — "from Jane" for a list someone shared, "for Beth · kept by Tom" for one kept on behalf of a person with no account.
 
 ## Testing
-- ~215 test cases across 26 files, run inside the container via `task test`
+- ~233 test cases across 26 files, run inside the container via `task test`
 - MSW mocks live in `src/test/mocks/handlers.ts` (default `/auth/refresh → 401`); setup in `src/test/setup.ts`
 
 ## Critical conventions
