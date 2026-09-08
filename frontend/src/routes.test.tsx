@@ -56,7 +56,9 @@ describe("routes", () => {
     }
   );
 
-  it.each(["/lists", "/people", "/people/1", "/people/families/1"])(
+  // `/occasions/:id` is back, and means a *family's* occasion now — the folder
+  // pages took the old meaning of the word with them (frontend ADR 0002).
+  it.each(["/lists", "/people", "/people/1", "/people/families/1", "/occasions/1"])(
     "still matches %s",
     (path) => {
       const router = renderAt(path);

@@ -59,7 +59,8 @@ src/
     gifts.ts         # Gift CRUD + claim/unclaim
     families.ts      # 13 functions — see "Families" below
     account.ts       # GET/PUT /account — the shared-account flag and its people
-    occasions.ts     # A family's occasions: list, create, rename/archive
+    occasions.ts     # A family's occasions: list, read, create, rename/archive,
+                     # and the lists shared to one
     connections.ts, shares.ts, folders.ts, invites.ts, users.ts, meta.ts
   contexts/AuthContext.tsx   # Access token in memory, silent refresh on mount
   hooks/             # useAuth, useTitle
@@ -67,6 +68,9 @@ src/
     Layout.tsx            # App shell: one tab set (Lists · People) + outlet, badge queries
     ProtectedRoute.tsx    # Auth guard        AdminRoute.tsx — admin guard for /admin/*
     Badge.tsx             # Numeric badge overlay for nav icons
+    HeaderMenu.tsx        # The `⋯` menu a page header hangs its actions off —
+                          # list detail's owner and viewer menus, and the
+                          # occasion page's organizer-only one
     Icons.tsx, Spinner.tsx
     ActionableBanner.tsx  # Pending connection requests + family invites, accept/decline
                           # inline. The one implementation; renders nothing when empty
@@ -78,6 +82,7 @@ src/
                      # FolderDetail.tsx — still unrouted; the Lists page's
                      # folder filter and list detail's "Add to a folder…"
                      # are where a user meets the concept now
+    OccasionDetail.tsx  # /occasions/:id — a family occasion and its lists
     family-detail/   # OccasionsSection (the family's occasions, its create
                      # action, and the organizer-only rename and archive)
     list-detail/     # GiftsTab (the page body), SharingSummary (the header's
@@ -109,6 +114,7 @@ src/
 | `/people` | `People` | The People tab: families, then individuals, under the actionable banner |
 | `/people/:id` | `ConnectionProfile` | |
 | `/people/families/:id` | `FamilyDetail` | Members, occasions, invites, rename, delete, leave |
+| `/occasions/:id` | `OccasionDetail` | A family occasion: header, tab bar (**Lists** only until M5), and the lists shared to it. The `⋯` menu's rename and archive are organizer-only |
 | `/account` | `Account` | Via the user menu |
 | `/admin/invites`, `/admin/users` | `AdminInvites`, `AdminUsers` | Admin-only |
 
@@ -142,6 +148,17 @@ read before the write it rides on, so it back-stops that warning afterwards when
 family with no active occasion says so outright, because that is what makes it unshareable. Archived
 occasions sit behind the same in-page toggle the Lists page uses, carrying **Unarchive** so Archive is
 never a one-way door; NEU-1278 replaces both toggles with one archive view.
+
+**The occasion page** (`pages/OccasionDetail.tsx`, `/occasions/:id`) is where an occasion is met on its
+own: its name and family in the header, a back link to `/people/families/:id`, and a tab bar. The bar
+ships with **Lists** alone — every list shared to the occasion that the viewer can see, from
+`/occasions/{id}/lists`, which filters by `can_view_list` so a list the viewer cannot see is *absent*
+rather than greyed. **My shopping** joins it in M5 (NEU-1274), which is why the bar is driven by a
+`TABS` array and the body by the active key. The `⋯` menu carries rename and archive, **organizer
+only** and gated on the family's members exactly as the family page's controls are — the backend
+enforces both, so a 403 still has a message. An **archived** occasion renders like any other, carrying
+an Archived pill and offering Unarchive: archiving takes an occasion out of the default views and does
+nothing else (project spec §5.4).
 
 **Register via family invite**: `Register.tsx` reads `?family_invite=<token>`; `getInviteInfo(token)` then returns a non-null `family_name`, the email field is pre-filled and locked, and a "Join the \<family\> family" subtitle is shown.
 

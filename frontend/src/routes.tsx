@@ -13,6 +13,7 @@ import { ListDetail } from "./pages/ListDetail";
 import { People } from "./pages/People";
 import { ConnectionProfile } from "./pages/ConnectionProfile";
 import { FamilyDetail } from "./pages/FamilyDetail";
+import { OccasionDetail } from "./pages/OccasionDetail";
 import { AcceptFamilyInvite } from "./pages/AcceptFamilyInvite";
 import { Account } from "./pages/Account";
 import { AdminInvites } from "./pages/AdminInvites";
@@ -52,6 +53,7 @@ export const routes: RouteObject[] = [
           { path: "people", element: <People /> },
           { path: "people/families/:id", element: <FamilyDetail /> },
           { path: "people/:id", element: <ConnectionProfile /> },
+          { path: "occasions/:id", element: <OccasionDetail /> },
           { path: "account", element: <Account /> },
           {
             path: "admin",

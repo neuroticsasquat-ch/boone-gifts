@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type FormEvent } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import { useParams, useNavigate, Link } from "react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getList, updateList, deleteList } from "../api/lists";
@@ -10,6 +10,7 @@ import type { GiftListDetailOwner, GiftListDetailViewer } from "../types";
 import { isAxiosError } from "axios";
 import toast from "react-hot-toast";
 import { Spinner } from "../components/Spinner";
+import { HeaderMenu } from "../components/HeaderMenu";
 import { GiftsTab } from "./list-detail/GiftsTab";
 import { SharingPanel } from "./list-detail/SharingPanel";
 import { SharingSummary } from "./list-detail/SharingSummary";
@@ -192,6 +193,7 @@ function OwnerHeader({
       }
       actions={
         <HeaderMenu
+          ariaLabel="List actions"
           pending={archiveMutation.isPending || deleteMutation.isPending}
           items={[
             { label: ADD_TO_FOLDER, onClick: onAddToFolder },
@@ -211,71 +213,6 @@ function OwnerHeader({
  * point a viewer has.
  */
 const ADD_TO_FOLDER = "Add to a folder…";
-
-type HeaderMenuItem = {
-  label: string;
-  onClick: () => void;
-  danger?: boolean;
-  separatorBefore?: boolean;
-};
-
-/**
- * The header's `⋯` menu, so the header can lead with the list itself and its
- * sharing line. An owner's holds the folder action plus edit, archive and
- * delete; a viewer's holds the folder action alone.
- */
-function HeaderMenu({ items, pending = false }: { items: HeaderMenuItem[]; pending?: boolean }) {
-  const [open, setOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    function handleClickOutside(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [open]);
-
-  function run(action: () => void) {
-    setOpen(false);
-    action();
-  }
-
-  return (
-    <div className="relative" ref={menuRef}>
-      <button
-        onClick={() => setOpen(!open)}
-        disabled={pending}
-        aria-label="List actions"
-        aria-expanded={open}
-        className="rounded px-3 py-1 text-lg font-medium leading-none text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50"
-      >
-        &#8943;
-      </button>
-
-      {open && (
-        <div className="absolute right-0 z-50 mt-2 w-52 rounded-lg bg-white py-1 shadow-lg ring-1 ring-black/5">
-          {items.map((item) => (
-            <div key={item.label}>
-              {item.separatorBefore && <hr className="my-1 border-gray-100" />}
-              <button
-                onClick={() => run(item.onClick)}
-                className={`block w-full px-4 py-2 text-left text-sm hover:bg-gray-50 ${
-                  item.danger ? "text-red-600" : "text-gray-700"
-                }`}
-              >
-                {item.label}
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 function ViewerHeader({
   list,
@@ -314,7 +251,9 @@ function ViewerHeader({
       // No owner controls, but the menu itself stays: filing someone else's list
       // under a folder of your own is the main use of the feature, and this
       // is a viewer's only way to reach it.
-      actions={<HeaderMenu items={[{ label: ADD_TO_FOLDER, onClick: onAddToFolder }]} />}
+      actions={
+        <HeaderMenu ariaLabel="List actions" items={[{ label: ADD_TO_FOLDER, onClick: onAddToFolder }]} />
+      }
     />
   );
 }
