@@ -12,6 +12,7 @@ import { Spinner } from "../components/Spinner";
 import { GiftsTab } from "./list-detail/GiftsTab";
 import { SharingPanel } from "./list-detail/SharingPanel";
 import { SharingSummary } from "./list-detail/SharingSummary";
+import { OccasionPicker } from "./list-detail/OccasionPicker";
 import { attributionFor, isKeptForAbsentPerson, recipientLabel, recipientNameOf } from "../lib/attribution";
 import { RecipientFields } from "../components/RecipientFields";
 import {
@@ -32,7 +33,13 @@ export function ListDetail() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const [editing, setEditing] = useState(false);
-  const [sharingOpen, setSharingOpen] = useState(false);
+  // One header panel at a time — both open in the same slot under the header,
+  // and two of them stacked there would bury the gifts.
+  const [panel, setPanel] = useState<"sharing" | "occasions" | null>(null);
+
+  function togglePanel(next: "sharing" | "occasions") {
+    setPanel((open) => (open === next ? null : next));
+  }
 
   const { data: list, isLoading, error, refetch } = useQuery({
     queryKey: ["list", listId],
@@ -57,6 +64,13 @@ export function ListDetail() {
   );
 
   const isOwner = user !== null && isOwnerView(list, user.id);
+  // Simple mode hides the occasion filter on /lists (project spec §6.1), so it
+  // has no way to read an occasion back. Offering to file a list into one here
+  // would leave membership its owner can never see — the orphaned-concept
+  // problem this project set out to end, not restage. Subtractive, as §6.1
+  // requires: the wording and the destination are the same in both modes when
+  // it shows at all.
+  const canAddToOccasion = !user?.simple_mode;
 
   return (
     <div className="space-y-6">
@@ -74,20 +88,33 @@ export function ListDetail() {
             navigate={navigate}
             onEdit={() => setEditing(true)}
             simpleMode={!!user?.simple_mode}
-            onChangeSharing={() => setSharingOpen((open) => !open)}
+            onChangeSharing={() => togglePanel("sharing")}
+            onAddToOccasion={canAddToOccasion ? () => togglePanel("occasions") : undefined}
           />
         )
       ) : (
-        <ViewerHeader list={list as GiftListDetailViewer} />
+        <ViewerHeader
+          list={list as GiftListDetailViewer}
+          onAddToOccasion={canAddToOccasion ? () => togglePanel("occasions") : undefined}
+        />
       )}
 
       {/* Sharing panel — the only way to reach the people and family controls now
           that the tab bar is gone. */}
-      {isOwner && sharingOpen && (
+      {isOwner && panel === "sharing" && (
         <SharingPanel
           listId={listId}
           queryClient={queryClient}
-          onClose={() => setSharingOpen(false)}
+          onClose={() => setPanel(null)}
+        />
+      )}
+
+      {/* Occasions — likewise the only way in, for owner and viewer alike. */}
+      {panel === "occasions" && (
+        <OccasionPicker
+          listId={listId}
+          queryClient={queryClient}
+          onClose={() => setPanel(null)}
         />
       )}
 
@@ -107,6 +134,7 @@ function OwnerHeader({
   onEdit,
   simpleMode,
   onChangeSharing,
+  onAddToOccasion,
 }: {
   list: GiftListDetailOwner;
   listId: number;
@@ -115,6 +143,7 @@ function OwnerHeader({
   onEdit: () => void;
   simpleMode: boolean;
   onChangeSharing: () => void;
+  onAddToOccasion?: () => void;
 }) {
   const archiveMutation = useMutation({
     mutationFn: () => updateList(listId, { is_archived: !list.is_archived }),
@@ -173,11 +202,13 @@ function OwnerHeader({
       }
       actions={
         <HeaderMenu
-          isArchived={list.is_archived}
           pending={archiveMutation.isPending || deleteMutation.isPending}
-          onEdit={onEdit}
-          onArchive={handleArchiveToggle}
-          onDelete={handleDelete}
+          items={[
+            ...(onAddToOccasion ? [{ label: ADD_TO_OCCASION, onClick: onAddToOccasion }] : []),
+            { label: "Edit", onClick: onEdit },
+            { label: list.is_archived ? "Unarchive" : "Archive", onClick: handleArchiveToggle },
+            { label: "Delete", onClick: handleDelete, danger: true, separatorBefore: true },
+          ]}
         />
       }
     />
@@ -185,22 +216,25 @@ function OwnerHeader({
 }
 
 /**
- * Edit, archive and delete, collapsed into one `⋯` menu so the header can lead
- * with the list itself and its sharing line.
+ * The occasion action reads the same for an owner and a viewer, so it is written
+ * once — the two headers must not drift apart on the wording of the only entry
+ * point a viewer has.
  */
-function HeaderMenu({
-  isArchived,
-  pending,
-  onEdit,
-  onArchive,
-  onDelete,
-}: {
-  isArchived: boolean;
-  pending: boolean;
-  onEdit: () => void;
-  onArchive: () => void;
-  onDelete: () => void;
-}) {
+const ADD_TO_OCCASION = "Add to an occasion…";
+
+type HeaderMenuItem = {
+  label: string;
+  onClick: () => void;
+  danger?: boolean;
+  separatorBefore?: boolean;
+};
+
+/**
+ * The header's `⋯` menu, so the header can lead with the list itself and its
+ * sharing line. An owner's holds the occasion action plus edit, archive and
+ * delete; a viewer's holds the occasion action alone.
+ */
+function HeaderMenu({ items, pending = false }: { items: HeaderMenuItem[]; pending?: boolean }) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -233,33 +267,33 @@ function HeaderMenu({
       </button>
 
       {open && (
-        <div className="absolute right-0 z-50 mt-2 w-48 rounded-lg bg-white py-1 shadow-lg ring-1 ring-black/5">
-          <button
-            onClick={() => run(onEdit)}
-            className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
-          >
-            Edit
-          </button>
-          <button
-            onClick={() => run(onArchive)}
-            className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
-          >
-            {isArchived ? "Unarchive" : "Archive"}
-          </button>
-          <hr className="my-1 border-gray-100" />
-          <button
-            onClick={() => run(onDelete)}
-            className="block w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-gray-50"
-          >
-            Delete
-          </button>
+        <div className="absolute right-0 z-50 mt-2 w-52 rounded-lg bg-white py-1 shadow-lg ring-1 ring-black/5">
+          {items.map((item) => (
+            <div key={item.label}>
+              {item.separatorBefore && <hr className="my-1 border-gray-100" />}
+              <button
+                onClick={() => run(item.onClick)}
+                className={`block w-full px-4 py-2 text-left text-sm hover:bg-gray-50 ${
+                  item.danger ? "text-red-600" : "text-gray-700"
+                }`}
+              >
+                {item.label}
+              </button>
+            </div>
+          ))}
         </div>
       )}
     </div>
   );
 }
 
-function ViewerHeader({ list }: { list: GiftListDetailViewer }) {
+function ViewerHeader({
+  list,
+  onAddToOccasion,
+}: {
+  list: GiftListDetailViewer;
+  onAddToOccasion?: () => void;
+}) {
   const connections = useQuery({ queryKey: ["connections"], queryFn: getConnections });
   const connectionId = connections.data?.find((c) => c.user.id === list.owner_id)?.id;
   const attribution = attributionFor(list);
@@ -289,6 +323,14 @@ function ViewerHeader({ list }: { list: GiftListDetailViewer }) {
         )
       }
       isArchived={list.is_archived}
+      // No owner controls, but the menu itself stays: filing someone else's list
+      // under an occasion of your own is the main use of the feature, and this
+      // is a viewer's only way to reach it.
+      actions={
+        onAddToOccasion && (
+          <HeaderMenu items={[{ label: ADD_TO_OCCASION, onClick: onAddToOccasion }]} />
+        )
+      }
     />
   );
 }

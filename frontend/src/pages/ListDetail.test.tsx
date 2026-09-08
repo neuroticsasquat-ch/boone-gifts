@@ -491,7 +491,7 @@ describe("ListDetail — header actions menu", () => {
     await waitFor(() => expect(deleted).toBe(true));
   });
 
-  it("gives a viewer no actions menu", async () => {
+  it("gives a viewer the menu, holding the occasion action alone", async () => {
     server.use(
       http.get(`${API}/lists/1`, () => HttpResponse.json(viewerListDetail)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
@@ -500,7 +500,108 @@ describe("ListDetail — header actions menu", () => {
     renderListDetail(viewerToken);
 
     await screen.findByText("My Wishlist");
-    expect(screen.queryByRole("button", { name: "List actions" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "List actions" }));
+
+    expect(screen.getByRole("button", { name: "Add to an occasion…" })).toBeInTheDocument();
+    for (const owned of ["Edit", "Archive", "Delete"]) {
+      expect(screen.queryByRole("button", { name: owned })).not.toBeInTheDocument();
+    }
+  });
+});
+
+describe("ListDetail — add to an occasion", () => {
+  const occasions = [
+    {
+      id: 3,
+      name: "Christmas 2026",
+      description: null,
+      owner_id: 2,
+      is_archived: false,
+      created_at: "2026-01-01",
+      updated_at: "2026-01-01",
+    },
+  ];
+
+  function serveOccasions() {
+    server.use(
+      http.get(`${API}/occasions`, () => HttpResponse.json(occasions)),
+      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
+    );
+  }
+
+  async function openFromMenu() {
+    await screen.findByText("My Wishlist");
+    await userEvent.click(screen.getByRole("button", { name: "List actions" }));
+    await userEvent.click(screen.getByRole("button", { name: "Add to an occasion…" }));
+    return screen.getByRole("region", { name: "Add to an occasion" });
+  }
+
+  it("opens the picker from the owner's menu", async () => {
+    server.use(
+      http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
+    );
+    serveOccasions();
+
+    renderListDetail(ownerToken);
+
+    const panel = await openFromMenu();
+    expect(await within(panel).findByRole("checkbox", { name: /christmas 2026/i })).toBeInTheDocument();
+  });
+
+  // The whole point of moving this into the header: a viewer has no other way
+  // in, so it has to work identically for them.
+  it("opens the picker from a viewer's menu too", async () => {
+    server.use(
+      http.get(`${API}/lists/1`, () => HttpResponse.json(viewerListDetail)),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+    );
+    serveOccasions();
+
+    renderListDetail(viewerToken);
+
+    const panel = await openFromMenu();
+    expect(await within(panel).findByRole("checkbox", { name: /christmas 2026/i })).toBeInTheDocument();
+  });
+
+  // Simple mode has no occasion filter on /lists, so it cannot read an occasion
+  // back — offering to file a list into one would strand the membership.
+  it("hides the action in simple mode, leaving the rest of the menu", async () => {
+    server.use(
+      http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+    );
+    serveOccasions();
+
+    renderListDetail(simpleModeOwnerToken);
+
+    await screen.findByText("My Wishlist");
+    await userEvent.click(screen.getByRole("button", { name: "List actions" }));
+
+    expect(screen.queryByRole("button", { name: "Add to an occasion…" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
+  });
+
+  it("shows the sharing panel and the picker one at a time", async () => {
+    server.use(
+      http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
+    );
+    serveOccasions();
+
+    renderListDetail(ownerToken);
+
+    await screen.findByText("My Wishlist");
+    await userEvent.click(await screen.findByRole("button", { name: "Change" }));
+    expect(screen.getByRole("region", { name: "Who can see this list" })).toBeInTheDocument();
+
+    await openFromMenu();
+    expect(screen.queryByRole("region", { name: "Who can see this list" })).not.toBeInTheDocument();
   });
 });
 

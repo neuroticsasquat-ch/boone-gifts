@@ -72,13 +72,12 @@ src/
     RecipientFields.tsx   # The "this list is for someone else" control
   pages/             # One per route (see table below), plus Occasions.tsx and
                      # OccasionDetail.tsx — still unrouted; the Lists page's
-                     # occasion filter is where a user meets the concept now (M5
-                     # gives it a home on list detail)
+                     # occasion filter and list detail's "Add to an occasion…"
+                     # are where a user meets the concept now
     list-detail/     # GiftsTab (the page body), SharingSummary (the header's
                      # "Shared with …" line), SharingPanel (the combined people
                      # + families picker behind the header's Change control),
-                     # OccasionsTab (orphaned by the tab bar's removal;
-                     # NEU-1240 re-homes it in the ⋯ menu)
+                     # OccasionPicker (the ⋯ menu's "Add to an occasion…")
   lib/               # attribution.ts, recipient.ts — list recipient/attribution logic
   types/index.ts     # Types mirroring the backend Pydantic schemas
   test/
@@ -98,7 +97,7 @@ src/
 | `/` | — | Redirects to `/lists`; the app's entry point, not a page |
 | `/lists` | `Lists` | My lists + everything shared with me, under the actionable banner. Header controls: occasion filter, sort, archive (full mode only) |
 | `/lists/new` | `CreateList` | Full mode also shows "Share with families" checkboxes |
-| `/lists/:id` | `ListDetail` | Owner view or viewer/claimer view. No tab bar: header, then the gifts. Owner header carries the sharing summary line (+ **Change**) and a `⋯` menu holding Edit, Archive and Delete |
+| `/lists/:id` | `ListDetail` | Owner view or viewer/claimer view. No tab bar: header, then the gifts. Owner header carries the sharing summary line (+ **Change**) and a `⋯` menu holding Add to an occasion…, Edit, Archive and Delete; a viewer gets the same menu holding the occasion action alone. Simple mode drops that one item, so a viewer has no menu at all |
 | `/people` | `People` | The People tab: families, then individuals, under the actionable banner |
 | `/people/:id` | `ConnectionProfile` | |
 | `/people/families/:id` | `FamilyDetail` | Members, invites, rename, delete, leave |
@@ -125,6 +124,10 @@ On `/lists`, simple mode hides the header controls — occasion filter, sort, ar
 else**. The rows, the section headings and the New List button are identical in both modes; only the
 "nothing shared with you yet" empty state differs, because full mode's "Add a connection" link points
 at People, which simple mode hides.
+
+On `/lists/:id`, simple mode hides one thing: "Add to an occasion…" in the `⋯` menu. It goes for the
+same reason the filter does — with no filter there is nothing to read an occasion back with — and it
+leaves Edit, Archive and Delete untouched, so a viewer in simple mode gets no `⋯` menu at all.
 
 `Layout.tsx` holds **one** `tabs` array driving both the mobile bottom bar and the desktop nav. Simple
 mode is purely subtractive — it filters People out of that array and adds a People link to the account
@@ -174,6 +177,24 @@ A list can name a recipient. `RecipientFields.tsx` is the shared "this list is f
 An occasion is a user's saved grouping of lists — renamed from "collection" (NEU-1229). It has **no
 top-level route** any more, so the **occasion filter on `/lists` is the primary place a user meets
 the concept**, and it carries the explanation the old page's blurb used to.
+
+**Membership is an action on the list, not a tab.** `list-detail/OccasionPicker.tsx` is opened by
+"Add to an occasion…" in list detail's `⋯` menu — a checkbox per occasion, ticked where this list is
+already a member, plus a field that creates one and files the list under it in a single step. It
+replaces the retired `OccasionsTab` (NEU-1240).
+
+- **Owner or viewer.** Filing someone else's list under "Christmas 2026" is the main use of the
+  feature, so the `⋯` menu exists on the viewer header too, holding this one item. It is a viewer's
+  only entry point to occasions, so it must keep working for them.
+- An occasion is private to whoever owns it: the picker always shows the *viewer's* own occasions,
+  and nothing about the list or its owner travels through it.
+- Membership writes through `/occasions/{id}/items`; the checked state comes from
+  `/occasions/for-list/{list_id}` (`["occasions-for-list", listId]`).
+- The picker and the sharing panel share the header's one panel slot, so opening either closes the
+  other.
+- **Hidden in simple mode**, which has no occasion filter on `/lists` and so no way to read an
+  occasion back: filing a list into one there would leave membership its owner could never see. The
+  rest of the `⋯` menu is unchanged, so this stays purely subtractive.
 
 - The filter is a `<select>` in the Lists page header, defaulting to "All lists". It narrows **both**
   sections at once; a list in several occasions is matched by each of them.
