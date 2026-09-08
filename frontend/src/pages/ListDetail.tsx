@@ -1,8 +1,9 @@
-import { useState, useEffect, type FormEvent } from "react";
+import { useState, useEffect, useRef, type FormEvent } from "react";
 import { useParams, useNavigate, Link } from "react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getList, updateList, deleteList } from "../api/lists";
 import { getConnections } from "../api/connections";
+import { getAccount } from "../api/account";
 import { useAuth } from "../hooks/useAuth";
 import { useTitle } from "../hooks/useTitle";
 import type { GiftListDetailOwner, GiftListDetailViewer } from "../types";
@@ -10,30 +11,21 @@ import { isAxiosError } from "axios";
 import toast from "react-hot-toast";
 import { Spinner } from "../components/Spinner";
 import { GiftsTab } from "./list-detail/GiftsTab";
-import { CollectionsTab } from "./list-detail/CollectionsTab";
-import { SharedWithTab } from "./list-detail/SharedWithTab";
-import { FamiliesTab } from "./list-detail/FamiliesTab";
+import { SharingPanel } from "./list-detail/SharingPanel";
+import { SharingSummary } from "./list-detail/SharingSummary";
+import { OccasionPicker } from "./list-detail/OccasionPicker";
 import { attributionFor, isKeptForAbsentPerson, recipientLabel, recipientNameOf } from "../lib/attribution";
-import { RecipientFields } from "../components/RecipientFields";
+import { ListForFields } from "../components/ListForFields";
 import {
-  recipientIncomplete,
-  recipientPayload,
-  recipientValueFrom,
-  type RecipientValue,
-} from "../lib/recipient";
+  listForIncomplete,
+  listForPayload,
+  listForValueFrom,
+  type ListForValue,
+} from "../lib/list-for";
 
 function isOwnerView(list: GiftListDetailOwner | GiftListDetailViewer, userId: number): list is GiftListDetailOwner {
   return list.owner_id === userId;
 }
-
-type Tab = "gifts" | "collections" | "shared" | "families";
-
-const TABS: { key: Tab; label: string }[] = [
-  { key: "gifts", label: "Gifts" },
-  { key: "collections", label: "Collections" },
-  { key: "shared", label: "Shared with" },
-  { key: "families", label: "Families" },
-];
 
 export function ListDetail() {
   const { id } = useParams();
@@ -41,8 +33,14 @@ export function ListDetail() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<Tab>("gifts");
   const [editing, setEditing] = useState(false);
+  // One header panel at a time — both open in the same slot under the header,
+  // and two of them stacked there would bury the gifts.
+  const [panel, setPanel] = useState<"sharing" | "occasions" | null>(null);
+
+  function togglePanel(next: "sharing" | "occasions") {
+    setPanel((open) => (open === next ? null : next));
+  }
 
   const { data: list, isLoading, error, refetch } = useQuery({
     queryKey: ["list", listId],
@@ -67,12 +65,13 @@ export function ListDetail() {
   );
 
   const isOwner = user !== null && isOwnerView(list, user.id);
-  // "Shared with" is hidden in simple mode; "Families" is not — a simple-mode
-  // user can own a list created in full mode and left unshared, so they need to
-  // see its real state. Neither is meaningful to a non-owner viewer.
-  const visibleTabs = TABS.filter(
-    (t) => !(user?.simple_mode && t.key === "shared") && !(!isOwner && t.key === "families"),
-  );
+  // Simple mode hides the occasion filter on /lists (project spec §6.1), so it
+  // has no way to read an occasion back. Offering to file a list into one here
+  // would leave membership its owner can never see — the orphaned-concept
+  // problem this project set out to end, not restage. Subtractive, as §6.1
+  // requires: the wording and the destination are the same in both modes when
+  // it shows at all.
+  const canAddToOccasion = !user?.simple_mode;
 
   return (
     <div className="space-y-6">
@@ -83,34 +82,45 @@ export function ListDetail() {
         editing ? (
           <EditListHeader list={list} listId={listId} queryClient={queryClient} onDone={() => setEditing(false)} />
         ) : (
-          <OwnerHeader list={list} listId={listId} queryClient={queryClient} navigate={navigate} onEdit={() => setEditing(true)} />
+          <OwnerHeader
+            list={list}
+            listId={listId}
+            queryClient={queryClient}
+            navigate={navigate}
+            onEdit={() => setEditing(true)}
+            simpleMode={!!user?.simple_mode}
+            onChangeSharing={() => togglePanel("sharing")}
+            onAddToOccasion={canAddToOccasion ? () => togglePanel("occasions") : undefined}
+          />
         )
       ) : (
-        <ViewerHeader list={list as GiftListDetailViewer} />
+        <ViewerHeader
+          list={list as GiftListDetailViewer}
+          onAddToOccasion={canAddToOccasion ? () => togglePanel("occasions") : undefined}
+        />
       )}
 
-      {/* Tab bar */}
-      <div className="flex border-b border-gray-200">
-        {visibleTabs.map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => setActiveTab(key)}
-            className={`flex-1 py-2.5 text-center text-sm font-medium ${
-              activeTab === key
-                ? "text-blue-600 border-b-2 border-blue-600"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      {/* Sharing panel — the only way to reach the people and family controls now
+          that the tab bar is gone. */}
+      {isOwner && panel === "sharing" && (
+        <SharingPanel
+          listId={listId}
+          queryClient={queryClient}
+          onClose={() => setPanel(null)}
+        />
+      )}
 
-      {/* Tab content */}
-      {activeTab === "gifts" && <GiftsTab list={list} listId={listId} isOwner={isOwner} userId={user!.id} queryClient={queryClient} />}
-      {activeTab === "collections" && <CollectionsTab listId={listId} queryClient={queryClient} />}
-      {activeTab === "shared" && <SharedWithTab listId={listId} isOwner={isOwner} ownerName={list.owner_name} queryClient={queryClient} />}
-      {activeTab === "families" && <FamiliesTab listId={listId} queryClient={queryClient} />}
+      {/* Occasions — likewise the only way in, for owner and viewer alike. */}
+      {panel === "occasions" && (
+        <OccasionPicker
+          listId={listId}
+          queryClient={queryClient}
+          onClose={() => setPanel(null)}
+        />
+      )}
+
+      {/* The gifts are the page. */}
+      <GiftsTab list={list} listId={listId} isOwner={isOwner} userId={user!.id} queryClient={queryClient} />
     </div>
   );
 }
@@ -123,12 +133,18 @@ function OwnerHeader({
   queryClient,
   navigate,
   onEdit,
+  simpleMode,
+  onChangeSharing,
+  onAddToOccasion,
 }: {
   list: GiftListDetailOwner;
   listId: number;
   queryClient: ReturnType<typeof useQueryClient>;
   navigate: ReturnType<typeof useNavigate>;
   onEdit: () => void;
+  simpleMode: boolean;
+  onChangeSharing: () => void;
+  onAddToOccasion?: () => void;
 }) {
   const archiveMutation = useMutation({
     mutationFn: () => updateList(listId, { is_archived: !list.is_archived }),
@@ -139,11 +155,31 @@ function OwnerHeader({
     onError: () => toast.error("Failed to update list."),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteList(listId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["lists"] });
+      navigate("/lists", { replace: true });
+    },
+    onError: (err) => {
+      const detail = isAxiosError(err) && err.response?.status === 409
+        ? err.response.data?.detail
+        : null;
+      toast.error(detail || "Failed to delete list.");
+    },
+  });
+
   function handleArchiveToggle() {
     if (list.is_archived) {
       archiveMutation.mutate();
     } else if (window.confirm("Archive this list?")) {
       archiveMutation.mutate();
+    }
+  }
+
+  function handleDelete() {
+    if (window.confirm("Delete this list? This cannot be undone.")) {
+      deleteMutation.mutate();
     }
   }
 
@@ -162,36 +198,113 @@ function OwnerHeader({
           : undefined
       }
       isArchived={list.is_archived}
-      onEdit={onEdit}
-      onDelete={
-        <DeleteListButton listId={listId} queryClient={queryClient} navigate={navigate} />
+      sharing={
+        <SharingSummary listId={listId} simpleMode={simpleMode} onChange={onChangeSharing} />
       }
-      onArchive={
-        <button
-          onClick={handleArchiveToggle}
-          disabled={archiveMutation.isPending}
-          className={`rounded px-3 py-1 text-sm font-medium text-white disabled:opacity-50 ${list.is_archived ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700"}`}
-        >
-          {archiveMutation.isPending ? "…" : list.is_archived ? "Unarchive" : "Archive"}
-        </button>
+      actions={
+        <HeaderMenu
+          pending={archiveMutation.isPending || deleteMutation.isPending}
+          items={[
+            ...(onAddToOccasion ? [{ label: ADD_TO_OCCASION, onClick: onAddToOccasion }] : []),
+            { label: "Edit", onClick: onEdit },
+            { label: list.is_archived ? "Unarchive" : "Archive", onClick: handleArchiveToggle },
+            { label: "Delete", onClick: handleDelete, danger: true, separatorBefore: true },
+          ]}
+        />
       }
     />
   );
 }
 
-function ViewerHeader({ list }: { list: GiftListDetailViewer }) {
+/**
+ * The occasion action reads the same for an owner and a viewer, so it is written
+ * once — the two headers must not drift apart on the wording of the only entry
+ * point a viewer has.
+ */
+const ADD_TO_OCCASION = "Add to an occasion…";
+
+type HeaderMenuItem = {
+  label: string;
+  onClick: () => void;
+  danger?: boolean;
+  separatorBefore?: boolean;
+};
+
+/**
+ * The header's `⋯` menu, so the header can lead with the list itself and its
+ * sharing line. An owner's holds the occasion action plus edit, archive and
+ * delete; a viewer's holds the occasion action alone.
+ */
+function HeaderMenu({ items, pending = false }: { items: HeaderMenuItem[]; pending?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  function run(action: () => void) {
+    setOpen(false);
+    action();
+  }
+
+  return (
+    <div className="relative" ref={menuRef}>
+      <button
+        onClick={() => setOpen(!open)}
+        disabled={pending}
+        aria-label="List actions"
+        aria-expanded={open}
+        className="rounded px-3 py-1 text-lg font-medium leading-none text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50"
+      >
+        &#8943;
+      </button>
+
+      {open && (
+        <div className="absolute right-0 z-50 mt-2 w-52 rounded-lg bg-white py-1 shadow-lg ring-1 ring-black/5">
+          {items.map((item) => (
+            <div key={item.label}>
+              {item.separatorBefore && <hr className="my-1 border-gray-100" />}
+              <button
+                onClick={() => run(item.onClick)}
+                className={`block w-full px-4 py-2 text-left text-sm hover:bg-gray-50 ${
+                  item.danger ? "text-red-600" : "text-gray-700"
+                }`}
+              >
+                {item.label}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ViewerHeader({
+  list,
+  onAddToOccasion,
+}: {
+  list: GiftListDetailViewer;
+  onAddToOccasion?: () => void;
+}) {
   const connections = useQuery({ queryKey: ["connections"], queryFn: getConnections });
   const connectionId = connections.data?.find((c) => c.user.id === list.owner_id)?.id;
   const attribution = attributionFor(list);
 
-  // The link always points at the owner's profile — the account behind the list —
-  // whichever name is showing. On a shared-account list that name is the
-  // recipient's, which is still the right profile to reach. On an "absent" list
-  // the link moves to the keeper: linking "Beth" to Tom's profile would simply
-  // be wrong.
+  // The link always points at the owner's profile — the account behind the list.
+  // On an "absent" list the link moves to the keeper rather than the recipient:
+  // linking "Beth" to Tom's profile would simply be wrong.
   const linkToOwner = (label: string) =>
     connectionId ? (
-      <Link to={`/connections/${connectionId}`} className="text-blue-600 hover:underline">{label}</Link>
+      <Link to={`/people/${connectionId}`} className="text-blue-600 hover:underline">{label}</Link>
     ) : (
       label
     );
@@ -209,6 +322,14 @@ function ViewerHeader({ list }: { list: GiftListDetailViewer }) {
         )
       }
       isArchived={list.is_archived}
+      // No owner controls, but the menu itself stays: filing someone else's list
+      // under an occasion of your own is the main use of the feature, and this
+      // is a viewer's only way to reach it.
+      actions={
+        onAddToOccasion && (
+          <HeaderMenu items={[{ label: ADD_TO_OCCASION, onClick: onAddToOccasion }]} />
+        )
+      }
     />
   );
 }
@@ -219,18 +340,16 @@ function ListHeader({
   subtitle,
   footnote,
   isArchived,
-  onEdit,
-  onDelete,
-  onArchive,
+  sharing,
+  actions,
 }: {
   name: string;
   description: string | null;
   subtitle?: React.ReactNode;
   footnote?: string;
   isArchived?: boolean;
-  onEdit?: () => void;
-  onDelete?: React.ReactNode;
-  onArchive?: React.ReactNode;
+  sharing?: React.ReactNode;
+  actions?: React.ReactNode;
 }) {
   return (
     <div className="rounded-lg bg-white p-6 shadow">
@@ -245,21 +364,9 @@ function ListHeader({
           {subtitle && <p className="mt-1 text-sm text-gray-500">{subtitle}</p>}
           {description && <p className="mt-2 text-gray-600">{description}</p>}
           {footnote && <p className="mt-2 text-sm text-gray-500">{footnote}</p>}
+          {sharing}
         </div>
-        {(onEdit || onDelete || onArchive) && (
-          <div className="flex gap-2 shrink-0">
-            {onArchive}
-            {onEdit && (
-              <button
-                onClick={onEdit}
-                className="rounded bg-gray-200 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-300"
-              >
-                Edit
-              </button>
-            )}
-            {onDelete}
-          </div>
-        )}
+        {actions && <div className="shrink-0">{actions}</div>}
       </div>
     </div>
   );
@@ -278,9 +385,10 @@ function EditListHeader({
 }) {
   const [name, setName] = useState(list.name);
   const [description, setDescription] = useState(list.description ?? "");
-  // Every transition is permitted — both fields are display-only, so nothing
+  // Every transition is permitted — all three fields are display-only, so nothing
   // cascades: no access path shifts and no claim is invalidated.
-  const [recipient, setRecipient] = useState<RecipientValue>(recipientValueFrom(list));
+  const [listFor, setListFor] = useState<ListForValue>(listForValueFrom(list));
+  const account = useQuery({ queryKey: ["account"], queryFn: getAccount });
 
   const mutation = useMutation({
     mutationFn: (data: Parameters<typeof updateList>[1]) => updateList(listId, data),
@@ -296,7 +404,7 @@ function EditListHeader({
     mutation.mutate({
       name,
       description: description || undefined,
-      ...recipientPayload(recipient),
+      ...listForPayload(listFor),
     });
   }
 
@@ -322,11 +430,14 @@ function EditListHeader({
           className="mt-1 block w-full rounded border border-gray-300 px-3 py-2"
         />
       </label>
-      <RecipientFields value={recipient} onChange={setRecipient} />
+      <ListForFields account={account.data} value={listFor} onChange={setListFor} />
       <div className="flex gap-2">
         <button
           type="submit"
-          disabled={mutation.isPending || recipientIncomplete(recipient)}
+          disabled={
+            mutation.isPending ||
+            listForIncomplete(listFor, account.data?.is_shared_account ?? false)
+          }
           className="rounded bg-blue-600 px-3 py-1 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
         >
           {mutation.isPending ? "Saving…" : "Save"}
@@ -340,45 +451,5 @@ function EditListHeader({
         </button>
       </div>
     </form>
-  );
-}
-
-function DeleteListButton({
-  listId,
-  queryClient,
-  navigate,
-}: {
-  listId: number;
-  queryClient: ReturnType<typeof useQueryClient>;
-  navigate: ReturnType<typeof useNavigate>;
-}) {
-  const mutation = useMutation({
-    mutationFn: () => deleteList(listId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["lists"] });
-      navigate("/lists", { replace: true });
-    },
-    onError: (err) => {
-      const detail = isAxiosError(err) && err.response?.status === 409
-        ? err.response.data?.detail
-        : null;
-      toast.error(detail || "Failed to delete list.");
-    },
-  });
-
-  function handleDelete() {
-    if (window.confirm("Delete this list? This cannot be undone.")) {
-      mutation.mutate();
-    }
-  }
-
-  return (
-    <button
-      onClick={handleDelete}
-      disabled={mutation.isPending}
-      className="rounded bg-red-600 px-3 py-1 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
-    >
-      {mutation.isPending ? "Deleting…" : "Delete"}
-    </button>
   );
 }

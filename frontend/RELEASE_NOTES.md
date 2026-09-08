@@ -1,3 +1,42 @@
+# Release notes
+
+## 0.4.0 — 2026-09-08
+
+### Account
+
+- Declare a shared account and name the people on it ([NEU-1232](https://linear.app/neuroticsasquatch/issue/NEU-1232)) ([#177](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/177))
+
+### General
+
+- Add /family-invites/:token route for existing-user invite links
+- Stop CI tests resolving against the Coder workspace API URL
+
+### List-detail
+
+- List detail without tabs ([NEU-1236](https://linear.app/neuroticsasquatch/issue/NEU-1236)) ([#173](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/173))
+- Combined "Who can see this list" picker ([NEU-1239](https://linear.app/neuroticsasquatch/issue/NEU-1239)) ([#174](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/174))
+
+### Lists
+
+- Actionable banner on Lists ([NEU-1233](https://linear.app/neuroticsasquatch/issue/NEU-1233)) ([#169](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/169))
+- Label each shared list with how it reached me ([NEU-1235](https://linear.app/neuroticsasquatch/issue/NEU-1235)) ([#171](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/171))
+- Occasion filter, header controls and empty states ([NEU-1238](https://linear.app/neuroticsasquatch/issue/NEU-1238)) ([#172](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/172))
+- Ask who a list is for on a shared account ([NEU-1237](https://linear.app/neuroticsasquatch/issue/NEU-1237)) ([#178](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/178))
+- Delete the "they use this app" radio ([NEU-1241](https://linear.app/neuroticsasquatch/issue/NEU-1241)) ([#179](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/179))
+
+### Nav
+
+- Two-tab nav shell and retired routes ([NEU-1231](https://linear.app/neuroticsasquatch/issue/NEU-1231)) ([#168](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/168))
+
+### Occasions
+
+- Add a list to an occasion from the header menu ([NEU-1240](https://linear.app/neuroticsasquatch/issue/NEU-1240)) ([#176](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/176))
+
+### People
+
+- Merge connections and families into one People page ([NEU-1234](https://linear.app/neuroticsasquatch/issue/NEU-1234)) ([#170](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/170))
+- Choose role and simple mode when inviting to a family ([#180](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/180))
+
 ## [0.3.0] - 2026-06-29
 
 ### 🚀 Features

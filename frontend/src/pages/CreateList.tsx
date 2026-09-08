@@ -3,22 +3,23 @@ import { useNavigate, Link } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { createList } from "../api/lists";
 import { getFamilies } from "../api/families";
+import { getAccount } from "../api/account";
 import { useAuth } from "../hooks/useAuth";
 import { useTitle } from "../hooks/useTitle";
-import { RecipientFields } from "../components/RecipientFields";
+import { ListForFields } from "../components/ListForFields";
 import {
-  NO_RECIPIENT,
-  recipientIncomplete,
-  recipientPayload,
-  type RecipientValue,
-} from "../lib/recipient";
+  LIST_FOR_UNANSWERED,
+  listForIncomplete,
+  listForPayload,
+  type ListForValue,
+} from "../lib/list-for";
 
 export function CreateList() {
   useTitle("New List");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [familyIds, setFamilyIds] = useState<number[]>([]);
-  const [recipient, setRecipient] = useState<RecipientValue>(NO_RECIPIENT);
+  const [listFor, setListFor] = useState<ListForValue>(LIST_FOR_UNANSWERED);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
@@ -34,6 +35,11 @@ export function CreateList() {
   });
   const showFamilies = canChooseFamilies && (families.data ?? []).length > 0;
 
+  // On a shared account every list says who it is for, and the answer is required
+  // (project spec §5.2). Fetched in both modes: a shared household is exactly the
+  // audience simple mode is for.
+  const account = useQuery({ queryKey: ["account"], queryFn: getAccount });
+
   function toggleFamily(id: number) {
     setFamilyIds((current) =>
       current.includes(id) ? current.filter((f) => f !== id) : [...current, id],
@@ -48,7 +54,7 @@ export function CreateList() {
       const list = await createList({
         name,
         description: description || undefined,
-        ...recipientPayload(recipient),
+        ...listForPayload(listFor),
         ...(showFamilies ? { family_ids: familyIds } : {}),
       });
       navigate(`/lists/${list.id}`, { replace: true });
@@ -83,7 +89,7 @@ export function CreateList() {
             className="mt-1 block w-full rounded border border-gray-300 px-3 py-2"
           />
         </label>
-        <RecipientFields value={recipient} onChange={setRecipient} />
+        <ListForFields account={account.data} value={listFor} onChange={setListFor} />
         {showFamilies && (
           <fieldset className="mb-6">
             <legend className="text-sm font-medium text-gray-700">Share with families</legend>
@@ -108,7 +114,10 @@ export function CreateList() {
         <div className="flex gap-3">
           <button
             type="submit"
-            disabled={submitting || recipientIncomplete(recipient)}
+            disabled={
+              submitting ||
+              listForIncomplete(listFor, account.data?.is_shared_account ?? false)
+            }
             className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
           >
             {submitting ? "Creating…" : "Create List"}

@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { useTitle } from "../hooks/useTitle";
 import { CogIcon } from "../components/Icons";
+import { SharedAccountCard } from "./account/SharedAccountCard";
 
 interface AxiosLikeError {
   response?: { status?: number; data?: { detail?: string } };
@@ -173,12 +174,14 @@ export function Account() {
         </form>
       </div>
 
+      <SharedAccountCard />
+
       <div className="bg-white shadow rounded p-6 mt-6">
         <h2 className="text-lg font-semibold mb-4">View mode</h2>
         {modeError && <p className="text-red-600 text-sm mb-4">{modeError}</p>}
         <p className="text-sm text-gray-600 mb-4">
           {user?.simple_mode
-            ? "Simple mode is on. You see My Lists and Family Lists only."
+            ? "Simple mode is on. You see Lists only; People is in this menu."
             : "Full mode is on. You see all sections."}
         </p>
         <button

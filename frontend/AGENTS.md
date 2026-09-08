@@ -54,24 +54,35 @@ src/
   api/
     client.ts        # Axios instance, JWT interceptors (set/get/clearAccessToken)
     auth.ts          # login, register, refresh, logout, updateProfile, changePassword, toggleSimpleMode
-    lists.ts         # getLists("owned"|"shared"|"family"), createList (family_ids),
+    lists.ts         # getLists("owned"|"shared"), createList (family_ids),
                      # getListFamilies / shareListWithFamily / unshareListFromFamily
     gifts.ts         # Gift CRUD + claim/unclaim
     families.ts      # 13 functions — see "Families" below
-    connections.ts, shares.ts, collections.ts, invites.ts, users.ts, meta.ts
+    account.ts       # GET/PUT /account — the shared-account flag and its people
+    connections.ts, shares.ts, occasions.ts, invites.ts, users.ts, meta.ts
   contexts/AuthContext.tsx   # Access token in memory, silent refresh on mount, toggleSimpleMode
   hooks/             # useAuth, useTitle
   components/
-    Layout.tsx            # App shell: nav + outlet, simple-mode branching, badge queries
+    Layout.tsx            # App shell: one tab set (Lists · People) + outlet, badge queries
     ProtectedRoute.tsx    # Auth guard        AdminRoute.tsx — admin guard for /admin/*
     Badge.tsx             # Numeric badge overlay for nav icons
     Icons.tsx, Spinner.tsx
-    PendingFamilyInvites.tsx  # Inline accept/decline for incoming family invites
+    ActionableBanner.tsx  # Pending connection requests + family invites, accept/decline
+                          # inline. The one implementation; renders nothing when empty
     ListAttribution.tsx   # "from Jane" / "for Beth · kept by Tom" row lines
+    ListForFields.tsx     # "Who is this list for?" — the shared-account picker,
+                          # falling back to RecipientFields on a normal account
     RecipientFields.tsx   # The "this list is for someone else" control
-  pages/             # One per route (see table below)
-    list-detail/     # GiftsTab, SharedWithTab, FamiliesTab, CollectionsTab
-  lib/               # attribution.ts, recipient.ts — list recipient/attribution logic
+  pages/             # One per route (see table below), plus Occasions.tsx and
+                     # OccasionDetail.tsx — still unrouted; the Lists page's
+                     # occasion filter and list detail's "Add to an occasion…"
+                     # are where a user meets the concept now
+    list-detail/     # GiftsTab (the page body), SharingSummary (the header's
+                     # "Shared with …" line), SharingPanel (the combined people
+                     # + families picker behind the header's Change control),
+                     # OccasionPicker (the ⋯ menu's "Add to an occasion…")
+  lib/               # attribution.ts, recipient.ts, list-for.ts — who a list is for,
+                     # and how that reads on a row
   types/index.ts     # Types mirroring the backend Pydantic schemas
   test/
     setup.ts         # Vitest setup (Testing Library + MSW)
@@ -87,17 +98,13 @@ src/
 | `/forgot-password` | `ForgotPassword` | Public |
 | `/reset-password` | `ResetPassword` | Public |
 | `/family-invites/:token` | `AcceptFamilyInvite` | Authenticated, outside `Layout` |
-| `/` | `Dashboard` | Summary + connection requests; no nav entry in simple mode |
-| `/lists` | `Lists` | Owned + directly shared lists |
+| `/` | — | Redirects to `/lists`; the app's entry point, not a page |
+| `/lists` | `Lists` | My lists + everything shared with me, under the actionable banner. Header controls: occasion filter, sort, archive (full mode only) |
 | `/lists/new` | `CreateList` | Full mode also shows "Share with families" checkboxes |
-| `/lists/:id` | `ListDetail` | Owner view or viewer/claimer view |
-| `/connections` | `Connections` | Hidden from simple-mode nav |
-| `/connections/:id` | `ConnectionProfile` | |
-| `/collections` | `Collections` | Hidden from simple-mode nav |
-| `/collections/:id` | `CollectionDetail` | |
-| `/families` | `Families` | Hidden from simple-mode nav |
-| `/families/:id` | `FamilyDetail` | Members, invites, rename, delete, leave |
-| `/family-lists` | `FamilyLists` | Co-members' lists grouped by family; simple mode's second tab |
+| `/lists/:id` | `ListDetail` | Owner view or viewer/claimer view. No tab bar: header, then the gifts. Owner header carries the sharing summary line (+ **Change**) and a `⋯` menu holding Add to an occasion…, Edit, Archive and Delete; a viewer gets the same menu holding the occasion action alone. Simple mode drops that one item, so a viewer has no menu at all |
+| `/people` | `People` | The People tab: families, then individuals, under the actionable banner |
+| `/people/:id` | `ConnectionProfile` | |
+| `/people/families/:id` | `FamilyDetail` | Members, invites, rename, delete, leave |
 | `/account` | `Account` | Both modes, via the user menu |
 | `/admin/invites`, `/admin/users` | `AdminInvites`, `AdminUsers` | Admin-only |
 
@@ -111,10 +118,24 @@ A reduced navigation for users who only need their own lists and their family's.
 
 | Mode | Tabs (desktop and mobile) |
 |---|---|
-| Full | Home · Lists · Connect · Families · Collect |
-| Simple | My Lists · Family Lists |
+| Full | Lists · People |
+| Simple | Lists (People moves into the account menu) |
 
-`Layout.tsx` picks `simpleTabs` or `fullTabs` from `user?.simple_mode` for the mobile bottom bar, and renders the same split inline in the desktop nav.
+`ActionableBanner` is deliberately **not** subtracted in simple mode: with People hidden, the banner
+on `/lists` is the only route to a pending connection request or family invite.
+
+On `/lists`, simple mode hides the header controls — occasion filter, sort, archive — **and nothing
+else**. The rows, the section headings and the New List button are identical in both modes; only the
+"nothing shared with you yet" empty state differs, because full mode's "Add a connection" link points
+at People, which simple mode hides.
+
+On `/lists/:id`, simple mode hides one thing: "Add to an occasion…" in the `⋯` menu. It goes for the
+same reason the filter does — with no filter there is nothing to read an occasion back with — and it
+leaves Edit, Archive and Delete untouched, so a viewer in simple mode gets no `⋯` menu at all.
+
+`Layout.tsx` holds **one** `tabs` array driving both the mobile bottom bar and the desktop nav. Simple
+mode is purely subtractive — it filters People out of that array and adds a People link to the account
+menu. It never changes a label or a destination.
 
 ## Families
 
@@ -122,24 +143,108 @@ A reduced navigation for users who only need their own lists and their family's.
 
 Types: `Family` (summary with `role`, `member_count`), `FamilyMember`, `FamilyDetail`, `FamilyRef` (lightweight, embedded in `GiftList.families`), `FamilyInvite`, `IncomingFamilyInvite`. `ListFamilyShareState` is `{ id, name, shared }`, one per family the list's owner belongs to. `InviteInfo.family_name` is `null` for admin invites and the family name for family invites.
 
-**Badges**: `Layout.tsx` runs three background queries on every page — `["connectionRequests"]` → Connections, `["unseen-shares"]` → Lists, `["familyInvites"]` → Families — rendered as `<Badge count={n}>` inside each mobile tab icon and inline in the desktop links.
+**Badges**: `Layout.tsx` runs three background queries on every page — `["unseen-shares"]` badges **Lists**, while `["connectionRequests"]` and `["familyInvites"]` are **summed into the single People badge**. Rendered as `<Badge count={n}>` inside each mobile tab icon and inline in the desktop links.
+`ActionableBanner` invalidates both keys after an accept or decline, so acting on an item clears its
+row and drops the badge.
 
 **Register via family invite**: `Register.tsx` reads `?family_invite=<token>`; `getInviteInfo(token)` then returns a non-null `family_name`, the email field is pre-filled and locked, and a "Join the \<family\> family" subtitle is shown.
 
-## Per-family list sharing
+## Actionable items
 
-Family visibility is an explicit per-(list, family) grant on the backend, not implied by co-membership. **The backend is always the gate — hidden or read-only UI is not.**
+`components/ActionableBanner.tsx` is the **single** implementation of accept/decline for incoming
+connection requests and family invites — the logic that used to live once in `Dashboard.tsx` (deleted
+in NEU-1231) and once in `PendingFamilyInvites.tsx` (replaced by this).
 
+- Mounted on `/lists` above the lists, and on `/people`.
+- Renders **nothing** when nothing is pending — no empty card, no heading.
+- While an item's accept/decline is in flight, both of that item's buttons are disabled, so a
+  decision cannot be taken twice. Other rows stay actionable.
+- A 409 on a family invite means it was already accepted, declined, or expired: the row is refreshed
+  away and the user is told the invite is no longer valid.
+
+## List sharing
+
+Visibility is an explicit grant on the backend — per-(list, user) for people, per-(list, family) for families, never implied by co-membership. **The backend is always the gate — hidden or read-only UI is not.**
+
+- **Who can see this list** (`list-detail/SharingPanel.tsx`) — the one owner-facing sharing surface, opened by the header's **Change** control. A **People** group (one checkbox per connection, checked when shared) and a **Families** group (one per family, checked when granted), in that order — the same order the summary line reads in. It writes through the existing endpoints, `/lists/{id}/shares` and `/lists/{id}/families/{family_id}`; there is no combined sharing endpoint.
+- **Owner-only and full-mode only.** Simple mode never opens the panel: its header summary line is read-only, because the backend auto-grants its lists to every family anyway.
+  - **Known cost of that line** (project spec §6.2, accepted): the auto-grant covers lists *created* in simple mode and family *joins*, so a simple-mode user who owns a list made in full mode and deliberately left unshared reads "Shared with your families" when it isn't. The retired Families tab used to show them the real state; the spec chose the fixed copy anyway.
 - **Create form** (`CreateList.tsx`) — a "Share with families" fieldset of **unchecked** checkboxes posting `family_ids`. Hidden when the user belongs to no families, and in simple mode, where the backend shares with every family regardless and a control would be a lie.
-- **List detail** (`list-detail/FamiliesTab.tsx`) — owner-only. Full mode renders one toggle per family. Simple mode **still shows the tab** — unlike "Shared with", which stays hidden — read-only, plus a link to Account settings, because a simple-mode user can own a list created in full mode and deliberately left unshared.
-- **Revoke dialog** — a 409 from the DELETE means members of that family hold claims that revoking would orphan. The modal offers **Release those claims** / **Keep them claimed** / **Cancel**, re-issuing with `claims=release` or `claims=keep`. It shows **no counts and no gift or claimer names**: owners are blind to claim state on their own lists.
+- **Revoke dialog** — a 409 from the family DELETE means members of that family hold claims that revoking would orphan. The modal offers **Release those claims** / **Keep them claimed** / **Cancel**, re-issuing with `claims=release` or `claims=keep`. It shows **no counts and no gift or claimer names**: owners are blind to claim state on their own lists.
 
 ## Recipients
 
-A list can name a recipient. `RecipientFields.tsx` is the shared "this list is for someone else" control (create form and edit header); `lib/recipient.ts` holds its value type and payload mapping, `lib/attribution.ts` turns a list into its display line, and `ListAttribution.tsx` renders it — "from Jane" for a list someone shared, "for Beth · kept by Tom" for one kept on behalf of a person with no account.
+A list can name a recipient, and since NEU-1241 that means exactly one thing: **a person who does not use the app**. The co-resident case the old "they use this app" radio described is the account-people picker instead (see below), so a recipient name is on its own the whole predicate — claims are hidden from the keeper and the keeper cannot claim, always.
+
+`RecipientFields.tsx` is the shared "this list is for someone else" control (create form and edit header); `lib/recipient.ts` holds its value type and payload mapping, `lib/attribution.ts` turns a list into its display line, and `ListAttribution.tsx` renders it — "from Jane" for a list someone shared, "for Beth · kept by Tom" for one kept on behalf of a person with no account. The keeper's warning under the name field is unconditional: it is the only case left.
+
+## Who is this list for?
+
+On a **shared account** every list says which of the account's people it is for, and the create form
+and edit header ask outright: a required radio group naming each person, plus "Both of us" and
+"Someone else" (NEU-1237). `ListForFields.tsx` is that picker and the single control both forms
+mount; `lib/list-for.ts` holds the answer as one tagged union and maps it to the two fields the API
+takes.
+
+- **The requirement lives on the client.** `POST /lists` accepts a list that names neither person nor
+  recipient — that is a household list — so nothing server-side forces an answer. "Both of us" is how
+  the household case is said out loud, and it sends `null` for both fields.
+- **Exclusivity is structural.** `account_person_id` and `recipient_name` are mutually exclusive on
+  the API (400 either way round); modelling the answer as a union means switching branches drops the
+  other's value, so both can never travel set. Choosing a person clears a typed recipient name and
+  choosing "Someone else" clears the person — in the UI as well as the payload.
+- **"Someone else" is a branch of the picker, not a sibling.** `RecipientFields`' disclosure checkbox
+  is *the* control on a non-shared account and is absent on a shared one, where the radio is the
+  disclosure; both render the same `RecipientDetails` body underneath.
+- **A non-shared account sees no picker at all** — the form is today's. `GET /account` (`["account"]`,
+  shared with the Account page's card) is what tells the two apart, and until it answers the form
+  renders the non-shared shape.
+- **Both modes ask.** A shared household is exactly who simple mode is for, so the picker is never
+  subtracted.
+- The owner-side label — "for Gran" on their own rows and in the list header — comes from
+  `recipientLabel` in `lib/attribution.ts`. A *viewer* is told nothing about account people: to
+  everyone else the account is one identity (project spec §5.1).
+
+## Occasions
+
+An occasion is a user's saved grouping of lists — renamed from "collection" (NEU-1229). It has **no
+top-level route** any more, so the **occasion filter on `/lists` is the primary place a user meets
+the concept**, and it carries the explanation the old page's blurb used to.
+
+**Membership is an action on the list, not a tab.** `list-detail/OccasionPicker.tsx` is opened by
+"Add to an occasion…" in list detail's `⋯` menu — a checkbox per occasion, ticked where this list is
+already a member, plus a field that creates one and files the list under it in a single step. It
+replaces the retired `OccasionsTab` (NEU-1240).
+
+- **Owner or viewer.** Filing someone else's list under "Christmas 2026" is the main use of the
+  feature, so the `⋯` menu exists on the viewer header too, holding this one item. It is a viewer's
+  only entry point to occasions, so it must keep working for them.
+- An occasion is private to whoever owns it: the picker always shows the *viewer's* own occasions,
+  and nothing about the list or its owner travels through it.
+- Membership writes through `/occasions/{id}/items`; the checked state comes from
+  `/occasions/for-list/{list_id}` (`["occasions-for-list", listId]`).
+- The picker and the sharing panel share the header's one panel slot, so opening either closes the
+  other.
+- **Hidden in simple mode**, which has no occasion filter on `/lists` and so no way to read an
+  occasion back: filing a list into one there would leave membership its owner could never see. The
+  rest of the `⋯` menu is unchanged, so this stays purely subtractive.
+
+- The filter is a `<select>` in the Lists page header, defaulting to "All lists". It narrows **both**
+  sections at once; a list in several occasions is matched by each of them.
+- It renders only when the viewer has at least one occasion — a select whose sole option is
+  "All lists" would name a concept it cannot explain.
+- Membership comes from `getOccasion(id).lists` (`["occasion", id]`), not from a per-list lookup, so
+  one request answers the whole page.
+
+**Sort is one page-level control, not one per section.** The Lists page used to hold two independent
+sort selects (`ownedSort`, `sharedSort`); NEU-1238 moved sort into the header row shared with the
+occasion filter, and a page-level control that sorts one section is a lie. So the two states
+collapsed into one `sortBy` governing both — the same both-sections-at-once reach the occasion filter
+has. This deliberately diverges from the project spec §4.2 wireframe, which still draws `[sort ▾]`
+against each section heading.
 
 ## Testing
-- ~215 test cases across 26 files, run inside the container via `task test`
+- ~260 test cases across 25 files, run inside the container via `task test`
 - MSW mocks live in `src/test/mocks/handlers.ts` (default `/auth/refresh → 401`); setup in `src/test/setup.ts`
 
 ## Critical conventions
@@ -152,6 +257,26 @@ A list can name a recipient. `RecipientFields.tsx` is the shared "this list is f
 ## Debugging CI failures
 - **If told a CI/workflow run failed, always investigate via `gh` first** before running anything locally or claiming it's fixed: `gh run list -w CI` to find the failed run, then `gh run view <id> --log-failed`.
 - **Never report something as fixed based on local runs alone** — CI runs `npx oxlint` and `npx vitest run` in a clean node environment and may surface issues local runs miss. Push, then confirm a fresh CI run passes before declaring done.
+
+## Commits and release notes
+
+**Commit subjects follow [Conventional Commits](https://www.conventionalcommits.org/), and this is load-bearing**: `RELEASE_NOTES.md` is generated from the commit history by [git-cliff](https://git-cliff.org/), configured in `cliff.toml` at the repo root. A commit subject *is* its release-note entry.
+
+```
+<type>(<scope>): <description> (NEU-1234)
+```
+
+- **Type decides whether the commit appears at all.** Only `feat`, `fix`, `perf` and `revert` are kept. `chore`, `ci`, `test`, `build`, `style`, `refactor` and `docs` are skipped outright, as is anything that doesn't parse as a conventional commit (`filter_unconventional = true`). A breaking change survives whatever its type (`protect_breaking_commits = true`).
+- **Every commit carries a scope.** `type(scope):`, never a bare `type:`. This is a hard rule, not a preference: entries are grouped by *scope*, not by type, so the scope **is** the section heading — `feat(families):` and `fix(families):` land together under `### Families`. Omit it and the entry falls into the `### General` catch-all (`default_scope = "general"`), which is where release notes go to become unreadable.
+- **Scope the skipped types too.** `docs`, `chore`, `test` and friends never reach the notes today, but scoping them costs nothing, keeps the log uniform to read and grep, and means the history is already correct if `cliff.toml`'s parsers ever change. Pick the scope from the area of the codebase the change lives in — the same vocabulary the existing sections use.
+- **The description is the entire entry.** git-cliff renders the description alone, capitalised, with the `type(scope):` prefix stripped. The line has to stand on its own without the type or scope for context: imperative mood, ≤72 chars, no trailing period.
+- **Ticket ID last, as a trailing parenthetical.** The squash merge appends the PR number, and both are rewritten into links (Linear, GitHub) when the notes render.
+
+**No co-author lines, no footers** — they land in the generated notes.
+
+**One ticket, at most one entry.** Work branches are squash-merged, so a ticket contributes exactly one commit. That is why the PR title has to be a well-formed Conventional Commit subject: it becomes the squash commit's subject, and thence the release-note line.
+
+**Releases are cut by hand.** There is no release workflow — `git cliff` is run locally to update `RELEASE_NOTES.md`, then the release is tagged (`tag_pattern = "v[0-9].*"`) and pushed. Nothing regenerates the notes afterwards, so a subject that was wrong at merge time can only be fixed by rewriting history or editing the notes directly. `git cliff --unreleased` previews what the next release will read like.
 
 ## Pre-commit (planned, not yet installed)
 Pre-commit will live **on the host** (system Python), not in the container; its hooks delegate to `task` commands that run the checks inside Docker (`task lint`, `task test`). Never install pre-commit or its hooks inside the container.

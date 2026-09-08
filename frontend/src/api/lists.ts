@@ -6,7 +6,7 @@ import type {
   ListFamilyShareState,
 } from "../types";
 
-export async function getLists(filter?: "owned" | "shared" | "family", archived?: boolean): Promise<GiftList[]> {
+export async function getLists(filter?: "owned" | "shared", archived?: boolean): Promise<GiftList[]> {
   const params: Record<string, string> = {};
   if (filter) params.filter = filter;
   if (archived !== undefined) params.archived = String(archived);
@@ -24,7 +24,9 @@ export async function createList(data: {
   description?: string;
   family_ids?: number[];
   recipient_name?: string | null;
-  recipient_has_account?: boolean | null;
+  /** The account person this list is for. Mutually exclusive with
+   *  `recipient_name` — the backend answers 400 if both arrive set. */
+  account_person_id?: number | null;
 }): Promise<GiftList> {
   const response = await apiClient.post<GiftList>("/lists", data);
   return response.data;
@@ -37,7 +39,9 @@ export async function updateList(
     description?: string;
     is_archived?: boolean;
     recipient_name?: string | null;
-    recipient_has_account?: boolean | null;
+    /** The account person this list is for. Mutually exclusive with
+     *  `recipient_name` — the backend answers 400 if both arrive set. */
+    account_person_id?: number | null;
   },
 ): Promise<GiftList> {
   const response = await apiClient.put<GiftList>(`/lists/${id}`, data);

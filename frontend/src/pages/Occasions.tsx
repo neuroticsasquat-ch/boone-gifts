@@ -1,52 +1,52 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getCollections, createCollection, deleteCollection } from "../api/collections";
+import { getOccasions, createOccasion, deleteOccasion } from "../api/occasions";
 import { useTitle } from "../hooks/useTitle";
 import toast from "react-hot-toast";
 import { Spinner } from "../components/Spinner";
 import { FolderOpenIcon } from "../components/Icons";
 
-export function Collections() {
-  useTitle("Collections");
+export function Occasions() {
+  useTitle("Occasions");
   const queryClient = useQueryClient();
   const [showArchived, setShowArchived] = useState(false);
 
-  const collections = useQuery({
-    queryKey: ["collections", { archived: showArchived }],
-    queryFn: () => getCollections(showArchived || undefined),
+  const occasions = useQuery({
+    queryKey: ["occasions", { archived: showArchived }],
+    queryFn: () => getOccasions(showArchived || undefined),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: deleteCollection,
+    mutationFn: deleteOccasion,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      queryClient.invalidateQueries({ queryKey: ["occasions"] });
     },
-    onError: () => toast.error("Failed to delete collection."),
+    onError: () => toast.error("Failed to delete occasion."),
   });
 
   function handleDelete(id: number) {
-    if (window.confirm("Delete this collection?")) {
+    if (window.confirm("Delete this occasion?")) {
       deleteMutation.mutate(id);
     }
   }
 
-  if (collections.isPending) return (
+  if (occasions.isPending) return (
     <div className="space-y-8">
-      <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900"><FolderOpenIcon className="h-6 w-6" /> Collections</h1>
+      <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900"><FolderOpenIcon className="h-6 w-6" /> Occasions</h1>
       <Spinner />
     </div>
   );
 
   return (
     <div className="space-y-8">
-      <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900"><FolderOpenIcon className="h-6 w-6" /> Collections</h1>
+      <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900"><FolderOpenIcon className="h-6 w-6" /> Occasions</h1>
 
       <p className="text-sm text-gray-500">
-        Collections let you group gift lists together for easy access — for example, all the lists for Christmas 2026.
+        Occasions let you group gift lists together for easy access — for example, all the lists for Christmas 2026.
       </p>
 
-      {!showArchived && <CreateCollectionForm queryClient={queryClient} />}
+      {!showArchived && <CreateOccasionForm queryClient={queryClient} />}
 
       <section>
         <div className="mb-3">
@@ -54,29 +54,29 @@ export function Collections() {
             onClick={() => setShowArchived(!showArchived)}
             className="text-sm text-blue-600 hover:underline"
           >
-            {showArchived ? "View active collections" : "View archived collections"}
+            {showArchived ? "View active occasions" : "View archived occasions"}
           </button>
         </div>
 
-        {collections.data && collections.data.length === 0 && !showArchived && (
-          <p className="text-gray-500">No collections yet.</p>
+        {occasions.data && occasions.data.length === 0 && !showArchived && (
+          <p className="text-gray-500">No occasions yet.</p>
         )}
-        {collections.data && collections.data.length === 0 && showArchived && (
-          <p className="text-gray-500">No archived collections.</p>
+        {occasions.data && occasions.data.length === 0 && showArchived && (
+          <p className="text-gray-500">No archived occasions.</p>
         )}
-        {collections.data && collections.data.length > 0 && (
+        {occasions.data && occasions.data.length > 0 && (
           <ul className="divide-y divide-gray-200 rounded-lg bg-white shadow">
-            {collections.data.map((coll) => (
-              <li key={coll.id} className={`flex items-center justify-between px-4 py-3${showArchived ? " opacity-60" : ""}`}>
-                <Link to={`/collections/${coll.id}`} className="min-w-0 flex-1 hover:opacity-75">
-                  <p className="font-medium text-gray-900">{coll.name}</p>
-                  {coll.description && (
-                    <p className="text-sm text-gray-500 truncate">{coll.description}</p>
+            {occasions.data.map((occ) => (
+              <li key={occ.id} className={`flex items-center justify-between px-4 py-3${showArchived ? " opacity-60" : ""}`}>
+                <Link to={`/occasions/${occ.id}`} className="min-w-0 flex-1 hover:opacity-75">
+                  <p className="font-medium text-gray-900">{occ.name}</p>
+                  {occ.description && (
+                    <p className="text-sm text-gray-500 truncate">{occ.description}</p>
                   )}
                 </Link>
                 {!showArchived && (
                   <button
-                    onClick={() => handleDelete(coll.id)}
+                    onClick={() => handleDelete(occ.id)}
                     disabled={deleteMutation.isPending}
                     className="ml-4 shrink-0 rounded bg-red-600 px-3 py-1 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
                   >
@@ -92,7 +92,7 @@ export function Collections() {
   );
 }
 
-function CreateCollectionForm({
+function CreateOccasionForm({
   queryClient,
 }: {
   queryClient: ReturnType<typeof useQueryClient>;
@@ -101,13 +101,13 @@ function CreateCollectionForm({
   const [description, setDescription] = useState("");
 
   const mutation = useMutation({
-    mutationFn: (data: { name: string; description?: string }) => createCollection(data),
+    mutationFn: (data: { name: string; description?: string }) => createOccasion(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      queryClient.invalidateQueries({ queryKey: ["occasions"] });
       setName("");
       setDescription("");
     },
-    onError: () => toast.error("Failed to create collection."),
+    onError: () => toast.error("Failed to create occasion."),
   });
 
   function handleSubmit(e: FormEvent) {
@@ -117,12 +117,12 @@ function CreateCollectionForm({
 
   return (
     <form onSubmit={handleSubmit} className="rounded-lg bg-white p-4 shadow">
-      <h2 className="text-sm font-semibold text-gray-700 mb-3">Create a Collection</h2>
+      <h2 className="text-sm font-semibold text-gray-700 mb-3">Create an Occasion</h2>
 
       <div className="flex flex-col gap-2 sm:flex-row">
         <input
           type="text"
-          placeholder="Collection name"
+          placeholder="Occasion name"
           value={name}
           onChange={(e) => setName(e.target.value)}
           className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm"

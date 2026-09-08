@@ -17,8 +17,18 @@ export const handlers = [
   http.get("https://boone-gifts-api.localhost/families/:familyId/invites", () => {
     return HttpResponse.json([]);
   }),
-  // Default handler: no incoming family invites (PendingFamilyInvites mounts on Families page)
+  // Default handler: no incoming family invites (ActionableBanner mounts on Lists and People)
   http.get("https://boone-gifts-api.localhost/families/invites", () => {
     return HttpResponse.json([]);
+  }),
+  // Default handler: no occasions (the Lists page's occasion filter fetches these
+  // in full mode on every render)
+  http.get("https://boone-gifts-api.localhost/occasions", () => {
+    return HttpResponse.json([]);
+  }),
+  // Default handler: a plain, un-shared account (the Account page's shared-account
+  // card fetches this whenever the page renders)
+  http.get("https://boone-gifts-api.localhost/account", () => {
+    return HttpResponse.json({ is_shared_account: false, people: [] });
   }),
 ];

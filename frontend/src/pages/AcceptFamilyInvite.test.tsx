@@ -17,8 +17,8 @@ function renderPageWithToken(token: string) {
       <MemoryRouter initialEntries={[`/family-invites/${token}`]}>
         <Routes>
           <Route path="/family-invites/:token" element={<AcceptFamilyInvite />} />
-          <Route path="/family-lists" element={<div>Family lists page</div>} />
-          <Route path="/families" element={<div>Families page</div>} />
+          <Route path="/lists" element={<div>Lists page</div>} />
+          <Route path="/people" element={<div>People page</div>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>
@@ -26,7 +26,7 @@ function renderPageWithToken(token: string) {
 }
 
 describe("AcceptFamilyInvite", () => {
-  it("accepts the invite by token and redirects to the family-lists view", async () => {
+  it("accepts the invite by token and redirects to Lists", async () => {
     let receivedToken: string | null = null;
     server.use(
       http.post(`${API}/families/invites/:token/accept`, ({ params }) => {
@@ -38,12 +38,12 @@ describe("AcceptFamilyInvite", () => {
     renderPageWithToken("tok-123");
 
     await waitFor(() => {
-      expect(screen.getByText("Family lists page")).toBeInTheDocument();
+      expect(screen.getByText("Lists page")).toBeInTheDocument();
     });
     expect(receivedToken).toBe("tok-123");
   });
 
-  it("shows a 'no longer valid' error with a families link when the invite is 409", async () => {
+  it("shows a 'no longer valid' error with a People link when the invite is 409", async () => {
     server.use(
       http.post(`${API}/families/invites/:token/accept`, () =>
         HttpResponse.json({ detail: "conflict" }, { status: 409 })
@@ -57,7 +57,7 @@ describe("AcceptFamilyInvite", () => {
     });
     expect(screen.getByRole("link", { name: /go to your families/i })).toHaveAttribute(
       "href",
-      "/families"
+      "/people"
     );
   });
 

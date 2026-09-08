@@ -47,7 +47,7 @@ export function Register() {
     setSubmitting(true);
     try {
       await register(token, name, password, email);
-      navigate("/", { replace: true });
+      navigate("/lists", { replace: true });
     } catch (err) {
       setError(
         isAxiosError(err)

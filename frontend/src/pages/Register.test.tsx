@@ -22,7 +22,7 @@ function renderRegister(query: string) {
       <MemoryRouter initialEntries={[`/register${query}`]}>
         <Routes>
           <Route path="/register" element={<Register />} />
-          <Route path="/" element={<div>App home</div>} />
+          <Route path="/lists" element={<div>App home</div>} />
           <Route path="/login" element={<div>Login page</div>} />
         </Routes>
       </MemoryRouter>

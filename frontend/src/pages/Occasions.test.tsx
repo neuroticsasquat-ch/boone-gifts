@@ -5,27 +5,27 @@ import { MemoryRouter } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { server } from "../test/mocks/server";
-import { Collections } from "./Collections";
+import { Occasions } from "./Occasions";
 
 const API = "https://boone-gifts-api.localhost";
 
-function renderCollections() {
+function renderOccasions() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
-        <Collections />
+        <Occasions />
       </MemoryRouter>
     </QueryClientProvider>
   );
 }
 
-describe("Collections", () => {
-  it("renders collections list with links", async () => {
+describe("Occasions", () => {
+  it("renders occasions list with links", async () => {
     server.use(
-      http.get(`${API}/collections`, () =>
+      http.get(`${API}/occasions`, () =>
         HttpResponse.json([
           { id: 1, name: "Christmas 2026", description: "Holiday gifts", owner_id: 1, created_at: "2026-01-01", updated_at: "2026-01-01" },
           { id: 2, name: "Birthdays", description: null, owner_id: 1, created_at: "2026-01-01", updated_at: "2026-01-01" },
@@ -33,7 +33,7 @@ describe("Collections", () => {
       ),
     );
 
-    renderCollections();
+    renderOccasions();
 
     await waitFor(() => {
       expect(screen.getByText("Christmas 2026")).toBeInTheDocument();
@@ -42,44 +42,44 @@ describe("Collections", () => {
     expect(screen.getByText("Birthdays")).toBeInTheDocument();
   });
 
-  it("creates a collection and clears form", async () => {
+  it("creates an occasion and clears form", async () => {
     server.use(
-      http.get(`${API}/collections`, () => HttpResponse.json([])),
-      http.post(`${API}/collections`, () =>
+      http.get(`${API}/occasions`, () => HttpResponse.json([])),
+      http.post(`${API}/occasions`, () =>
         HttpResponse.json(
-          { id: 3, name: "New Collection", description: "", owner_id: 1, created_at: "2026-01-01", updated_at: "2026-01-01" },
+          { id: 3, name: "New Occasion", description: "", owner_id: 1, created_at: "2026-01-01", updated_at: "2026-01-01" },
           { status: 201 }
         )
       ),
     );
 
-    renderCollections();
+    renderOccasions();
 
     await waitFor(() => {
-      expect(screen.getByPlaceholderText("Collection name")).toBeInTheDocument();
+      expect(screen.getByPlaceholderText("Occasion name")).toBeInTheDocument();
     });
 
-    await userEvent.type(screen.getByPlaceholderText("Collection name"), "New Collection");
+    await userEvent.type(screen.getByPlaceholderText("Occasion name"), "New Occasion");
     await userEvent.click(screen.getByText("Create"));
 
     await waitFor(() => {
-      expect(screen.getByPlaceholderText("Collection name")).toHaveValue("");
+      expect(screen.getByPlaceholderText("Occasion name")).toHaveValue("");
     });
   });
 
-  it("deletes a collection", async () => {
+  it("deletes an occasion", async () => {
     server.use(
-      http.get(`${API}/collections`, () =>
+      http.get(`${API}/occasions`, () =>
         HttpResponse.json([
           { id: 1, name: "To Delete", description: null, owner_id: 1, created_at: "2026-01-01", updated_at: "2026-01-01" },
         ])
       ),
-      http.delete(`${API}/collections/1`, () =>
+      http.delete(`${API}/occasions/1`, () =>
         new HttpResponse(null, { status: 204 })
       ),
     );
 
-    renderCollections();
+    renderOccasions();
 
     await waitFor(() => {
       expect(screen.getByText("To Delete")).toBeInTheDocument();
@@ -90,13 +90,13 @@ describe("Collections", () => {
 
   it("shows empty state", async () => {
     server.use(
-      http.get(`${API}/collections`, () => HttpResponse.json([])),
+      http.get(`${API}/occasions`, () => HttpResponse.json([])),
     );
 
-    renderCollections();
+    renderOccasions();
 
     await waitFor(() => {
-      expect(screen.getByText("No collections yet.")).toBeInTheDocument();
+      expect(screen.getByText("No occasions yet.")).toBeInTheDocument();
     });
   });
 });

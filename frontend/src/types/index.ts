@@ -30,23 +30,41 @@ export interface User {
 }
 
 // Gift Lists
+/**
+ * How a shared list reached the viewer: a direct share from a person, or a grant
+ * to a family they belong to. A list reachable both ways reports `kind: "user"`
+ * — the backend resolves that (NEU-1227), the client never re-derives it.
+ */
+export interface SharedVia {
+  kind: "user" | "family";
+  /** The sharing user, or the family — whichever `kind` names. */
+  id: number;
+  name: string;
+}
+
 export interface GiftList {
   id: number;
   name: string;
   description: string | null;
   owner_id: number;
   owner_name: string;
-  /** Who the list is *for*, when that differs from the account that owns it. */
+  /** Who the list is *for*, when that differs from the account that owns it: a
+   * person with no account. Read it through `attributionFor` / `recipientLabel`
+   * in `lib/attribution` rather than directly. */
   recipient_name: string | null;
-  /** Whether that person has an account of their own. Three-valued: null means
-   * there is no recipient at all. Never read it directly — go through
-   * `attributionFor` / `recipientLabel` in `lib/attribution`. */
-  recipient_has_account: boolean | null;
+  /** The account person this list is marked for, on a shared account. Mutually
+   * exclusive with `recipient_name`; both null on a household list. */
+  account_person_id: number | null;
+  /** That person's name, so a row can read "for Gran" without a second request. */
+  account_person_name: string | null;
   is_archived: boolean;
   gift_count: number;
   claimed_count: number;
   created_at: string;
   updated_at: string;
+  /** Present only on a list in the `shared` scope — null on one the caller owns,
+   * absent on a response cached from before the field existed. */
+  shared_via?: SharedVia | null;
   families?: FamilyRef[];
 }
 
@@ -85,12 +103,15 @@ export interface GiftListDetailOwner {
   description: string | null;
   owner_id: number;
   owner_name: string;
-  /** Who the list is *for*, when that differs from the account that owns it. */
+  /** Who the list is *for*, when that differs from the account that owns it: a
+   * person with no account. Read it through `attributionFor` / `recipientLabel`
+   * in `lib/attribution` rather than directly. */
   recipient_name: string | null;
-  /** Whether that person has an account of their own. Three-valued: null means
-   * there is no recipient at all. Never read it directly — go through
-   * `attributionFor` / `recipientLabel` in `lib/attribution`. */
-  recipient_has_account: boolean | null;
+  /** The account person this list is marked for, on a shared account. Mutually
+   * exclusive with `recipient_name`; both null on a household list. */
+  account_person_id: number | null;
+  /** That person's name, so a row can read "for Gran" without a second request. */
+  account_person_name: string | null;
   is_archived: boolean;
   gifts: GiftOwnerView[];
   created_at: string;
@@ -103,12 +124,15 @@ export interface GiftListDetailViewer {
   description: string | null;
   owner_id: number;
   owner_name: string;
-  /** Who the list is *for*, when that differs from the account that owns it. */
+  /** Who the list is *for*, when that differs from the account that owns it: a
+   * person with no account. Read it through `attributionFor` / `recipientLabel`
+   * in `lib/attribution` rather than directly. */
   recipient_name: string | null;
-  /** Whether that person has an account of their own. Three-valued: null means
-   * there is no recipient at all. Never read it directly — go through
-   * `attributionFor` / `recipientLabel` in `lib/attribution`. */
-  recipient_has_account: boolean | null;
+  /** The account person this list is marked for, on a shared account. Mutually
+   * exclusive with `recipient_name`; both null on a household list. */
+  account_person_id: number | null;
+  /** That person's name, so a row can read "for Gran" without a second request. */
+  account_person_name: string | null;
   is_archived: boolean;
   gifts: Gift[];
   created_at: string;
@@ -145,8 +169,8 @@ export interface ListShare {
   created_at: string;
 }
 
-// Collections
-export interface Collection {
+// Occasions
+export interface Occasion {
   id: number;
   name: string;
   description: string | null;
@@ -156,7 +180,7 @@ export interface Collection {
   updated_at: string;
 }
 
-export interface CollectionDetail {
+export interface OccasionDetail {
   id: number;
   name: string;
   description: string | null;
@@ -168,12 +192,6 @@ export interface CollectionDetail {
 }
 
 // Shared Users
-export interface SharedUser {
-  id: number;
-  name: string;
-  email: string;
-}
-
 // URL Metadata
 export interface UrlMeta {
   title: string | null;
@@ -222,4 +240,42 @@ export interface IncomingFamilyInvite {
   id: number; token: string; role: string;
   family: FamilyRef; invited_by: { id: number; name: string };
   expires_at: string; created_at: string;
+}
+
+// Shared accounts
+/**
+ * A named person on a shared account. A **label, never an identity**: the
+ * account stays one login, one member, one claimer everywhere, and everyone on
+ * it sees everything on it (project spec §5.1).
+ */
+export interface AccountPerson {
+  id: number;
+  name: string;
+}
+
+/** `GET /account`, and the body every `PUT /account` returns. */
+export interface Account {
+  is_shared_account: boolean;
+  people: AccountPerson[];
+}
+
+/** One entry of the desired people list. An `id` the account owns renames that
+ *  person in place; without one the person is created. */
+export interface AccountPersonWrite {
+  id?: number;
+  name: string;
+}
+
+/**
+ * The `PUT /account` body — the *whole* desired state, not a patch: anyone left
+ * out is deleted, and array order becomes display order (NEU-1228 §3.2).
+ */
+export interface AccountUpdate {
+  is_shared_account: boolean;
+  people: AccountPersonWrite[];
+}
+
+/** The 409 body when a change would strip labels off lists (NEU-1228 §3.3). */
+export interface AccountConflict {
+  affected_lists: number;
 }

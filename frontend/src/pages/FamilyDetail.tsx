@@ -20,6 +20,8 @@ export function FamilyDetail() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("member");
+  const [inviteSimpleMode, setInviteSimpleMode] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
 
   const family = useQuery({
@@ -45,10 +47,13 @@ export function FamilyDetail() {
   });
 
   const sendInviteMutation = useMutation({
-    mutationFn: (email: string) => createInvite(familyId, { email }),
+    mutationFn: (invite: { email: string; role: string; simple_mode: boolean }) =>
+      createInvite(familyId, invite),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["family-invites", familyId] });
       setInviteEmail("");
+      setInviteRole("member");
+      setInviteSimpleMode(false);
       setInviteError(null);
     },
     onError: (err: unknown) => {
@@ -76,7 +81,11 @@ export function FamilyDetail() {
     e.preventDefault();
     if (!inviteEmail.trim()) return;
     setInviteError(null);
-    sendInviteMutation.mutate(inviteEmail.trim());
+    sendInviteMutation.mutate({
+      email: inviteEmail.trim(),
+      role: inviteRole,
+      simple_mode: inviteSimpleMode,
+    });
   }
 
   const renameMutation = useMutation({
@@ -96,7 +105,7 @@ export function FamilyDetail() {
     mutationFn: () => deleteFamily(familyId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["families"] });
-      navigate("/families");
+      navigate("/people");
     },
     onError: () => {
       toast.error("Failed to delete family.");
@@ -109,7 +118,7 @@ export function FamilyDetail() {
     onSuccess: (_data, userId) => {
       if (userId === user?.id) {
         queryClient.invalidateQueries({ queryKey: ["families"] });
-        navigate("/families");
+        navigate("/people");
       } else {
         invalidate();
       }
@@ -152,7 +161,7 @@ export function FamilyDetail() {
     return (
       <div className="text-center py-12">
         <p className="text-red-600">Family not found.</p>
-        <Link to="/families" className="mt-2 text-sm text-blue-600 hover:underline">
+        <Link to="/people" className="mt-2 text-sm text-blue-600 hover:underline">
           Back to families
         </Link>
       </div>
@@ -163,7 +172,7 @@ export function FamilyDetail() {
 
   return (
     <div className="space-y-6">
-      <Link to="/families" className="text-sm text-blue-600 hover:underline">
+      <Link to="/people" className="text-sm text-blue-600 hover:underline">
         &larr; Back to families
       </Link>
 
@@ -232,21 +241,50 @@ export function FamilyDetail() {
           {/* Invite by email */}
           <section>
             <h2 className="text-lg font-semibold text-gray-900 mb-3">Invite to Family</h2>
-            <form onSubmit={handleSendInvite} className="flex gap-2">
-              <input
-                type="email"
-                placeholder="Email address"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-                className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm"
-              />
-              <button
-                type="submit"
-                disabled={sendInviteMutation.isPending}
-                className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-              >
-                Send Invite
-              </button>
+            <form onSubmit={handleSendInvite}>
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  placeholder="Email address"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm"
+                />
+                <label className="sr-only" htmlFor="invite-role">
+                  Role
+                </label>
+                <select
+                  id="invite-role"
+                  value={inviteRole}
+                  onChange={(e) => setInviteRole(e.target.value)}
+                  className="rounded border border-gray-300 px-2 py-2 text-sm text-gray-700"
+                >
+                  <option value="member">Member</option>
+                  <option value="organizer">Organizer</option>
+                </select>
+                <button
+                  type="submit"
+                  disabled={sendInviteMutation.isPending}
+                  className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                >
+                  Send Invite
+                </button>
+              </div>
+              <label className="mt-2 flex items-start gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={inviteSimpleMode}
+                  onChange={(e) => setInviteSimpleMode(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span>
+                  Start them in simple mode
+                  <span className="block text-xs text-gray-500">
+                    Only applies to a new account. Someone who already has an account keeps
+                    the mode they are using.
+                  </span>
+                </span>
+              </label>
             </form>
             {inviteError && <p className="mt-2 text-sm text-red-600">{inviteError}</p>}
           </section>
@@ -260,7 +298,11 @@ export function FamilyDetail() {
                   <li key={invite.id} className="flex items-center justify-between px-4 py-3">
                     <div>
                       <p className="font-medium text-gray-900">{invite.email}</p>
-                      <p className="text-sm text-gray-500 capitalize">{invite.status}</p>
+                      <p className="text-sm text-gray-500">
+                        <span className="capitalize">{invite.status}</span>
+                        {` · ${invite.role === "organizer" ? "Organizer" : "Member"}`}
+                        {invite.simple_mode && " · Simple mode"}
+                      </p>
                     </div>
                     {invite.status === "pending" && (
                       <button
