@@ -21,7 +21,6 @@ export function FamilyDetail() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("member");
-  const [inviteSimpleMode, setInviteSimpleMode] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
 
   const family = useQuery({
@@ -47,13 +46,12 @@ export function FamilyDetail() {
   });
 
   const sendInviteMutation = useMutation({
-    mutationFn: (invite: { email: string; role: string; simple_mode: boolean }) =>
+    mutationFn: (invite: { email: string; role: string }) =>
       createInvite(familyId, invite),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["family-invites", familyId] });
       setInviteEmail("");
       setInviteRole("member");
-      setInviteSimpleMode(false);
       setInviteError(null);
     },
     onError: (err: unknown) => {
@@ -84,7 +82,6 @@ export function FamilyDetail() {
     sendInviteMutation.mutate({
       email: inviteEmail.trim(),
       role: inviteRole,
-      simple_mode: inviteSimpleMode,
     });
   }
 
@@ -270,21 +267,6 @@ export function FamilyDetail() {
                   Send Invite
                 </button>
               </div>
-              <label className="mt-2 flex items-start gap-2 text-sm text-gray-700">
-                <input
-                  type="checkbox"
-                  checked={inviteSimpleMode}
-                  onChange={(e) => setInviteSimpleMode(e.target.checked)}
-                  className="mt-0.5"
-                />
-                <span>
-                  Start them in simple mode
-                  <span className="block text-xs text-gray-500">
-                    Only applies to a new account. Someone who already has an account keeps
-                    the mode they are using.
-                  </span>
-                </span>
-              </label>
             </form>
             {inviteError && <p className="mt-2 text-sm text-red-600">{inviteError}</p>}
           </section>
@@ -301,7 +283,6 @@ export function FamilyDetail() {
                       <p className="text-sm text-gray-500">
                         <span className="capitalize">{invite.status}</span>
                         {` · ${invite.role === "organizer" ? "Organizer" : "Member"}`}
-                        {invite.simple_mode && " · Simple mode"}
                       </p>
                     </div>
                     {invite.status === "pending" && (

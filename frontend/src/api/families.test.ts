@@ -32,7 +32,6 @@ const familyInvite = {
   family_id: 1,
   email: "bob@example.com",
   role: "member",
-  simple_mode: false,
   token: "tok_abc123",
   invited_by_id: 10,
   expires_at: "2026-07-28T00:00:00Z",

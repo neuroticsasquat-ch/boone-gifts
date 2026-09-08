@@ -24,13 +24,6 @@ const viewerToken = [
   "fake-signature",
 ].join(".");
 
-// JWT with payload: { sub: "1", email: "owner@test.com", role: "member", simple_mode: true, exp: 9999999999 }
-const simpleModeOwnerToken = [
-  btoa(JSON.stringify({ alg: "HS256", typ: "JWT" })),
-  btoa(JSON.stringify({ sub: "1", email: "owner@test.com", role: "member", simple_mode: true, exp: 9999999999 })),
-  "fake-signature",
-].join(".");
-
 const ownerListDetail = {
   id: 1,
   name: "My Wishlist",
@@ -388,20 +381,6 @@ describe("ListDetail — no tab bar", () => {
     expect(await screen.findByText("Not shared with anyone yet")).toBeInTheDocument();
   });
 
-  it("shows simple mode a read-only summary with no Change control", async () => {
-    // The backend auto-grants a simple-mode user's lists to their families, so
-    // there is nothing here for them to change.
-    server.use(
-      http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
-      http.get(`${API}/connections`, () => HttpResponse.json([])),
-    );
-
-    renderListDetail(simpleModeOwnerToken);
-
-    expect(await screen.findByText("Shared with your families")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Change" })).not.toBeInTheDocument();
-  });
-
   it("opens the family controls from Change", async () => {
     server.use(
       http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
@@ -564,25 +543,6 @@ describe("ListDetail — add to a folder", () => {
 
     const panel = await openFromMenu();
     expect(await within(panel).findByRole("checkbox", { name: /christmas 2026/i })).toBeInTheDocument();
-  });
-
-  // Simple mode has no folder filter on /lists, so it cannot read a folder
-  // back — offering to file a list into one would strand the membership.
-  it("hides the action in simple mode, leaving the rest of the menu", async () => {
-    server.use(
-      http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
-      http.get(`${API}/connections`, () => HttpResponse.json([])),
-    );
-    serveFolders();
-
-    renderListDetail(simpleModeOwnerToken);
-
-    await screen.findByText("My Wishlist");
-    await userEvent.click(screen.getByRole("button", { name: "List actions" }));
-
-    expect(screen.queryByRole("button", { name: "Add to a folder…" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
   });
 
   it("shows the sharing panel and the picker one at a time", async () => {

@@ -18,8 +18,7 @@ function token(claims: Record<string, unknown>) {
   ].join(".");
 }
 
-const fullModeToken = token({});
-const simpleModeToken = token({ simple_mode: true });
+const authToken = token({});
 
 const families = [
   { id: 7, name: "The Boones", role: "organizer", member_count: 3 },
@@ -45,10 +44,10 @@ function renderCreateList(authToken: string) {
 }
 
 describe("CreateList — family sharing", () => {
-  it("lists the user's families as unchecked checkboxes in full mode", async () => {
+  it("lists the user's families as unchecked checkboxes", async () => {
     server.use(http.get(`${API}/families`, () => HttpResponse.json(families)));
 
-    renderCreateList(fullModeToken);
+    renderCreateList(authToken);
 
     const boones = await screen.findByRole("checkbox", { name: "The Boones" });
     expect(boones).not.toBeChecked();
@@ -65,7 +64,7 @@ describe("CreateList — family sharing", () => {
       }),
     );
 
-    renderCreateList(fullModeToken);
+    renderCreateList(authToken);
 
     await userEvent.type(await screen.findByRole("textbox", { name: /name/i }), "Birthday");
     await userEvent.click(screen.getByRole("checkbox", { name: "The Boones" }));
@@ -85,7 +84,7 @@ describe("CreateList — family sharing", () => {
       }),
     );
 
-    renderCreateList(fullModeToken);
+    renderCreateList(authToken);
 
     await userEvent.type(await screen.findByRole("textbox", { name: /name/i }), "Private");
     await screen.findByRole("checkbox", { name: "The Boones" });
@@ -95,21 +94,10 @@ describe("CreateList — family sharing", () => {
     expect(posted.mock.calls[0][0]).toMatchObject({ family_ids: [] });
   });
 
-  it("hides the section in simple mode — the backend shares with all families anyway", async () => {
-    server.use(http.get(`${API}/families`, () => HttpResponse.json(families)));
-
-    renderCreateList(simpleModeToken);
-
-    await screen.findByRole("button", { name: /create list/i });
-    expect(screen.queryByText("Share with families")).not.toBeInTheDocument();
-    expect(screen.queryByRole("checkbox", { name: "The Boones" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("checkbox", { name: "The Smiths" })).not.toBeInTheDocument();
-  });
-
   it("hides the section when the user belongs to no families", async () => {
     server.use(http.get(`${API}/families`, () => HttpResponse.json([])));
 
-    renderCreateList(fullModeToken);
+    renderCreateList(authToken);
 
     await screen.findByRole("button", { name: /create list/i });
     await waitFor(() =>
@@ -137,7 +125,7 @@ describe("CreateList — list recipients", () => {
   it("keeps the form unchanged until the disclosure is checked", async () => {
     server.use(http.get(`${API}/families`, () => HttpResponse.json([])));
 
-    renderCreateList(simpleModeToken);
+    renderCreateList(authToken);
 
     await screen.findByRole("button", { name: /create list/i });
     expect(disclosure()).not.toBeChecked();
@@ -153,7 +141,7 @@ describe("CreateList — list recipients", () => {
   it("reveals the name field and the keeper's warning when checked", async () => {
     server.use(http.get(`${API}/families`, () => HttpResponse.json([])));
 
-    renderCreateList(fullModeToken);
+    renderCreateList(authToken);
 
     await userEvent.click(await screen.findByRole("checkbox", {
       name: "This list is for someone else",
@@ -170,7 +158,7 @@ describe("CreateList — list recipients", () => {
   it("uses the typed name in the keeper's warning", async () => {
     server.use(http.get(`${API}/families`, () => HttpResponse.json([])));
 
-    renderCreateList(fullModeToken);
+    renderCreateList(authToken);
 
     await userEvent.click(await screen.findByRole("checkbox", {
       name: "This list is for someone else",
@@ -188,7 +176,7 @@ describe("CreateList — list recipients", () => {
   it("posts the recipient name", async () => {
     const posted = postSpy();
 
-    renderCreateList(fullModeToken);
+    renderCreateList(authToken);
 
     await userEvent.type(
       await screen.findByRole("textbox", { name: /^name/i }),
@@ -211,7 +199,7 @@ describe("CreateList — list recipients", () => {
   it("posts null when the disclosure is unchecked again", async () => {
     const posted = postSpy();
 
-    renderCreateList(fullModeToken);
+    renderCreateList(authToken);
 
     await userEvent.type(await screen.findByRole("textbox", { name: /^name/i }), "Mine");
     await userEvent.click(disclosure());
@@ -229,7 +217,7 @@ describe("CreateList — list recipients", () => {
   it("cannot be submitted with the disclosure open and the name left blank", async () => {
     server.use(http.get(`${API}/families`, () => HttpResponse.json([])));
 
-    renderCreateList(fullModeToken);
+    renderCreateList(authToken);
 
     await userEvent.click(await screen.findByRole("checkbox", {
       name: "This list is for someone else",
@@ -250,7 +238,7 @@ describe("CreateList — who is this list for (shared account)", () => {
     ],
   };
 
-  function sharedAccountForm(authToken = fullModeToken) {
+  function sharedAccountForm() {
     const posted = vi.fn();
     server.use(
       http.get(`${API}/families`, () => HttpResponse.json([])),
@@ -372,17 +360,10 @@ describe("CreateList — who is this list for (shared account)", () => {
     });
   });
 
-  it("asks the same question in simple mode — a shared household is its audience", async () => {
-    sharedAccountForm(simpleModeToken);
-
-    expect(await screen.findByRole("radio", { name: "Gran" })).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: "Both of us" })).toBeInTheDocument();
-  });
-
   it("shows no picker at all on a non-shared account", async () => {
     server.use(http.get(`${API}/families`, () => HttpResponse.json([])));
 
-    renderCreateList(fullModeToken);
+    renderCreateList(authToken);
 
     expect(
       await screen.findByRole("checkbox", { name: "This list is for someone else" }),

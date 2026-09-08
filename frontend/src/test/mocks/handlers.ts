@@ -22,7 +22,7 @@ export const handlers = [
     return HttpResponse.json([]);
   }),
   // Default handler: no folders (the Lists page's folder filter fetches these
-  // in full mode on every render)
+  // on every render)
   http.get("https://boone-gifts-api.localhost/folders", () => {
     return HttpResponse.json([]);
   }),

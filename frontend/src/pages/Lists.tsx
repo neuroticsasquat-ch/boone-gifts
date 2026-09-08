@@ -3,7 +3,6 @@ import { Link } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { getLists } from "../api/lists";
 import { getFolder, getFolders } from "../api/folders";
-import { useAuth } from "../hooks/useAuth";
 import { useTitle } from "../hooks/useTitle";
 import { Spinner } from "../components/Spinner";
 import { ClipboardIcon, HandshakeIcon } from "../components/Icons";
@@ -38,13 +37,6 @@ function visibleLists(
 
 export function Lists() {
   useTitle("Lists");
-  const { user, isLoading: authLoading } = useAuth();
-  // Simple mode is purely subtractive: it hides the folder filter, sort and
-  // archive, and nothing else on this page (project spec §6.1). Withheld until
-  // the session resolves, so a simple-mode viewer never sees them flash by while
-  // the silent refresh is still in flight.
-  const showControls = !authLoading && !user?.simple_mode;
-
   const [showArchived, setShowArchived] = useState(false);
   const [sortBy, setSortBy] = useState<SortBy>("updated");
   const [folderId, setFolderId] = useState<number | null>(null);
@@ -63,7 +55,6 @@ export function Lists() {
   const folders = useQuery({
     queryKey: ["folders", { archived: false }],
     queryFn: () => getFolders(),
-    enabled: showControls,
   });
   const selectedFolder = useQuery({
     queryKey: ["folder", folderId],
@@ -109,8 +100,7 @@ export function Lists() {
 
   return (
     <div className="space-y-8">
-      {/* Anything awaiting a decision, above the lists. Rendered in both modes:
-          in simple mode this is the only route to these items. */}
+      {/* Anything awaiting a decision, above the lists. */}
       <ActionableBanner />
 
       <header>
@@ -128,57 +118,53 @@ export function Lists() {
           )}
         </div>
 
-        {showControls && (
-          <>
-            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
-              {hasFolders && (
-                <label className="flex items-center gap-2 text-sm text-gray-600">
-                  Folder
-                  <select
-                    value={folderId === null ? ALL_LISTS : String(folderId)}
-                    onChange={(e) =>
-                      setFolderId(e.target.value === ALL_LISTS ? null : Number(e.target.value))
-                    }
-                    className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600"
-                  >
-                    <option value={ALL_LISTS}>All lists</option>
-                    {folders.data?.map((folder) => (
-                      <option key={folder.id} value={folder.id}>{folder.name}</option>
-                    ))}
-                  </select>
-                </label>
-              )}
-
-              <label className="flex items-center gap-2 text-sm text-gray-600">
-                Sort
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as SortBy)}
-                  className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600"
-                >
-                  <option value="updated">Most recent</option>
-                  <option value="name">Name A–Z</option>
-                  <option value="created">Oldest first</option>
-                </select>
-              </label>
-
-              <button
-                onClick={() => setShowArchived(!showArchived)}
-                className="text-sm text-blue-600 hover:underline"
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+          {hasFolders && (
+            <label className="flex items-center gap-2 text-sm text-gray-600">
+              Folder
+              <select
+                value={folderId === null ? ALL_LISTS : String(folderId)}
+                onChange={(e) =>
+                  setFolderId(e.target.value === ALL_LISTS ? null : Number(e.target.value))
+                }
+                className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600"
               >
-                {showArchived ? "View active lists" : "View archived lists"}
-              </button>
-            </div>
+                <option value={ALL_LISTS}>All lists</option>
+                {folders.data?.map((folder) => (
+                  <option key={folder.id} value={folder.id}>{folder.name}</option>
+                ))}
+              </select>
+            </label>
+          )}
 
-            {/* Always shown in full mode, filter or no filter: with the folders
-                pages unrouted this is the only introduction to the concept, and a
-                viewer with no folders yet is exactly the one who needs it. */}
-            <p className="mt-2 text-xs text-gray-500">
-              Folders group lists together — for example, all the lists for Christmas 2026.
-              {!hasFolders && " Open a list to file it under one."}
-            </p>
-          </>
-        )}
+          <label className="flex items-center gap-2 text-sm text-gray-600">
+            Sort
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortBy)}
+              className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600"
+            >
+              <option value="updated">Most recent</option>
+              <option value="name">Name A–Z</option>
+              <option value="created">Oldest first</option>
+            </select>
+          </label>
+
+          <button
+            onClick={() => setShowArchived(!showArchived)}
+            className="text-sm text-blue-600 hover:underline"
+          >
+            {showArchived ? "View active lists" : "View archived lists"}
+          </button>
+        </div>
+
+        {/* Always shown, filter or no filter: with the folders pages unrouted
+            this is the only introduction to the concept, and a viewer with no
+            folders yet is exactly the one who needs it. */}
+        <p className="mt-2 text-xs text-gray-500">
+          Folders group lists together — for example, all the lists for Christmas 2026.
+          {!hasFolders && " Open a list to file it under one."}
+        </p>
       </header>
 
       {sectionsPending ? <Spinner /> : (
@@ -237,14 +223,11 @@ export function Lists() {
                   `No lists shared with you are in ${folderName}.`
                 ) : showArchived ? (
                   "No archived lists shared with you."
-                ) : showControls ? (
+                ) : (
                   <>
                     No one has shared a list with you yet.{" "}
                     <Link to="/people" className="text-blue-600 hover:underline">Add a connection</Link> to get started.
                   </>
-                ) : (
-                  // Simple mode hides People, so there is nothing to point at.
-                  "No one has shared a list with you yet."
                 )}
               </p>
             )}

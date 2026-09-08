@@ -1,12 +1,11 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect } from "vitest";
-import { MemoryRouter, Route, Routes } from "react-router";
+import { MemoryRouter } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { delay, http, HttpResponse } from "msw";
+import { http, HttpResponse } from "msw";
 import { server } from "../test/mocks/server";
 import { AuthProvider } from "../contexts/AuthContext";
-import { Layout } from "../components/Layout";
 import { Lists } from "./Lists";
 
 const API = "https://boone-gifts-api.localhost";
@@ -27,8 +26,7 @@ function token(claims: Record<string, unknown>) {
   ].join(".");
 }
 
-const fullModeToken = token({});
-const simpleModeToken = token({ simple_mode: true });
+const authToken = token({});
 
 function noLists() {
   server.use(http.get(`${API}/lists`, () => HttpResponse.json([])));
@@ -90,39 +88,10 @@ function lists({ owned = [], shared = [] }: { owned?: unknown[]; shared?: unknow
   );
 }
 
-/** Lists inside the real nav shell, signed in as a simple-mode user. `authDelayMs`
- *  holds the silent refresh open so the lists land before the mode is known. */
-function renderInSimpleMode({ authDelayMs = 0 } = {}) {
-  server.use(
-    http.post(`${API}/auth/refresh`, async () => {
-      if (authDelayMs) await delay(authDelayMs);
-      return HttpResponse.json({ access_token: simpleModeToken, token_type: "bearer" });
-    }),
-  );
-
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
-
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <MemoryRouter initialEntries={["/lists"]}>
-          <Routes>
-            <Route element={<Layout />}>
-              <Route path="/lists" element={<Lists />} />
-            </Route>
-          </Routes>
-        </MemoryRouter>
-      </AuthProvider>
-    </QueryClientProvider>
-  );
-}
-
 function renderLists() {
   server.use(
     http.post(`${API}/auth/refresh`, () =>
-      HttpResponse.json({ access_token: fullModeToken, token_type: "bearer" })
+      HttpResponse.json({ access_token: authToken, token_type: "bearer" })
     ),
   );
 
@@ -156,24 +125,6 @@ describe("Lists", () => {
     // The banner precedes the lists heading in document order.
     const heading = screen.getByRole("heading", { name: /My Lists/ });
     expect(banner.compareDocumentPosition(heading)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-  });
-
-  // Simple mode is purely subtractive, but the banner is the one surface it must
-  // NOT subtract: with People hidden, /lists is the only route to these items.
-  it("still renders the banner in simple mode, where People is hidden", async () => {
-    noLists();
-    server.use(
-      http.get(`${API}/connections/requests`, () => HttpResponse.json([testRequest])),
-    );
-
-    renderInSimpleMode();
-
-    // Wait for the simple-mode session to be established.
-    await screen.findByLabelText("Account menu");
-    expect(screen.queryByRole("link", { name: /^People$/ })).not.toBeInTheDocument();
-
-    expect(await screen.findByRole("region", { name: "Waiting on you" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Accept connection request from Dave Boone")).toBeInTheDocument();
   });
 
   // One section for every list shared with the viewer, labelled with its source:
@@ -405,53 +356,6 @@ describe("Lists — sort and archive", () => {
   });
 });
 
-describe("Lists — simple mode", () => {
-  // Purely subtractive: it hides the folder filter, sort and archive, and
-  // nothing else on this page (project spec §6.1).
-  it("hides the folder filter, sort and archive — and nothing else", async () => {
-    lists({
-      owned: [ownedList({ id: 1, name: "Tom's Wishlist" })],
-      shared: [sharedList({ id: 3, name: "Jane's Wishlist", shared_via: { kind: "user", id: 2, name: "Jane Boone" } })],
-    });
-    folders([{ id: 5, name: "Christmas 2026", lists: [{ id: 1 }] }]);
-
-    renderInSimpleMode();
-
-    await screen.findByLabelText("Account menu");
-    expect(await screen.findByText("Tom's Wishlist")).toBeInTheDocument();
-
-    expect(screen.queryByLabelText("Folder")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Sort")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /archived lists/ })).not.toBeInTheDocument();
-    // The filter's explanation goes with the filter.
-    expect(screen.queryByText(/Folders group lists together/)).not.toBeInTheDocument();
-
-    // Everything else on the page survives, unrelabelled.
-    expect(screen.getByRole("link", { name: "New List" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /My Lists/ })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /Shared with Me/ })).toBeInTheDocument();
-    expect(screen.getByText("Jane's Wishlist")).toBeInTheDocument();
-    expect(screen.getByText("from Jane Boone")).toBeInTheDocument();
-  });
-
-  // The lists resolve long before the silent refresh does, so "is this simple
-  // mode?" is still unanswered while the page is already on screen. Guessing
-  // "full" there flashes up exactly the controls simple mode must hide.
-  it("withholds the controls until the session resolves", async () => {
-    lists({ owned: [ownedList({ id: 1, name: "Tom's Wishlist" })] });
-    folders([{ id: 5, name: "Christmas 2026" }]);
-
-    renderInSimpleMode({ authDelayMs: 100 });
-
-    expect(await screen.findByText("Tom's Wishlist")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Sort")).not.toBeInTheDocument();
-
-    // And they stay gone once the answer arrives.
-    await screen.findByLabelText("Account menu");
-    expect(screen.queryByLabelText("Sort")).not.toBeInTheDocument();
-  });
-});
-
 describe("Lists — empty states", () => {
   it("offers to create a list when the viewer owns none", async () => {
     noLists();
@@ -462,28 +366,13 @@ describe("Lists — empty states", () => {
     expect(screen.getByRole("link", { name: "Create your first list" })).toBeInTheDocument();
   });
 
-  it("points a full-mode viewer at People when nothing is shared", async () => {
+  it("points the viewer at People when nothing is shared", async () => {
     noLists();
 
     renderLists();
 
     expect(await screen.findByText(/No one has shared a list with you yet/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Add a connection" })).toHaveAttribute("href", "/people");
-  });
-
-  // People is hidden in simple mode, so pointing at it would be a dead end.
-  it("offers nothing actionable in simple mode when nothing is shared", async () => {
-    noLists();
-
-    renderInSimpleMode();
-
-    await screen.findByLabelText("Account menu");
-    await waitFor(() => {
-      expect(screen.queryByRole("link", { name: /^People$/ })).not.toBeInTheDocument();
-    });
-
-    expect(await screen.findByText("No one has shared a list with you yet.")).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Add a connection" })).not.toBeInTheDocument();
   });
 
   it("says there are no archived lists when the archive is empty", async () => {

@@ -65,14 +65,6 @@ export function ListDetail() {
   );
 
   const isOwner = user !== null && isOwnerView(list, user.id);
-  // Simple mode hides the folder filter on /lists (project spec §6.1), so it
-  // has no way to read a folder back. Offering to file a list into one here
-  // would leave membership its owner can never see — the orphaned-concept
-  // problem this project set out to end, not restage. Subtractive, as §6.1
-  // requires: the wording and the destination are the same in both modes when
-  // it shows at all.
-  const canAddToFolder = !user?.simple_mode;
-
   return (
     <div className="space-y-6">
       <Link to="/lists" className="text-sm text-blue-600 hover:underline">&larr; Back to lists</Link>
@@ -88,15 +80,14 @@ export function ListDetail() {
             queryClient={queryClient}
             navigate={navigate}
             onEdit={() => setEditing(true)}
-            simpleMode={!!user?.simple_mode}
             onChangeSharing={() => togglePanel("sharing")}
-            onAddToFolder={canAddToFolder ? () => togglePanel("folders") : undefined}
+            onAddToFolder={() => togglePanel("folders")}
           />
         )
       ) : (
         <ViewerHeader
           list={list as GiftListDetailViewer}
-          onAddToFolder={canAddToFolder ? () => togglePanel("folders") : undefined}
+          onAddToFolder={() => togglePanel("folders")}
         />
       )}
 
@@ -133,7 +124,6 @@ function OwnerHeader({
   queryClient,
   navigate,
   onEdit,
-  simpleMode,
   onChangeSharing,
   onAddToFolder,
 }: {
@@ -142,9 +132,8 @@ function OwnerHeader({
   queryClient: ReturnType<typeof useQueryClient>;
   navigate: ReturnType<typeof useNavigate>;
   onEdit: () => void;
-  simpleMode: boolean;
   onChangeSharing: () => void;
-  onAddToFolder?: () => void;
+  onAddToFolder: () => void;
 }) {
   const archiveMutation = useMutation({
     mutationFn: () => updateList(listId, { is_archived: !list.is_archived }),
@@ -199,13 +188,13 @@ function OwnerHeader({
       }
       isArchived={list.is_archived}
       sharing={
-        <SharingSummary listId={listId} simpleMode={simpleMode} onChange={onChangeSharing} />
+        <SharingSummary listId={listId} onChange={onChangeSharing} />
       }
       actions={
         <HeaderMenu
           pending={archiveMutation.isPending || deleteMutation.isPending}
           items={[
-            ...(onAddToFolder ? [{ label: ADD_TO_FOLDER, onClick: onAddToFolder }] : []),
+            { label: ADD_TO_FOLDER, onClick: onAddToFolder },
             { label: "Edit", onClick: onEdit },
             { label: list.is_archived ? "Unarchive" : "Archive", onClick: handleArchiveToggle },
             { label: "Delete", onClick: handleDelete, danger: true, separatorBefore: true },
@@ -293,7 +282,7 @@ function ViewerHeader({
   onAddToFolder,
 }: {
   list: GiftListDetailViewer;
-  onAddToFolder?: () => void;
+  onAddToFolder: () => void;
 }) {
   const connections = useQuery({ queryKey: ["connections"], queryFn: getConnections });
   const connectionId = connections.data?.find((c) => c.user.id === list.owner_id)?.id;
@@ -325,11 +314,7 @@ function ViewerHeader({
       // No owner controls, but the menu itself stays: filing someone else's list
       // under a folder of your own is the main use of the feature, and this
       // is a viewer's only way to reach it.
-      actions={
-        onAddToFolder && (
-          <HeaderMenu items={[{ label: ADD_TO_FOLDER, onClick: onAddToFolder }]} />
-        )
-      }
+      actions={<HeaderMenu items={[{ label: ADD_TO_FOLDER, onClick: onAddToFolder }]} />}
     />
   );
 }

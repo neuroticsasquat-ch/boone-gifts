@@ -15,7 +15,6 @@ export interface AuthUser {
   email: string;
   name: string;
   role: string;
-  simple_mode: boolean;
 }
 
 // User (from API)
@@ -231,7 +230,7 @@ export interface FamilyMember { user_id: number; name: string; role: string; }
 export interface FamilyDetail { id: number; name: string; created_by_id: number; members: FamilyMember[]; }
 export interface FamilyRef { id: number; name: string; }
 export interface FamilyInvite {
-  id: number; family_id: number; email: string; role: string; simple_mode: boolean;
+  id: number; family_id: number; email: string; role: string;
   token: string; invited_by_id: number; expires_at: string;
   accepted_at: string | null; declined_at: string | null; created_at: string;
   status: "pending" | "accepted" | "declined" | "expired";

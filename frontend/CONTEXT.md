@@ -21,7 +21,8 @@ Words the UI must **not** use: "collection" (rejected outright — it reads too 
 "occasion" for a folder (the word is reserved for a family's shared occasion — see
 [`docs/adr/0002-occasion-and-folder.md`](docs/adr/0002-occasion-and-folder.md)), "family list" (a list shared via a family
 is just a shared list, labelled with the family), "connect"/"collect" as navigation labels, "they use
-this app".
+this app", "simple mode" (retired in NEU-1261 — the full-mode behaviour is the only
+behaviour).
 
 ## Rules the UI must respect
 
@@ -35,9 +36,5 @@ this app".
 3. **Source is a label, not a destination.** How a list reached the viewer is rendered on the row.
    It never becomes its own page, tab, or filter-by-default.
 
-4. **Simple mode is subtractive only.** It hides controls. It never changes a label, a word, or where
-   a link goes. Anything awaiting the user's decision must still be reachable in simple mode — which
-   is why requests and invites render as a banner on Lists, not only on People.
-
-5. **A list is for an account person, or for someone with no account, or for neither.** The two
+4. **A list is for an account person, or for someone with no account, or for neither.** The two
    controls are mutually exclusive; picking one clears the other.

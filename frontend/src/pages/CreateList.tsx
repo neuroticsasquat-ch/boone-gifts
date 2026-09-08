@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import { createList } from "../api/lists";
 import { getFamilies } from "../api/families";
 import { getAccount } from "../api/account";
-import { useAuth } from "../hooks/useAuth";
 import { useTitle } from "../hooks/useTitle";
 import { ListForFields } from "../components/ListForFields";
 import {
@@ -23,21 +22,16 @@ export function CreateList() {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
-  const { user } = useAuth();
 
-  // Simple-mode lists are shared with every family automatically, so a control
-  // here would be a lie. Full-mode owners opt in family by family, unchecked.
-  const canChooseFamilies = !user?.simple_mode;
+  // Owners opt in family by family, unchecked.
   const families = useQuery({
     queryKey: ["families"],
     queryFn: getFamilies,
-    enabled: canChooseFamilies,
   });
-  const showFamilies = canChooseFamilies && (families.data ?? []).length > 0;
+  const showFamilies = (families.data ?? []).length > 0;
 
   // On a shared account every list says who it is for, and the answer is required
-  // (project spec §5.2). Fetched in both modes: a shared household is exactly the
-  // audience simple mode is for.
+  // (project spec §5.2).
   const account = useQuery({ queryKey: ["account"], queryFn: getAccount });
 
   function toggleFamily(id: number) {

@@ -1,7 +1,7 @@
 # Boone Gifts Frontend — Claude Code
 
 Project documentation lives in [`AGENTS.md`](../AGENTS.md) — architecture, commands, conventions,
-routes, simple mode, and production details. Read it first; this file holds only the settings that
+routes, and production details. Read it first; this file holds only the settings that
 are specific to Claude Code and the personal skills.
 
 <!-- Specs/plans live under this repo's own docs/ (not the umbrella). This overrides the

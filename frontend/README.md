@@ -2,7 +2,7 @@
 
 React SPA for the Boone Gifts platform — a gift list and wishlist app where users create lists, share them with connections and families, and claim gifts without the list's owner seeing who claimed what.
 
-For architecture, routes, conventions, and the simple-mode rules, see [`AGENTS.md`](AGENTS.md).
+For architecture, routes, and conventions, see [`AGENTS.md`](AGENTS.md).
 
 ## Tech Stack
 

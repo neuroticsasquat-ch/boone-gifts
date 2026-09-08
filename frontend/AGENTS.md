@@ -53,14 +53,14 @@ src/
   index.css          # Tailwind import
   api/
     client.ts        # Axios instance, JWT interceptors (set/get/clearAccessToken)
-    auth.ts          # login, register, refresh, logout, updateProfile, changePassword, toggleSimpleMode
+    auth.ts          # login, register, refresh, logout, updateProfile, changePassword
     lists.ts         # getLists("owned"|"shared"), createList (family_ids),
                      # getListFamilies / shareListWithFamily / unshareListFromFamily
     gifts.ts         # Gift CRUD + claim/unclaim
     families.ts      # 13 functions — see "Families" below
     account.ts       # GET/PUT /account — the shared-account flag and its people
     connections.ts, shares.ts, folders.ts, invites.ts, users.ts, meta.ts
-  contexts/AuthContext.tsx   # Access token in memory, silent refresh on mount, toggleSimpleMode
+  contexts/AuthContext.tsx   # Access token in memory, silent refresh on mount
   hooks/             # useAuth, useTitle
   components/
     Layout.tsx            # App shell: one tab set (Lists · People) + outlet, badge queries
@@ -99,43 +99,23 @@ src/
 | `/reset-password` | `ResetPassword` | Public |
 | `/family-invites/:token` | `AcceptFamilyInvite` | Authenticated, outside `Layout` |
 | `/` | — | Redirects to `/lists`; the app's entry point, not a page |
-| `/lists` | `Lists` | My lists + everything shared with me, under the actionable banner. Header controls: folder filter, sort, archive (full mode only) |
-| `/lists/new` | `CreateList` | Full mode also shows "Share with families" checkboxes |
-| `/lists/:id` | `ListDetail` | Owner view or viewer/claimer view. No tab bar: header, then the gifts. Owner header carries the sharing summary line (+ **Change**) and a `⋯` menu holding Add to a folder…, Edit, Archive and Delete; a viewer gets the same menu holding the folder action alone. Simple mode drops that one item, so a viewer has no menu at all |
+| `/lists` | `Lists` | My lists + everything shared with me, under the actionable banner. Header controls: folder filter, sort, archive |
+| `/lists/new` | `CreateList` | Also shows "Share with families" checkboxes |
+| `/lists/:id` | `ListDetail` | Owner view or viewer/claimer view. No tab bar: header, then the gifts. Owner header carries the sharing summary line (+ **Change**) and a `⋯` menu holding Add to a folder…, Edit, Archive and Delete; a viewer gets the same menu holding the folder action alone |
 | `/people` | `People` | The People tab: families, then individuals, under the actionable banner |
 | `/people/:id` | `ConnectionProfile` | |
 | `/people/families/:id` | `FamilyDetail` | Members, invites, rename, delete, leave |
-| `/account` | `Account` | Both modes, via the user menu |
+| `/account` | `Account` | Via the user menu |
 | `/admin/invites`, `/admin/users` | `AdminInvites`, `AdminUsers` | Admin-only |
 
-## Simple mode
+## Navigation
 
-A reduced navigation for users who only need their own lists and their family's.
+`Layout.tsx` holds **one** `tabs` array — **Lists · People** — driving both the mobile bottom bar and
+the desktop nav, with the same labels and destinations at every screen size. The account menu holds
+Account Settings and the admin links; it never duplicates a nav destination.
 
-- `AuthUser.simple_mode` is decoded from the JWT payload by the same `decodePayload()` call that reads `role`
-- `AuthContext.toggleSimpleMode()` calls the API, receives a new JWT, stores it, and re-decodes user state
-- The Account page's **View mode** card is the toggle, reachable in both modes
-
-| Mode | Tabs (desktop and mobile) |
-|---|---|
-| Full | Lists · People |
-| Simple | Lists (People moves into the account menu) |
-
-`ActionableBanner` is deliberately **not** subtracted in simple mode: with People hidden, the banner
-on `/lists` is the only route to a pending connection request or family invite.
-
-On `/lists`, simple mode hides the header controls — folder filter, sort, archive — **and nothing
-else**. The rows, the section headings and the New List button are identical in both modes; only the
-"nothing shared with you yet" empty state differs, because full mode's "Add a connection" link points
-at People, which simple mode hides.
-
-On `/lists/:id`, simple mode hides one thing: "Add to a folder…" in the `⋯` menu. It goes for the
-same reason the filter does — with no filter there is nothing to read a folder back with — and it
-leaves Edit, Archive and Delete untouched, so a viewer in simple mode gets no `⋯` menu at all.
-
-`Layout.tsx` holds **one** `tabs` array driving both the mobile bottom bar and the desktop nav. Simple
-mode is purely subtractive — it filters People out of that array and adds a People link to the account
-menu. It never changes a label or a destination.
+`ActionableBanner` is mounted on `/lists` above the lists as well as on `/people`, so a pending
+connection request or family invite is reachable from either.
 
 ## Families
 
@@ -167,9 +147,8 @@ in NEU-1231) and once in `PendingFamilyInvites.tsx` (replaced by this).
 Visibility is an explicit grant on the backend — per-(list, user) for people, per-(list, family) for families, never implied by co-membership. **The backend is always the gate — hidden or read-only UI is not.**
 
 - **Who can see this list** (`list-detail/SharingPanel.tsx`) — the one owner-facing sharing surface, opened by the header's **Change** control. A **People** group (one checkbox per connection, checked when shared) and a **Families** group (one per family, checked when granted), in that order — the same order the summary line reads in. It writes through the existing endpoints, `/lists/{id}/shares` and `/lists/{id}/families/{family_id}`; there is no combined sharing endpoint.
-- **Owner-only and full-mode only.** Simple mode never opens the panel: its header summary line is read-only, because the backend auto-grants its lists to every family anyway.
-  - **Known cost of that line** (project spec §6.2, accepted): the auto-grant covers lists *created* in simple mode and family *joins*, so a simple-mode user who owns a list made in full mode and deliberately left unshared reads "Shared with your families" when it isn't. The retired Families tab used to show them the real state; the spec chose the fixed copy anyway.
-- **Create form** (`CreateList.tsx`) — a "Share with families" fieldset of **unchecked** checkboxes posting `family_ids`. Hidden when the user belongs to no families, and in simple mode, where the backend shares with every family regardless and a control would be a lie.
+- **Owner-only.** The header summary line names who the list actually reaches and always carries the Change control that opens the panel.
+- **Create form** (`CreateList.tsx`) — a "Share with families" fieldset of **unchecked** checkboxes posting `family_ids`. Hidden when the user belongs to no families.
 - **Revoke dialog** — a 409 from the family DELETE means members of that family hold claims that revoking would orphan. The modal offers **Release those claims** / **Keep them claimed** / **Cancel**, re-issuing with `claims=release` or `claims=keep`. It shows **no counts and no gift or claimer names**: owners are blind to claim state on their own lists.
 
 ## Recipients
@@ -199,8 +178,6 @@ takes.
 - **A non-shared account sees no picker at all** — the form is today's. `GET /account` (`["account"]`,
   shared with the Account page's card) is what tells the two apart, and until it answers the form
   renders the non-shared shape.
-- **Both modes ask.** A shared household is exactly who simple mode is for, so the picker is never
-  subtracted.
 - The owner-side label — "for Gran" on their own rows and in the list header — comes from
   `recipientLabel` in `lib/attribution.ts`. A *viewer* is told nothing about account people: to
   everyone else the account is one identity (project spec §5.1).
@@ -227,10 +204,6 @@ replaces the tab retired in NEU-1240.
   `/folders/for-list/{list_id}` (`["folders-for-list", listId]`).
 - The picker and the sharing panel share the header's one panel slot, so opening either closes the
   other.
-- **Hidden in simple mode**, which has no folder filter on `/lists` and so no way to read a
-  folder back: filing a list into one there would leave membership its owner could never see. The
-  rest of the `⋯` menu is unchanged, so this stays purely subtractive.
-
 - The filter is a `<select>` in the Lists page header, defaulting to "All lists". It narrows **both**
   sections at once; a list in several folders is matched by each of them.
 - It renders only when the viewer has at least one folder — a select whose sole option is
@@ -254,7 +227,7 @@ against each section heading.
 - **Vite HMR**: WSS on port 443 (`clientPort`) so it works behind the workspace's TLS proxy.
 - **Never store the access token in localStorage** — `src/api/client.ts` keeps it in memory and exports `setAccessToken` / `getAccessToken` / `clearAccessToken`.
 - **Type imports**: use `import type { ... }` — `verbatimModuleSyntax` is on.
-- **Types** in `src/types/index.ts`: `AuthUser` is decoded from the JWT payload (`simple_mode` + `role`), and `Gift` vs `GiftOwnerView` are separate because owners get responses without claim fields.
+- **Types** in `src/types/index.ts`: `AuthUser` is decoded from the JWT payload (`role`), and `Gift` vs `GiftOwnerView` are separate because owners get responses without claim fields.
 
 ## Debugging CI failures
 - **If told a CI/workflow run failed, always investigate via `gh` first** before running anything locally or claiming it's fixed: `gh run list -w CI` to find the failed run, then `gh run view <id> --log-failed`.

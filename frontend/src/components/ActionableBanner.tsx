@@ -13,10 +13,9 @@ import {
  * Everything waiting on the user's decision — incoming connection requests and
  * family invites — with accept/decline inline.
  *
- * This is the only route to these items in simple mode, where People collapses
- * into the account menu, so it renders in both modes and is mounted above the
- * lists on /lists. It is also the single implementation of the accept/decline
- * behaviour: /people mounts the same component rather than keeping its own copy.
+ * Mounted above the lists on /lists and on /people. It is the single
+ * implementation of the accept/decline behaviour: /people mounts the same
+ * component rather than keeping its own copy.
  *
  * Renders nothing at all when nothing is pending — no empty card, no heading.
  */

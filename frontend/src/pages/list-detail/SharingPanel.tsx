@@ -18,11 +18,9 @@ type QueryClient = ReturnType<typeof useQueryClient>;
  * The one place an owner says who can see a list — people and families in the
  * same panel, replacing the retired "Shared with" and "Families" tabs.
  *
- * Owner-only, and full mode only: it is opened by the header's Change control,
- * which simple mode does not render (project spec §6.2 — the backend auto-grants
- * a simple-mode user's lists to their families, so its summary line is read-only).
- * The backend is still the gate; this panel writes through the existing
- * `/lists/{id}/shares` and `/lists/{id}/families/{family_id}` endpoints.
+ * Owner-only: it is opened by the header's Change control. The backend is still
+ * the gate; this panel writes through the existing `/lists/{id}/shares` and
+ * `/lists/{id}/families/{family_id}` endpoints.
  */
 export function SharingPanel({
   listId,

@@ -8,26 +8,16 @@ import { getListFamilies } from "../../api/lists";
  * families together, in that order, replacing the "Shared with" and "Families"
  * tabs as the place an owner reads their sharing state.
  *
- * Owner-only. Simple mode renders it read-only, because the backend auto-grants
- * a simple-mode user's lists to every family they belong to (project spec §6.2)
- * — there is nothing for them to change, so there is no Change control.
+ * Owner-only, and always editable: it names who the list actually reaches and
+ * carries the Change control that opens the sharing panel.
  */
 export function SharingSummary({
   listId,
-  simpleMode,
   onChange,
 }: {
   listId: number;
-  simpleMode: boolean;
   onChange: () => void;
 }) {
-  if (simpleMode) {
-    return <SummaryLine text="Shared with your families" />;
-  }
-  return <FullModeSummary listId={listId} onChange={onChange} />;
-}
-
-function FullModeSummary({ listId, onChange }: { listId: number; onChange: () => void }) {
   const shares = useQuery({ queryKey: ["shares", listId], queryFn: () => getShares(listId) });
   const connections = useQuery({ queryKey: ["connections"], queryFn: getConnections });
   const families = useQuery({
@@ -43,35 +33,24 @@ function FullModeSummary({ listId, onChange }: { listId: number; onChange: () =>
     ...(families.data ?? []).filter((f) => f.shared).map((f) => f.name),
   ];
 
-  return (
-    <SummaryLine
-      text={
-        isLoading
-          ? "Loading sharing…"
-          : names.length > 0
-            ? `Shared with ${names.join(", ")}`
-            : "Not shared with anyone yet"
-      }
-      onChange={onChange}
-    />
-  );
-}
+  const text = isLoading
+    ? "Loading sharing…"
+    : names.length > 0
+      ? `Shared with ${names.join(", ")}`
+      : "Not shared with anyone yet";
 
-function SummaryLine({ text, onChange }: { text: string; onChange?: () => void }) {
   return (
     <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1">
       <p className="text-sm text-gray-600">
         <span aria-hidden="true">👥 </span>
         {text}
       </p>
-      {onChange && (
-        <button
-          onClick={onChange}
-          className="text-sm font-medium text-blue-600 hover:underline"
-        >
-          Change
-        </button>
-      )}
+      <button
+        onClick={onChange}
+        className="text-sm font-medium text-blue-600 hover:underline"
+      >
+        Change
+      </button>
     </div>
   );
 }
