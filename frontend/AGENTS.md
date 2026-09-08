@@ -59,6 +59,7 @@ src/
     gifts.ts         # Gift CRUD + claim/unclaim
     families.ts      # 13 functions — see "Families" below
     account.ts       # GET/PUT /account — the shared-account flag and its people
+    occasions.ts     # A family's occasions: list, create, rename/archive
     connections.ts, shares.ts, folders.ts, invites.ts, users.ts, meta.ts
   contexts/AuthContext.tsx   # Access token in memory, silent refresh on mount
   hooks/             # useAuth, useTitle
@@ -77,6 +78,8 @@ src/
                      # FolderDetail.tsx — still unrouted; the Lists page's
                      # folder filter and list detail's "Add to a folder…"
                      # are where a user meets the concept now
+    family-detail/   # OccasionsSection (the family's occasions, its create
+                     # action, and the organizer-only rename and archive)
     list-detail/     # GiftsTab (the page body), SharingSummary (the header's
                      # "Shared with …" line), SharingPanel (the combined people
                      # + families picker behind the header's Change control),
@@ -104,7 +107,7 @@ src/
 | `/lists/:id` | `ListDetail` | Owner view or viewer/claimer view. No tab bar: header, then the gifts. Owner header carries the sharing summary line (+ **Change**) and a `⋯` menu holding Add to a folder…, Edit, Archive and Delete; a viewer gets the same menu holding the folder action alone |
 | `/people` | `People` | The People tab: families, then individuals, under the actionable banner |
 | `/people/:id` | `ConnectionProfile` | |
-| `/people/families/:id` | `FamilyDetail` | Members, invites, rename, delete, leave |
+| `/people/families/:id` | `FamilyDetail` | Members, occasions, invites, rename, delete, leave |
 | `/account` | `Account` | Via the user menu |
 | `/admin/invites`, `/admin/users` | `AdminInvites`, `AdminUsers` | Admin-only |
 
@@ -126,6 +129,18 @@ Types: `Family` (summary with `role`, `member_count`), `FamilyMember`, `FamilyDe
 **Badges**: `Layout.tsx` runs three background queries on every page — `["unseen-shares"]` badges **Lists**, while `["connectionRequests"]` and `["familyInvites"]` are **summed into the single People badge**. Rendered as `<Badge count={n}>` inside each mobile tab icon and inline in the desktop links.
 `ActionableBanner` invalidates both keys after an accept or decline, so acting on an item clears its
 row and drops the badge.
+
+**Occasions** (`src/api/occasions.ts` — `getFamilyOccasions`, `createOccasion`, `updateOccasion`): a
+family's shared gifting occasion, listed on the family page by
+`pages/family-detail/OccasionsSection.tsx` under `["occasions", familyId, { archived }]`. **Creating is
+open to any member** — a family with no active occasion cannot be shared to at all, so nobody waits on
+an absent organizer — while **rename and archive are organizer-only**, gated the same `isOrganizer` way
+the member controls are. A second active occasion is warned about, never blocked: the warning names the
+occasions the family already has, built from the list already on the page — `has_other_active` cannot be
+read before the write it rides on, so it back-stops that warning afterwards when the list was stale. A
+family with no active occasion says so outright, because that is what makes it unshareable. Archived
+occasions sit behind the same in-page toggle the Lists page uses, carrying **Unarchive** so Archive is
+never a one-way door; NEU-1278 replaces both toggles with one archive view.
 
 **Register via family invite**: `Register.tsx` reads `?family_invite=<token>`; `getInviteInfo(token)` then returns a non-null `family_name`, the email field is pre-filled and locked, and a "Join the \<family\> family" subtitle is shown.
 

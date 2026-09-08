@@ -5,6 +5,7 @@ import { getFamily, renameFamily, deleteFamily, removeMember, updateMemberRole, 
 import { useAuth } from "../hooks/useAuth";
 import { useTitle } from "../hooks/useTitle";
 import { Spinner } from "../components/Spinner";
+import { OccasionsSection } from "./family-detail/OccasionsSection";
 import toast from "react-hot-toast";
 import { isAxiosError } from "axios";
 
@@ -220,6 +221,9 @@ export function FamilyDetail() {
           })}
         </ul>
       </section>
+
+      {/* Occasions — any member may create; renaming and archiving are organizer-only */}
+      <OccasionsSection familyId={familyId} familyName={f.name} isOrganizer={isOrganizer} />
 
       {/* Leave family */}
       <section>

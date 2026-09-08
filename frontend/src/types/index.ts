@@ -190,6 +190,31 @@ export interface FolderDetail {
   updated_at: string;
 }
 
+// Occasions
+/**
+ * A family's shared gifting occasion — "Christmas 2026". The unit a list is
+ * shared *to*, owned by the family. Not a {@link Folder}, which is one user's
+ * private grouping of lists — see `docs/adr/0002-occasion-and-folder.md`.
+ */
+export interface Occasion {
+  id: number;
+  family_id: number;
+  name: string;
+  is_archived: boolean;
+  created_by_id: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * The create response. A second active occasion is allowed, so the backend
+ * reports whether the family already had one rather than refusing — a caller
+ * with no occasion list to hand can warn off this alone.
+ */
+export interface OccasionCreated extends Occasion {
+  has_other_active: boolean;
+}
+
 // Shared Users
 // URL Metadata
 export interface UrlMeta {

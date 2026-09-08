@@ -14,6 +14,7 @@ architecture live in [`AGENTS.md`](AGENTS.md); this file is only about what the 
 | **People** | Connections and families together — everyone I share with | `pages/People.tsx` |
 | **Family** | A named group of people; lists can be shared to it wholesale | `pages/FamilyDetail.tsx` |
 | **Folder** | My saved grouping of lists — "Christmas 2026". Was called a *collection*, then an *occasion* | `pages/Folder*.tsx` |
+| **Occasion** | A family's shared gifting occasion — "Christmas 2026". The unit a list is shared *to*, and the only thing that makes a family shareable | `pages/family-detail/OccasionsSection.tsx` |
 | **Claim** / "I'll get this" | My private intent to buy a gift. Never visible to the list's owner | `pages/list-detail/GiftsTab.tsx` |
 | **Account person** | A named person on a shared login; a list can be marked as being for one | `components/ListForFields.tsx` |
 
