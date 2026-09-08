@@ -1,9 +1,10 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { MemoryRouter } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
+import toast, { Toaster } from "react-hot-toast";
 import { server } from "../../test/mocks/server";
 import { AuthProvider } from "../../contexts/AuthContext";
 import { SharingPanel } from "./SharingPanel";
@@ -33,20 +34,38 @@ const connections = [
   },
 ];
 
-const listFamilies = [
-  { id: 7, name: "The Boones", shared: true },
-  { id: 8, name: "The Smiths", shared: false },
+/** One family of each shape the control has to render (project spec §5.2). */
+const shareTargets = [
+  {
+    id: 7,
+    name: "The Boones",
+    occasions: [{ id: 10, name: "Christmas 2026", is_archived: false, shared: true }],
+  },
+  {
+    id: 8,
+    name: "The Smiths",
+    occasions: [{ id: 20, name: "Easter 2026", is_archived: false, shared: false }],
+  },
+  {
+    id: 9,
+    name: "The Joneses",
+    occasions: [
+      { id: 31, name: "Jones Christmas", is_archived: false, shared: false },
+      { id: 32, name: "Jones Birthdays", is_archived: false, shared: false },
+    ],
+  },
+  { id: 11, name: "Work Friends", occasions: [] },
 ];
 
 /** Everything the panel reads, so a test only overrides what it cares about. */
 function serveSharingState({
   shares = [] as { id: number; list_id: number; user_id: number; created_at: string }[],
-  families = listFamilies,
+  targets = shareTargets,
 } = {}) {
   server.use(
     http.get(`${API}/connections`, () => HttpResponse.json(connections)),
     http.get(`${API}/lists/1/shares`, () => HttpResponse.json(shares)),
-    http.get(`${API}/lists/1/families`, () => HttpResponse.json(families)),
+    http.get(`${API}/lists/1/families`, () => HttpResponse.json(targets)),
   );
 }
 
@@ -62,6 +81,7 @@ function renderPanel(onClose = vi.fn()) {
       <AuthProvider>
         <MemoryRouter>
           <SharingPanel listId={1} queryClient={queryClient} onClose={onClose} />
+          <Toaster />
         </MemoryRouter>
       </AuthProvider>
     </QueryClientProvider>
@@ -149,7 +169,7 @@ describe("SharingPanel — people", () => {
       http.get(`${API}/lists/1/shares`, () =>
         HttpResponse.json([{ id: 1, list_id: 1, user_id: 42, created_at: "2026-01-01" }])
       ),
-      http.get(`${API}/lists/1/families`, () => HttpResponse.json(listFamilies)),
+      http.get(`${API}/lists/1/families`, () => HttpResponse.json(shareTargets)),
       http.delete(`${API}/lists/1/shares/42`, () => {
         revoked();
         return new HttpResponse(null, { status: 204 });
@@ -169,7 +189,7 @@ describe("SharingPanel — people", () => {
     server.use(
       http.get(`${API}/connections`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
-      http.get(`${API}/lists/1/families`, () => HttpResponse.json(listFamilies)),
+      http.get(`${API}/lists/1/families`, () => HttpResponse.json(shareTargets)),
     );
 
     renderPanel();
@@ -180,20 +200,15 @@ describe("SharingPanel — people", () => {
 });
 
 describe("SharingPanel — families", () => {
-  it("renders one toggle per family, reflecting its shared state", async () => {
-    serveSharingState();
+  // react-hot-toast keeps its queue at module level, so a toast raised by one
+  // test outlives `cleanup()` and shows up in the next one.
+  beforeEach(() => toast.remove());
 
-    renderPanel();
-
-    expect(await screen.findByRole("checkbox", { name: /share with the boones/i })).toBeChecked();
-    expect(screen.getByRole("checkbox", { name: /share with the smiths/i })).not.toBeChecked();
-  });
-
-  it("toggling a family on PUTs the grant", async () => {
+  it("names the occasion a family with one is reached through, and shares to it", async () => {
     const shared = vi.fn();
     serveSharingState();
     server.use(
-      http.put(`${API}/lists/1/families/8`, () => {
+      http.put(`${API}/lists/1/occasions/20`, () => {
         shared();
         return new HttpResponse(null, { status: 204 });
       }),
@@ -201,15 +216,125 @@ describe("SharingPanel — families", () => {
 
     renderPanel();
 
-    await userEvent.click(await screen.findByRole("checkbox", { name: /share with the smiths/i }));
+    // One occasion is displayed, not offered: no select, and one click shares.
+    expect(await screen.findByText("Easter 2026")).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: /occasion for the smiths/i })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("checkbox", { name: /share with the smiths/i }));
     await waitFor(() => expect(shared).toHaveBeenCalled());
   });
 
-  it("toggling a family off DELETEs the grant with no claims param", async () => {
+  it("checks the family whose occasion already holds the share, and names it", async () => {
+    serveSharingState();
+
+    renderPanel();
+
+    expect(await screen.findByRole("checkbox", { name: /share with the boones/i })).toBeChecked();
+    expect(screen.getByText("Christmas 2026")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: /share with the smiths/i })).not.toBeChecked();
+  });
+
+  it("disables a family with no active occasion and says why", async () => {
+    serveSharingState();
+
+    renderPanel();
+
+    const box = await screen.findByRole("checkbox", { name: /share with work friends/i });
+    expect(box).toBeDisabled();
+    expect(screen.getByText(/no active occasion/i)).toBeInTheDocument();
+  });
+
+  it("refuses a tick on a family with several occasions until one is chosen", async () => {
+    const shared = vi.fn();
+    serveSharingState();
+    server.use(
+      http.put(`${API}/lists/1/occasions/:occasionId`, () => {
+        shared();
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+
+    renderPanel();
+
+    await userEvent.click(await screen.findByRole("checkbox", { name: /share with the joneses/i }));
+
+    expect(await screen.findByText(/choose an occasion to share with the joneses/i)).toBeInTheDocument();
+    expect(shared).not.toHaveBeenCalled();
+    expect(screen.getByRole("checkbox", { name: /share with the joneses/i })).not.toBeChecked();
+  });
+
+  it("shares to the occasion chosen in the select", async () => {
+    const shared = vi.fn();
+    serveSharingState();
+    server.use(
+      http.put(`${API}/lists/1/occasions/:occasionId`, ({ params }) => {
+        shared(params.occasionId);
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+
+    renderPanel();
+
+    const select = await screen.findByRole("combobox", { name: /occasion for the joneses/i });
+    await userEvent.selectOptions(select, "32");
+    await userEvent.click(screen.getByRole("checkbox", { name: /share with the joneses/i }));
+
+    await waitFor(() => expect(shared).toHaveBeenCalledWith("32"));
+  });
+
+  it("keeps the select on a shared family, disabled and naming the occasion", async () => {
+    // The wireframe draws a ticked row still carrying its select (project spec
+    // §5.2): the row keeps one shape as the box is ticked. Disabled, because
+    // re-pointing a share is untick-then-tick — the only order in which the
+    // claims question can be asked.
+    serveSharingState({
+      targets: [
+        {
+          id: 9,
+          name: "The Joneses",
+          occasions: [
+            { id: 31, name: "Jones Christmas", is_archived: false, shared: true },
+            { id: 32, name: "Jones Birthdays", is_archived: false, shared: false },
+          ],
+        },
+      ],
+    });
+
+    renderPanel();
+
+    const select = await screen.findByRole("combobox", { name: /occasion for the joneses/i });
+    expect(select).toBeDisabled();
+    expect(select).toHaveValue("31");
+    expect(screen.getByRole("checkbox", { name: /share with the joneses/i })).toBeChecked();
+    // Nothing to choose while shared, so no placeholder offering one.
+    expect(screen.queryByRole("option", { name: /choose an occasion/i })).not.toBeInTheDocument();
+  });
+
+  it("says an occasion archived out from under the owner cannot be shared to", async () => {
+    serveSharingState();
+    server.use(
+      http.put(`${API}/lists/1/occasions/20`, () =>
+        HttpResponse.json(
+          { detail: "This occasion is archived and can no longer be shared to." },
+          { status: 409 },
+        )
+      ),
+    );
+
+    renderPanel();
+
+    await userEvent.click(await screen.findByRole("checkbox", { name: /share with the smiths/i }));
+
+    // A 409 here is the one thing the owner can act on, so it must not arrive as
+    // the generic failure toast.
+    expect(await screen.findByText(/has been archived/i)).toBeInTheDocument();
+  });
+
+  it("toggling a family off DELETEs its occasion's share with no claims param", async () => {
     const revoked = vi.fn();
     serveSharingState();
     server.use(
-      http.delete(`${API}/lists/1/families/7`, ({ request }) => {
+      http.delete(`${API}/lists/1/occasions/10`, ({ request }) => {
         revoked(new URL(request.url).searchParams.get("claims"));
         return new HttpResponse(null, { status: 204 });
       }),
@@ -222,10 +347,40 @@ describe("SharingPanel — families", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
+  it("can still unshare from an occasion archived after the share was made", async () => {
+    // Archiving is not unsharing, so the row stays operable — and it is the only
+    // way the owner has of switching that grant off.
+    const revoked = vi.fn();
+    serveSharingState({
+      targets: [
+        {
+          id: 7,
+          name: "The Boones",
+          occasions: [{ id: 10, name: "Christmas 2025", is_archived: true, shared: true }],
+        },
+      ],
+    });
+    server.use(
+      http.delete(`${API}/lists/1/occasions/10`, () => {
+        revoked();
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+
+    renderPanel();
+
+    const box = await screen.findByRole("checkbox", { name: /share with the boones/i });
+    expect(box).toBeEnabled();
+    expect(screen.getByText(/christmas 2025 — archived/i)).toBeInTheDocument();
+
+    await userEvent.click(box);
+    await waitFor(() => expect(revoked).toHaveBeenCalled());
+  });
+
   it("shows the release/keep dialog on a 409, with no counts or names", async () => {
     serveSharingState();
     server.use(
-      http.delete(`${API}/lists/1/families/7`, () =>
+      http.delete(`${API}/lists/1/occasions/10`, () =>
         HttpResponse.json(
           { detail: "Some gifts on this list are claimed by members of this family." },
           { status: 409 },
@@ -246,11 +401,11 @@ describe("SharingPanel — families", () => {
     expect(dialog).not.toHaveTextContent(/\d/);
   });
 
-  it("re-issues the request with claims=release", async () => {
+  it.each(["release", "keep"] as const)("re-issues the request with claims=%s", async (choice) => {
     const revoked = vi.fn();
     serveSharingState();
     server.use(
-      http.delete(`${API}/lists/1/families/7`, ({ request }) => {
+      http.delete(`${API}/lists/1/occasions/10`, ({ request }) => {
         const claims = new URL(request.url).searchParams.get("claims");
         revoked(claims);
         return claims
@@ -262,38 +417,20 @@ describe("SharingPanel — families", () => {
     renderPanel();
 
     await userEvent.click(await screen.findByRole("checkbox", { name: /share with the boones/i }));
-    await userEvent.click(await screen.findByRole("button", { name: /release those claims/i }));
-
-    await waitFor(() => expect(revoked).toHaveBeenLastCalledWith("release"));
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-  });
-
-  it("re-issues the request with claims=keep", async () => {
-    const revoked = vi.fn();
-    serveSharingState();
-    server.use(
-      http.delete(`${API}/lists/1/families/7`, ({ request }) => {
-        const claims = new URL(request.url).searchParams.get("claims");
-        revoked(claims);
-        return claims
-          ? new HttpResponse(null, { status: 204 })
-          : HttpResponse.json({ detail: "claimed" }, { status: 409 });
+    await userEvent.click(
+      await screen.findByRole("button", {
+        name: choice === "release" ? /release those claims/i : /keep them claimed/i,
       }),
     );
 
-    renderPanel();
-
-    await userEvent.click(await screen.findByRole("checkbox", { name: /share with the boones/i }));
-    await userEvent.click(await screen.findByRole("button", { name: /keep them claimed/i }));
-
-    await waitFor(() => expect(revoked).toHaveBeenLastCalledWith("keep"));
+    await waitFor(() => expect(revoked).toHaveBeenLastCalledWith(choice));
   });
 
   it("cancelling the dialog leaves the grant in place", async () => {
     const revoked = vi.fn();
     serveSharingState();
     server.use(
-      http.delete(`${API}/lists/1/families/7`, ({ request }) => {
+      http.delete(`${API}/lists/1/occasions/10`, ({ request }) => {
         revoked(new URL(request.url).searchParams.get("claims"));
         return HttpResponse.json({ detail: "claimed" }, { status: 409 });
       }),
@@ -310,7 +447,7 @@ describe("SharingPanel — families", () => {
   });
 
   it("says so when the owner belongs to no families", async () => {
-    serveSharingState({ families: [] });
+    serveSharingState({ targets: [] });
 
     renderPanel();
 

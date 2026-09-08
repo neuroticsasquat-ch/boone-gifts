@@ -1,12 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { getShares } from "../../api/shares";
 import { getConnections } from "../../api/connections";
-import { getListFamilies } from "../../api/lists";
+import { getShareTargets } from "../../api/lists";
 
 /**
- * The one line on list detail that says who can see this list — people and
- * families together, in that order, replacing the "Shared with" and "Families"
- * tabs as the place an owner reads their sharing state.
+ * The one line on list detail that says who can see this list — the people and
+ * the occasions it actually reaches, in that order, replacing the "Shared with"
+ * and "Families" tabs as the place an owner reads their sharing state.
  *
  * Owner-only, and always editable: it names who the list actually reaches and
  * carries the Change control that opens the sharing panel.
@@ -20,24 +20,28 @@ export function SharingSummary({
 }) {
   const shares = useQuery({ queryKey: ["shares", listId], queryFn: () => getShares(listId) });
   const connections = useQuery({ queryKey: ["connections"], queryFn: getConnections });
-  const families = useQuery({
-    queryKey: ["list-families", listId],
-    queryFn: () => getListFamilies(listId),
+  const targets = useQuery({
+    queryKey: ["share-targets", listId],
+    queryFn: () => getShareTargets(listId),
   });
 
-  const isLoading = shares.isLoading || connections.isLoading || families.isLoading;
+  const isLoading = shares.isLoading || connections.isLoading || targets.isLoading;
   const namesByUserId = new Map((connections.data ?? []).map((c) => [c.user.id, c.user.name]));
-  // People first, then families — "Shared with Jane, Boone Family".
+  // People first, then occasions — "Shared with Jane, Boone Family · Christmas
+  // 2026". A share points at an occasion, so naming the family alone would say
+  // more than the list actually reaches (project spec §8).
   const names = [
     ...(shares.data ?? []).map((s) => namesByUserId.get(s.user_id) ?? `User ${s.user_id}`),
-    ...(families.data ?? []).filter((f) => f.shared).map((f) => f.name),
+    ...(targets.data ?? []).flatMap((family) =>
+      family.occasions.filter((o) => o.shared).map((o) => `${family.name} · ${o.name}`),
+    ),
   ];
 
   // A failed fetch also leaves `names` empty, and "nobody can see this" is far
   // too load-bearing a sentence to say on the strength of a request that never
   // answered. Connections are exempt: their names decorate a share, and a share
   // we know about still counts without one.
-  const failed = shares.isError || families.isError;
+  const failed = shares.isError || targets.isError;
 
   // A list that reaches nobody is the case the auto-grant retired in NEU-1261
   // used to make impossible, so the line states it outright rather than in passing

@@ -93,7 +93,13 @@ describe("ListDetail sharing panel", () => {
       ),
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/families`, () =>
-        HttpResponse.json([{ id: 7, name: "The Boones", shared: true }])
+        HttpResponse.json([
+          {
+            id: 7,
+            name: "The Boones",
+            occasions: [{ id: 10, name: "Christmas 2026", is_archived: false, shared: true }],
+          },
+        ])
       ),
       http.get(`${API}/folders`, () => HttpResponse.json([])),
       http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
@@ -355,15 +361,25 @@ describe("ListDetail — no tab bar", () => {
       ),
       http.get(`${API}/lists/1/families`, () =>
         HttpResponse.json([
-          { id: 7, name: "The Boones", shared: true },
-          { id: 8, name: "The Smiths", shared: false },
+          {
+            id: 7,
+            name: "The Boones",
+            occasions: [{ id: 10, name: "Christmas 2026", is_archived: false, shared: true }],
+          },
+          {
+            id: 8,
+            name: "The Smiths",
+            occasions: [{ id: 20, name: "Easter 2026", is_archived: false, shared: false }],
+          },
         ])
       ),
     );
 
     renderListDetail(ownerToken);
 
-    expect(await screen.findByText("Shared with Alice, The Boones")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Shared with Alice, The Boones · Christmas 2026"),
+    ).toBeInTheDocument();
   });
 
   it("says so when a list is shared with nobody", async () => {
@@ -372,7 +388,13 @@ describe("ListDetail — no tab bar", () => {
       http.get(`${API}/connections`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/families`, () =>
-        HttpResponse.json([{ id: 7, name: "The Boones", shared: false }])
+        HttpResponse.json([
+          {
+            id: 7,
+            name: "The Boones",
+            occasions: [{ id: 10, name: "Christmas 2026", is_archived: false, shared: false }],
+          },
+        ])
       ),
     );
 
@@ -424,7 +446,13 @@ describe("ListDetail — no tab bar", () => {
       http.get(`${API}/connections`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/families`, () =>
-        HttpResponse.json([{ id: 7, name: "The Boones", shared: true }])
+        HttpResponse.json([
+          {
+            id: 7,
+            name: "The Boones",
+            occasions: [{ id: 10, name: "Christmas 2026", is_archived: false, shared: true }],
+          },
+        ])
       ),
     );
 

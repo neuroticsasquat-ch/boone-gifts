@@ -54,8 +54,8 @@ src/
   api/
     client.ts        # Axios instance, JWT interceptors (set/get/clearAccessToken)
     auth.ts          # login, register, refresh, logout, updateProfile, changePassword
-    lists.ts         # getLists("owned"|"shared"), createList (family_ids),
-                     # getListFamilies / shareListWithFamily / unshareListFromFamily
+    lists.ts         # getLists("owned"|"shared"), createList (occasion_ids),
+                     # getShareTargets / shareListWithOccasion / unshareListFromOccasion
     gifts.ts         # Gift CRUD + claim/unclaim
     families.ts      # 13 functions — see "Families" below
     account.ts       # GET/PUT /account — the shared-account flag and its people
@@ -85,7 +85,8 @@ src/
                      # + families picker behind the header's Change control),
                      # FolderPicker (the ⋯ menu's "Add to a folder…")
   lib/               # attribution.ts, recipient.ts, list-for.ts — who a list is for,
-                     # and how that reads on a row
+                     # and how that reads on a row; occasion-choice.ts — the
+                     # sharing control's one-, several-, no-occasion rule
   types/index.ts     # Types mirroring the backend Pydantic schemas
   test/
     setup.ts         # Vitest setup (Testing Library + MSW)
@@ -159,12 +160,29 @@ in NEU-1231) and once in `PendingFamilyInvites.tsx` (replaced by this).
 
 ## List sharing
 
-Visibility is an explicit grant on the backend — per-(list, user) for people, per-(list, family) for families, never implied by co-membership. **The backend is always the gate — hidden or read-only UI is not.**
+Visibility is an explicit grant on the backend — per-(list, user) for people, per-(list, occasion) for families, never implied by co-membership. **The backend is always the gate — hidden or read-only UI is not.**
 
-- **Who can see this list** (`list-detail/SharingPanel.tsx`) — the one owner-facing sharing surface, opened by the header's **Change** control. A **People** group (one checkbox per connection, checked when shared) and a **Families** group (one per family, checked when granted), in that order — the same order the summary line reads in. It writes through the existing endpoints, `/lists/{id}/shares` and `/lists/{id}/families/{family_id}`; there is no combined sharing endpoint.
-- **Owner-only.** The header summary line names who the list actually reaches and always carries the Change control that opens the panel. A list that reaches **nobody** says so outright — "This list isn't shared with anyone." in a line set apart from the ordinary summary — because since simple mode was retired nothing grants a list to a family on the owner's behalf (project spec §8). It is the mitigation for that, not decoration — but it is not a warning either, because a private list is a legitimate choice. A failed `shares` or `families` fetch is **not** an empty one and says so instead. Like every owner-facing surface it reveals nothing about claims.
-- **Create form** (`CreateList.tsx`) — a "Share with families" fieldset of **pre-checked** checkboxes posting `family_ids`: every family the owner belongs to arrives checked, and unchecking is free. Hidden when the user belongs to no families. The default lives in `CreateList`'s `familyIds` state as `null` meaning "untouched", so a late `GET /families` still arrives checked without an effect re-seeding over a deliberate uncheck.
-- **Revoke dialog** — a 409 from the family DELETE means members of that family hold claims that revoking would orphan. The modal offers **Release those claims** / **Keep them claimed** / **Cancel**, re-issuing with `claims=release` or `claims=keep`. It shows **no counts and no gift or claimer names**: owners are blind to claim state on their own lists.
+**A list is shared to an occasion, never to a family** (project spec §5.1, frontend ADR 0002). The
+family is still the row a user sees, because that is who they recognise; the occasion underneath is
+what the share points at. `lib/occasion-choice.ts` states the resulting three-state rule once, for
+both surfaces that render it:
+
+| The family has | The row |
+|---|---|
+| Exactly one active occasion | Its name is **displayed, not offered** — ticking shares to it, and sharing stays one click |
+| Several | A `<select>` accompanies the checkbox; ticking before choosing is **refused client-side**, as it is server-side |
+| None | Rendered, **disabled**, with the reason — a family with no active occasion cannot be shared to at all |
+
+An **archived** occasion is never a choice, but it still arrives on a family whose share was made
+before it was archived: archiving blocks new shares and nothing else, so the row stays operable (it
+is the only way to switch that grant off) and names the occasion "— archived".
+
+- **Who can see this list** (`list-detail/SharingPanel.tsx`) — the one owner-facing sharing surface, opened by the header's **Change** control. A **People** group (one checkbox per connection, checked when shared) and a **Families** group (one per family, per the table above), in that order — the same order the summary line reads in. It writes through `/lists/{id}/shares` and `/lists/{id}/occasions/{occasion_id}`; there is no combined sharing endpoint. The **families half reads `/lists/{id}/families`** — the resource is still "which families can this list reach", each carrying its occasions. A family with several keeps its select once shared, **disabled** and naming the occasion reached: the row holds one shape as the box is ticked, and moving a share is untick-then-tick, which is also the only order in which the claims question can be asked.
+- A **409 on the PUT** means the occasion was archived after the panel loaded. It is surfaced as its own message naming the cause and the way out — not the generic failure toast, which would leave the owner clicking a box that is never going to tick.
+- **Owner-only.** The header summary line names who the list actually reaches — people first, then each occasion as "Boone Family · Christmas 2026", because naming the family alone would claim more reach than the list has — and always carries the Change control that opens the panel. A list that reaches **nobody** says so outright — "This list isn't shared with anyone." in a line set apart from the ordinary summary — because since simple mode was retired nothing grants a list to a family on the owner's behalf (project spec §8). It is the mitigation for that, not decoration — but it is not a warning either, because a private list is a legitimate choice. A failed `shares` or `families` fetch is **not** an empty one and says so instead. Like every owner-facing surface it reveals nothing about claims.
+- A **409 on `POST /lists`** is the same archived occasion, caught between the create form loading and being submitted. It gets its own message for the same reason: "try again" is a lie when the identical submission will keep failing.
+- **Create form** (`CreateList.tsx`) — a "Share with families" fieldset posting `occasion_ids`, with the same three row shapes. **Pre-checked, narrowed by M3**: a family arrives checked only when it has **exactly one active occasion**, the only shape where ticking needs no further answer. Hidden when the user belongs to no families. The default lives in `tickedFamilyIds` as `null` meaning "untouched", so a late answer still arrives checked without an effect re-seeding over a deliberate uncheck; the selects' values live in a separate `picked` map, because naming an occasion is not the same as saying the list should reach that family. There is no endpoint answering "my families and their occasions" in one call, so the form fans out over `useQueries` — a user's families are few. Submit is blocked while any of those are pending (posting no `occasion_ids` would silently skip the pre-check) and while any ticked family has no occasion chosen.
+- **Revoke dialog** — a 409 from the occasion DELETE means members of that occasion's family hold claims that revoking would orphan. The modal offers **Release those claims** / **Keep them claimed** / **Cancel**, re-issuing with `claims=release` or `claims=keep`. It shows **no counts and no gift or claimer names**: owners are blind to claim state on their own lists.
 
 ## Recipients
 
@@ -234,7 +252,7 @@ has. This deliberately diverges from the project spec §4.2 wireframe, which sti
 against each section heading.
 
 ## Testing
-- ~260 test cases across 25 files, run inside the container via `task test`
+- ~335 test cases across 31 files, run inside the container via `task test`
 - MSW mocks live in `src/test/mocks/handlers.ts` (default `/auth/refresh → 401`); setup in `src/test/setup.ts`
 
 ## Critical conventions

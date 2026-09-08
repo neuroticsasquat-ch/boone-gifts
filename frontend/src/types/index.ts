@@ -30,16 +30,18 @@ export interface User {
 
 // Gift Lists
 /**
- * How a shared list reached the viewer: a direct share from a person, or a grant
- * to a family they belong to. A list reachable both ways reports `kind: "user"`
+ * How a shared list reached the viewer: a direct share from a person, or the
+ * occasion it was shared to. A list reachable both ways reports `kind: "user"`
  * — the backend resolves that (NEU-1227), the client never re-derives it.
+ *
+ * A list is shared to an occasion, never to a family (project spec §5.1), so the
+ * occasion arm carries the family it belongs to rather than naming it directly.
  */
-export interface SharedVia {
-  kind: "user" | "family";
-  /** The sharing user, or the family — whichever `kind` names. */
-  id: number;
-  name: string;
-}
+export type SharedVia =
+  | { kind: "user"; id: number; name: string }
+  /** The family rides on the occasion arm and only there. It is not optional:
+   *  the backend refuses an occasion share that does not carry one. */
+  | { kind: "occasion"; id: number; name: string; family: FamilyRef };
 
 export interface GiftList {
   id: number;
@@ -64,14 +66,31 @@ export interface GiftList {
   /** Present only on a list in the `shared` scope — null on one the caller owns,
    * absent on a response cached from before the field existed. */
   shared_via?: SharedVia | null;
-  families?: FamilyRef[];
 }
 
-/** One family the list owner belongs to, and whether the list is shared with it. */
-export interface ListFamilyShareState {
+/**
+ * One occasion the list can be shared to, and whether it already is.
+ *
+ * `is_archived` is only ever true on an occasion the list is *already* shared
+ * to: archiving blocks new shares without withdrawing old ones, so the name
+ * still has to be displayable (project spec §5.4).
+ */
+export interface ShareTargetOccasion {
   id: number;
   name: string;
+  is_archived: boolean;
   shared: boolean;
+}
+
+/**
+ * One family the list's owner belongs to, with the occasions it can be shared
+ * to. An empty `occasions` is the "no active occasion" state — the family is
+ * still listed, disabled, with the reason given (project spec §5.2).
+ */
+export interface ShareTargetFamily {
+  id: number;
+  name: string;
+  occasions: ShareTargetOccasion[];
 }
 
 export interface Gift {

@@ -128,20 +128,27 @@ describe("Lists", () => {
   });
 
   // One section for every list shared with the viewer, labelled with its source:
-  // "from Jane" for a direct share, the bare family name for a family grant
-  // (NEU-1235). The source is a label, never a destination.
+  // "from Jane" for a direct share, the bare family name for one that arrived
+  // through an occasion of that family (NEU-1235). The source is a label, never
+  // a destination.
   it("labels each shared row with its source", async () => {
     lists({
       shared: [
         sharedList({ id: 1, name: "Jane's Wishlist", shared_via: { kind: "user", id: 2, name: "Jane Boone" } }),
         sharedList({
           id: 2, name: "Carol's Wishlist", owner_name: "Carol Boone",
-          shared_via: { kind: "family", id: 1, name: "Boone Family" },
+          shared_via: {
+            kind: "occasion", id: 3, name: "Christmas 2026",
+            family: { id: 1, name: "Boone Family" },
+          },
         }),
         sharedList({
           id: 3, name: "Beth's List", owner_name: "Tom Boone",
           recipient_name: "Beth",
-          shared_via: { kind: "family", id: 1, name: "Boone Family" },
+          shared_via: {
+            kind: "occasion", id: 3, name: "Christmas 2026",
+            family: { id: 1, name: "Boone Family" },
+          },
         }),
       ],
     });
@@ -174,7 +181,10 @@ describe("Lists", () => {
         }),
         sharedList({
           id: 2, name: "Adam's Wishlist", updated_at: "2026-01-01T00:00:00Z",
-          shared_via: { kind: "family", id: 1, name: "Boone Family" },
+          shared_via: {
+            kind: "occasion", id: 3, name: "Christmas 2026",
+            family: { id: 1, name: "Boone Family" },
+          },
         }),
       ],
     });
@@ -254,7 +264,10 @@ describe("Lists — folder filter", () => {
       owned: [ownedList({ id: 1, name: "Tom's Wishlist" }), ownedList({ id: 2, name: "Beth's List" })],
       shared: [
         sharedList({ id: 3, name: "Jane's Wishlist", shared_via: { kind: "user", id: 2, name: "Jane Boone" } }),
-        sharedList({ id: 4, name: "Carol's Wishlist", shared_via: { kind: "family", id: 1, name: "Boone Family" } }),
+        sharedList({ id: 4, name: "Carol's Wishlist", shared_via: {
+            kind: "occasion", id: 3, name: "Christmas 2026",
+            family: { id: 1, name: "Boone Family" },
+          } }),
       ],
     });
     folders([{ id: 5, name: "Christmas 2026", lists: [{ id: 1 }, { id: 3 }] }]);
