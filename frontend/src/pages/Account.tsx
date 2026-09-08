@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { useTitle } from "../hooks/useTitle";
 import { CogIcon } from "../components/Icons";
+import { SharedAccountCard } from "./account/SharedAccountCard";
 
 interface AxiosLikeError {
   response?: { status?: number; data?: { detail?: string } };
@@ -172,6 +173,8 @@ export function Account() {
           </button>
         </form>
       </div>
+
+      <SharedAccountCard />
 
       <div className="bg-white shadow rounded p-6 mt-6">
         <h2 className="text-lg font-semibold mb-4">View mode</h2>

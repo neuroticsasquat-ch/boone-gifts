@@ -2,6 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { MemoryRouter } from "react-router";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { server } from "../test/mocks/server";
 import { Account } from "./Account";
@@ -21,14 +22,17 @@ function renderAccount(overrides: Partial<AuthContextType> = {}) {
     toggleSimpleMode: vi.fn(),
     ...overrides,
   };
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return {
     value,
     ...render(
-      <MemoryRouter>
-        <AuthContext.Provider value={value}>
-          <Account />
-        </AuthContext.Provider>
-      </MemoryRouter>
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <AuthContext.Provider value={value}>
+            <Account />
+          </AuthContext.Provider>
+        </MemoryRouter>
+      </QueryClientProvider>
     ),
   };
 }

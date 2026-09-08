@@ -26,4 +26,9 @@ export const handlers = [
   http.get("https://boone-gifts-api.localhost/occasions", () => {
     return HttpResponse.json([]);
   }),
+  // Default handler: a plain, un-shared account (the Account page's shared-account
+  // card fetches this whenever the page renders)
+  http.get("https://boone-gifts-api.localhost/account", () => {
+    return HttpResponse.json({ is_shared_account: false, people: [] });
+  }),
 ];

@@ -232,3 +232,41 @@ export interface IncomingFamilyInvite {
   family: FamilyRef; invited_by: { id: number; name: string };
   expires_at: string; created_at: string;
 }
+
+// Shared accounts
+/**
+ * A named person on a shared account. A **label, never an identity**: the
+ * account stays one login, one member, one claimer everywhere, and everyone on
+ * it sees everything on it (project spec §5.1).
+ */
+export interface AccountPerson {
+  id: number;
+  name: string;
+}
+
+/** `GET /account`, and the body every `PUT /account` returns. */
+export interface Account {
+  is_shared_account: boolean;
+  people: AccountPerson[];
+}
+
+/** One entry of the desired people list. An `id` the account owns renames that
+ *  person in place; without one the person is created. */
+export interface AccountPersonWrite {
+  id?: number;
+  name: string;
+}
+
+/**
+ * The `PUT /account` body — the *whole* desired state, not a patch: anyone left
+ * out is deleted, and array order becomes display order (NEU-1228 §3.2).
+ */
+export interface AccountUpdate {
+  is_shared_account: boolean;
+  people: AccountPersonWrite[];
+}
+
+/** The 409 body when a change would strip labels off lists (NEU-1228 §3.3). */
+export interface AccountConflict {
+  affected_lists: number;
+}
