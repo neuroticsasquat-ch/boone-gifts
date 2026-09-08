@@ -174,14 +174,16 @@ Visibility is an explicit grant on the backend — per-(list, user) for people, 
 
 ## Recipients
 
-A list can name a recipient. `RecipientFields.tsx` is the shared "this list is for someone else" control (create form and edit header); `lib/recipient.ts` holds its value type and payload mapping, `lib/attribution.ts` turns a list into its display line, and `ListAttribution.tsx` renders it — "from Jane" for a list someone shared, "for Beth · kept by Tom" for one kept on behalf of a person with no account.
+A list can name a recipient, and since NEU-1241 that means exactly one thing: **a person who does not use the app**. The co-resident case the old "they use this app" radio described is the account-people picker instead (see below), so a recipient name is on its own the whole predicate — claims are hidden from the keeper and the keeper cannot claim, always.
+
+`RecipientFields.tsx` is the shared "this list is for someone else" control (create form and edit header); `lib/recipient.ts` holds its value type and payload mapping, `lib/attribution.ts` turns a list into its display line, and `ListAttribution.tsx` renders it — "from Jane" for a list someone shared, "for Beth · kept by Tom" for one kept on behalf of a person with no account. The keeper's warning under the name field is unconditional: it is the only case left.
 
 ## Who is this list for?
 
 On a **shared account** every list says which of the account's people it is for, and the create form
 and edit header ask outright: a required radio group naming each person, plus "Both of us" and
 "Someone else" (NEU-1237). `ListForFields.tsx` is that picker and the single control both forms
-mount; `lib/list-for.ts` holds the answer as one tagged union and maps it to the three fields the API
+mount; `lib/list-for.ts` holds the answer as one tagged union and maps it to the two fields the API
 takes.
 
 - **The requirement lives on the client.** `POST /lists` accepts a list that names neither person nor

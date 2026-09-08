@@ -48,12 +48,10 @@ export interface GiftList {
   description: string | null;
   owner_id: number;
   owner_name: string;
-  /** Who the list is *for*, when that differs from the account that owns it. */
+  /** Who the list is *for*, when that differs from the account that owns it: a
+   * person with no account. Read it through `attributionFor` / `recipientLabel`
+   * in `lib/attribution` rather than directly. */
   recipient_name: string | null;
-  /** Whether that person has an account of their own. Three-valued: null means
-   * there is no recipient at all. Never read it directly — go through
-   * `attributionFor` / `recipientLabel` in `lib/attribution`. */
-  recipient_has_account: boolean | null;
   /** The account person this list is marked for, on a shared account. Mutually
    * exclusive with `recipient_name`; both null on a household list. */
   account_person_id: number | null;
@@ -105,12 +103,10 @@ export interface GiftListDetailOwner {
   description: string | null;
   owner_id: number;
   owner_name: string;
-  /** Who the list is *for*, when that differs from the account that owns it. */
+  /** Who the list is *for*, when that differs from the account that owns it: a
+   * person with no account. Read it through `attributionFor` / `recipientLabel`
+   * in `lib/attribution` rather than directly. */
   recipient_name: string | null;
-  /** Whether that person has an account of their own. Three-valued: null means
-   * there is no recipient at all. Never read it directly — go through
-   * `attributionFor` / `recipientLabel` in `lib/attribution`. */
-  recipient_has_account: boolean | null;
   /** The account person this list is marked for, on a shared account. Mutually
    * exclusive with `recipient_name`; both null on a household list. */
   account_person_id: number | null;
@@ -128,12 +124,10 @@ export interface GiftListDetailViewer {
   description: string | null;
   owner_id: number;
   owner_name: string;
-  /** Who the list is *for*, when that differs from the account that owns it. */
+  /** Who the list is *for*, when that differs from the account that owns it: a
+   * person with no account. Read it through `attributionFor` / `recipientLabel`
+   * in `lib/attribution` rather than directly. */
   recipient_name: string | null;
-  /** Whether that person has an account of their own. Three-valued: null means
-   * there is no recipient at all. Never read it directly — go through
-   * `attributionFor` / `recipientLabel` in `lib/attribution`. */
-  recipient_has_account: boolean | null;
   /** The account person this list is marked for, on a shared account. Mutually
    * exclusive with `recipient_name`; both null on a household list. */
   account_person_id: number | null;

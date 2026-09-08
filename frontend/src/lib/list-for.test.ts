@@ -12,7 +12,6 @@ describe("listForPayload", () => {
     expect(listForPayload({ kind: "person", personId: 4 })).toEqual({
       account_person_id: 4,
       recipient_name: null,
-      recipient_has_account: null,
     });
   });
 
@@ -20,12 +19,11 @@ describe("listForPayload", () => {
     expect(
       listForPayload({
         kind: "someone-else",
-        recipient: { enabled: true, name: "Beth", hasAccount: false },
+        recipient: { enabled: true, name: "Beth" },
       }),
     ).toEqual({
       account_person_id: null,
       recipient_name: "Beth",
-      recipient_has_account: false,
     });
   });
 
@@ -33,7 +31,6 @@ describe("listForPayload", () => {
     expect(listForPayload({ kind: "household" })).toEqual({
       account_person_id: null,
       recipient_name: null,
-      recipient_has_account: null,
     });
   });
 
@@ -64,19 +61,16 @@ describe("listForIncomplete", () => {
     expect(listForIncomplete({ kind: "person", personId: 4 }, true)).toBe(false);
   });
 
-  it("blocks 'Someone else' until its own fields are answered", () => {
+  it("blocks 'Someone else' until the name is given", () => {
     expect(listForIncomplete(LIST_FOR_SOMEONE_ELSE, true)).toBe(true);
     expect(
       listForIncomplete(
-        { kind: "someone-else", recipient: { enabled: true, name: "Beth", hasAccount: null } },
+        { kind: "someone-else", recipient: { enabled: true, name: "  " } },
         true,
       ),
     ).toBe(true);
     expect(
-      listForIncomplete(
-        { kind: "someone-else", recipient: { enabled: true, name: "Beth", hasAccount: true } },
-        true,
-      ),
+      listForIncomplete({ kind: "someone-else", recipient: { enabled: true, name: "Beth" } }, true),
     ).toBe(false);
   });
 });
@@ -84,40 +78,26 @@ describe("listForIncomplete", () => {
 describe("listForValueFrom", () => {
   it("seeds a list marked for an account person", () => {
     expect(
-      listForValueFrom({
-        recipient_name: null,
-        recipient_has_account: null,
-        account_person_id: 4,
-      }),
+      listForValueFrom({ recipient_name: null, account_person_id: 4 }),
     ).toEqual({ kind: "person", personId: 4 });
   });
 
   it("seeds a list kept for someone with no account", () => {
     expect(
-      listForValueFrom({
-        recipient_name: "Beth",
-        recipient_has_account: false,
-        account_person_id: null,
-      }),
+      listForValueFrom({ recipient_name: "Beth", account_person_id: null }),
     ).toEqual({
       kind: "someone-else",
-      recipient: { enabled: true, name: "Beth", hasAccount: false },
+      recipient: { enabled: true, name: "Beth" },
     });
   });
 
   it("seeds a list marked for neither as the household answer", () => {
     expect(
-      listForValueFrom({
-        recipient_name: null,
-        recipient_has_account: null,
-        account_person_id: null,
-      }),
+      listForValueFrom({ recipient_name: null, account_person_id: null }),
     ).toEqual({ kind: "household" });
   });
 
   it("tolerates a response predating the account-person columns", () => {
-    expect(listForValueFrom({ recipient_name: null, recipient_has_account: null })).toEqual({
-      kind: "household",
-    });
+    expect(listForValueFrom({ recipient_name: null })).toEqual({ kind: "household" });
   });
 });

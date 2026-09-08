@@ -10,7 +10,6 @@ function list(overrides: Partial<ListLike> = {}): ListLike {
   return {
     owner_name: "Tom",
     recipient_name: null,
-    recipient_has_account: null,
     ...overrides,
   };
 }
@@ -24,30 +23,27 @@ describe("attributionFor", () => {
     });
   });
 
-  it("attributes a recipient who has an account to the recipient alone", () => {
-    // A shared login: Jane is the person a viewer would talk to, so naming the
-    // account as well would be noise.
-    const attribution = attributionFor(
-      list({ recipient_name: "Jane", recipient_has_account: true }),
-    );
-    expect(attribution).toEqual({ kind: "shared", subject: "Jane", keeper: null });
+  it("names both the recipient and the keeper", () => {
+    // A recipient now means one thing only: a person with no account (§5.4), so
+    // a name is all it takes to reach the "kept by" form.
+    expect(attributionFor(list({ recipient_name: "Beth" }))).toEqual({
+      kind: "absent",
+      subject: "Beth",
+      keeper: "Tom",
+    });
   });
 
-  it("names both the absent recipient and the keeper", () => {
-    expect(
-      attributionFor(list({ recipient_name: "Beth", recipient_has_account: false })),
-    ).toEqual({ kind: "absent", subject: "Beth", keeper: "Tom" });
+  it("falls back to the owner when the recipient field is absent entirely", () => {
+    // A response cached from before this column existed.
+    expect(attributionFor({ owner_name: "Tom" })).toEqual({
+      kind: "owner",
+      subject: "Tom",
+      keeper: null,
+    });
   });
 
-  it("falls back to the owner when the fields are absent entirely", () => {
-    // A response cached from before these columns existed.
-    const attribution = attributionFor({ owner_name: "Tom" });
-    expect(attribution).toEqual({ kind: "owner", subject: "Tom", keeper: null });
-  });
-
-  it("treats a recipient named but not yet answered for as having an account", () => {
-    // The safe branch: never claims someone is absent without being told so.
-    expect(attributionFor(list({ recipient_name: "Jane" })).kind).toBe("shared");
+  it("treats a blank recipient name as no recipient", () => {
+    expect(attributionFor(list({ recipient_name: "   " })).kind).toBe("owner");
   });
 
   it("names the sharing person on a direct share", () => {
@@ -71,25 +67,10 @@ describe("attributionFor", () => {
       attributionFor(
         list({
           recipient_name: "Beth",
-          recipient_has_account: false,
           shared_via: { kind: "family", id: 1, name: "Boone Family" },
         }),
       ),
     ).toEqual({ kind: "absent", subject: "Beth", keeper: "Tom" });
-  });
-
-  it("prefers a recipient who has an account over the source label", () => {
-    // `shared_via` replaces the line that named the owner, and nothing else: on a
-    // shared login Jane is still the person a viewer would talk to.
-    expect(
-      attributionFor(
-        list({
-          recipient_name: "Jane",
-          recipient_has_account: true,
-          shared_via: { kind: "family", id: 1, name: "Boone Family" },
-        }),
-      ),
-    ).toEqual({ kind: "shared", subject: "Jane", keeper: null });
   });
 
   it("falls back to the owner when the list carries no source", () => {
@@ -104,10 +85,7 @@ describe("attributionFor", () => {
 
 describe("recipientLabel", () => {
   it("labels the owner's own row with the recipient", () => {
-    expect(recipientLabel(list({ recipient_name: "Beth", recipient_has_account: false })))
-      .toBe("for Beth");
-    expect(recipientLabel(list({ recipient_name: "Jane", recipient_has_account: true })))
-      .toBe("for Jane");
+    expect(recipientLabel(list({ recipient_name: "Beth" }))).toBe("for Beth");
   });
 
   it("is null on a list with no recipient", () => {
@@ -133,15 +111,11 @@ describe("isKeptForAbsentPerson", () => {
     expect(isKeptForAbsentPerson(list())).toBe(false);
   });
 
-  it("is false when the recipient has an account", () => {
-    expect(
-      isKeptForAbsentPerson(list({ recipient_name: "Jane", recipient_has_account: true })),
-    ).toBe(false);
+  it("is true for any named recipient", () => {
+    expect(isKeptForAbsentPerson(list({ recipient_name: "Beth" }))).toBe(true);
   });
 
-  it("is true only for a named recipient without an account", () => {
-    expect(
-      isKeptForAbsentPerson(list({ recipient_name: "Beth", recipient_has_account: false })),
-    ).toBe(true);
+  it("is false for a blank recipient name", () => {
+    expect(isKeptForAbsentPerson(list({ recipient_name: "   " }))).toBe(false);
   });
 });

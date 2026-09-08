@@ -144,9 +144,13 @@ describe("CreateList — list recipients", () => {
     expect(screen.queryByRole("textbox", { name: /who is this list for/i }))
       .not.toBeInTheDocument();
     expect(screen.queryByRole("radio")).not.toBeInTheDocument();
+    // The warning is unconditional inside the disclosure (NEU-1241), so the
+    // closed checkbox is the only thing keeping it off an ordinary self-list.
+    expect(screen.queryByText(/can't claim anything on it yourself/i))
+      .not.toBeInTheDocument();
   });
 
-  it("reveals the name field and the radio pair when checked", async () => {
+  it("reveals the name field and the keeper's warning when checked", async () => {
     server.use(http.get(`${API}/families`, () => HttpResponse.json([])));
 
     renderCreateList(fullModeToken);
@@ -157,71 +161,31 @@ describe("CreateList — list recipients", () => {
 
     expect(screen.getByRole("textbox", { name: /who is this list for/i }))
       .toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: "They use this app" })).not.toBeChecked();
-    expect(screen.getByRole("radio", { name: "They don't use this app" }))
-      .not.toBeChecked();
-  });
-
-  it("uses the typed name in the radio labels", async () => {
-    server.use(http.get(`${API}/families`, () => HttpResponse.json([])));
-
-    renderCreateList(fullModeToken);
-
-    await userEvent.click(await screen.findByRole("checkbox", {
-      name: "This list is for someone else",
-    }));
-    await userEvent.type(
-      screen.getByRole("textbox", { name: /who is this list for/i }),
-      "Beth",
-    );
-
-    expect(screen.getByRole("radio", { name: "Beth uses this app" }))
-      .toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: "Beth doesn't use this app" }))
-      .toBeInTheDocument();
-  });
-
-  it("cannot be submitted while the disclosure is open and no radio is chosen", async () => {
-    server.use(http.get(`${API}/families`, () => HttpResponse.json([])));
-
-    renderCreateList(fullModeToken);
-
-    await userEvent.click(await screen.findByRole("checkbox", {
-      name: "This list is for someone else",
-    }));
-    await userEvent.type(
-      screen.getByRole("textbox", { name: /who is this list for/i }),
-      "Beth",
-    );
-    expect(screen.getByRole("button", { name: /create list/i })).toBeDisabled();
-
-    await userEvent.click(screen.getByRole("radio", { name: "Beth uses this app" }));
-    expect(screen.getByRole("button", { name: /create list/i })).toBeEnabled();
-  });
-
-  it("warns the keeper only when the recipient doesn't use the app", async () => {
-    server.use(http.get(`${API}/families`, () => HttpResponse.json([])));
-
-    renderCreateList(fullModeToken);
-
-    await userEvent.click(await screen.findByRole("checkbox", {
-      name: "This list is for someone else",
-    }));
-    await userEvent.type(
-      screen.getByRole("textbox", { name: /who is this list for/i }),
-      "Beth",
-    );
-
-    await userEvent.click(screen.getByRole("radio", { name: "Beth uses this app" }));
-    expect(screen.queryByText(/can't claim anything on it yourself/i))
-      .not.toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole("radio", { name: "Beth doesn't use this app" }));
+    // "Someone else" means a person with no account and nothing else (NEU-1241),
+    // so the warning is unconditional and there is no radio left to answer.
     expect(screen.getByText(/can't claim anything on it yourself/i)).toBeInTheDocument();
+    expect(screen.queryByRole("radio")).not.toBeInTheDocument();
+  });
+
+  it("uses the typed name in the keeper's warning", async () => {
+    server.use(http.get(`${API}/families`, () => HttpResponse.json([])));
+
+    renderCreateList(fullModeToken);
+
+    await userEvent.click(await screen.findByRole("checkbox", {
+      name: "This list is for someone else",
+    }));
+    expect(screen.getByText(/planning to get them/i)).toBeInTheDocument();
+
+    await userEvent.type(
+      screen.getByRole("textbox", { name: /who is this list for/i }),
+      "Beth",
+    );
+
     expect(screen.getByText(/planning to get Beth/i)).toBeInTheDocument();
   });
 
-  it("posts both recipient fields", async () => {
+  it("posts the recipient name", async () => {
     const posted = postSpy();
 
     renderCreateList(fullModeToken);
@@ -235,18 +199,16 @@ describe("CreateList — list recipients", () => {
       screen.getByRole("textbox", { name: /who is this list for/i }),
       "Beth",
     );
-    await userEvent.click(screen.getByRole("radio", { name: "Beth doesn't use this app" }));
     await userEvent.click(screen.getByRole("button", { name: /create list/i }));
 
     await waitFor(() => expect(posted).toHaveBeenCalled());
     expect(posted.mock.calls[0][0]).toMatchObject({
       name: "Christmas Ideas",
       recipient_name: "Beth",
-      recipient_has_account: false,
     });
   });
 
-  it("posts null for both fields when the disclosure is unchecked again", async () => {
+  it("posts null when the disclosure is unchecked again", async () => {
     const posted = postSpy();
 
     renderCreateList(fullModeToken);
@@ -257,15 +219,11 @@ describe("CreateList — list recipients", () => {
       screen.getByRole("textbox", { name: /who is this list for/i }),
       "Beth",
     );
-    await userEvent.click(screen.getByRole("radio", { name: "Beth doesn't use this app" }));
     await userEvent.click(disclosure());
     await userEvent.click(screen.getByRole("button", { name: /create list/i }));
 
     await waitFor(() => expect(posted).toHaveBeenCalled());
-    expect(posted.mock.calls[0][0]).toMatchObject({
-      recipient_name: null,
-      recipient_has_account: null,
-    });
+    expect(posted.mock.calls[0][0]).toMatchObject({ recipient_name: null });
   });
 
   it("cannot be submitted with the disclosure open and the name left blank", async () => {
@@ -276,10 +234,9 @@ describe("CreateList — list recipients", () => {
     await userEvent.click(await screen.findByRole("checkbox", {
       name: "This list is for someone else",
     }));
-    await userEvent.click(screen.getByRole("radio", { name: "They use this app" }));
 
-    // Submitting here would send null for both fields, silently discarding the
-    // answer and creating an ordinary self-list.
+    // Submitting here would send null, silently discarding the disclosure and
+    // creating an ordinary self-list.
     expect(screen.getByRole("button", { name: /create list/i })).toBeDisabled();
   });
 });
@@ -344,7 +301,6 @@ describe("CreateList — who is this list for (shared account)", () => {
       name: "Gran's List",
       account_person_id: 4,
       recipient_name: null,
-      recipient_has_account: null,
     });
   });
 
@@ -359,8 +315,22 @@ describe("CreateList — who is this list for (shared account)", () => {
     expect(posted.mock.calls[0][0]).toMatchObject({
       account_person_id: null,
       recipient_name: null,
-      recipient_has_account: null,
     });
+  });
+
+  it("shows the keeper's warning under 'Someone else' and nowhere else", async () => {
+    sharedAccountForm();
+
+    await userEvent.click(await screen.findByRole("radio", { name: "Gran" }));
+    expect(screen.queryByText(/can't claim anything on it yourself/i))
+      .not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("radio", { name: "Both of us" }));
+    expect(screen.queryByText(/can't claim anything on it yourself/i))
+      .not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("radio", { name: "Someone else" }));
+    expect(screen.getByText(/can't claim anything on it yourself/i)).toBeInTheDocument();
   });
 
   it("reveals the recipient fields under 'Someone else' and posts the name alone", async () => {
@@ -370,17 +340,16 @@ describe("CreateList — who is this list for (shared account)", () => {
     expect(screen.queryByRole("textbox", { name: /their name/i })).not.toBeInTheDocument();
 
     await userEvent.click(await screen.findByRole("radio", { name: "Someone else" }));
-    await userEvent.type(screen.getByRole("textbox", { name: /their name/i }), "Beth");
-    // Its own question is still unanswered, so the form is still blocked.
+    // The name is still blank at the moment "Someone else" is chosen, so the
+    // form is blocked until it is typed.
     expect(screen.getByRole("button", { name: /create list/i })).toBeDisabled();
 
-    await userEvent.click(screen.getByRole("radio", { name: "Beth doesn't use this app" }));
+    await userEvent.type(screen.getByRole("textbox", { name: /their name/i }), "Beth");
     await userEvent.click(screen.getByRole("button", { name: /create list/i }));
 
     await waitFor(() => expect(posted).toHaveBeenCalled());
     expect(posted.mock.calls[0][0]).toMatchObject({
       recipient_name: "Beth",
-      recipient_has_account: false,
       account_person_id: null,
     });
   });

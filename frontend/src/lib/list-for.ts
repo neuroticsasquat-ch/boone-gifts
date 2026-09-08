@@ -29,7 +29,7 @@ export type ListForValue =
   /** One of the account's own people. */
   | { kind: "person"; personId: number }
   /** A person with no account, named by `RecipientFields`. `recipient.enabled` is
-   *  always true in this branch — the radio is the disclosure. */
+   *  always true in this branch — the picker's radio is the disclosure. */
   | { kind: "someone-else"; recipient: RecipientValue };
 
 /** Where a shared account's create form starts: the answer is required, and there
@@ -46,7 +46,6 @@ export const LIST_FOR_SOMEONE_ELSE: ListForValue = {
  *  neither field reads as "Both of us" — which is what it is. */
 export function listForValueFrom(list: {
   recipient_name: string | null;
-  recipient_has_account?: boolean | null;
   account_person_id?: number | null;
 }): ListForValue {
   if (list.recipient_name !== null) {
@@ -64,28 +63,19 @@ export function listForValueFrom(list: {
  * one set — `PUT /lists/{id}` is a partial update, and omitting the other would
  * leave the old label standing beside the new one, which the service rejects as a
  * 400.
- *
- * `recipient_has_account` rides along for `RecipientFields`' radio alone. The
- * backend dropped the column in NEU-1230 and ignores the field; NEU-1241 deletes
- * the radio and this third key with it.
  */
 export function listForPayload(value: ListForValue): {
   recipient_name: string | null;
-  recipient_has_account: boolean | null;
   account_person_id: number | null;
 } {
   switch (value.kind) {
     case "person":
-      return {
-        recipient_name: null,
-        recipient_has_account: null,
-        account_person_id: value.personId,
-      };
+      return { recipient_name: null, account_person_id: value.personId };
     case "someone-else":
       return { ...recipientPayload(value.recipient), account_person_id: null };
     default:
       // "Both of us", and the unanswered state a form never submits.
-      return { recipient_name: null, recipient_has_account: null, account_person_id: null };
+      return { recipient_name: null, account_person_id: null };
   }
 }
 

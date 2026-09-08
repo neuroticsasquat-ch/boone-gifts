@@ -606,10 +606,9 @@ describe("ListDetail — add to an occasion", () => {
 });
 
 describe("ListDetail — list recipients", () => {
-  const withRecipient = (base: object, name: string | null, hasAccount: boolean | null) => ({
+  const withRecipient = (base: object, name: string | null) => ({
     ...base,
     recipient_name: name,
-    recipient_has_account: hasAccount,
   });
 
   function serveList(list: object) {
@@ -637,26 +636,21 @@ describe("ListDetail — list recipients", () => {
   // --- viewer attribution ---
 
   it("shows the owner on a list with no recipient", async () => {
-    serveList(withRecipient(viewerListDetail, null, null));
+    serveList(withRecipient(viewerListDetail, null));
     renderListDetail(viewerToken);
     expect(await screen.findByText("from Owner")).toBeInTheDocument();
   });
 
-  it("shows the recipient alone when they have an account", async () => {
-    serveList(withRecipient(viewerListDetail, "Jane", true));
-    renderListDetail(viewerToken);
-    expect(await screen.findByText("from Jane")).toBeInTheDocument();
-    expect(screen.queryByText(/kept by/)).not.toBeInTheDocument();
-  });
-
-  it("names the keeper when the recipient has no account", async () => {
-    serveList(withRecipient(viewerListDetail, "Beth", false));
+  it("names the keeper on any list with a recipient", async () => {
+    // A recipient is now always a person with no account (NEU-1241), so this is
+    // the only form a named recipient takes.
+    serveList(withRecipient(viewerListDetail, "Beth"));
     renderListDetail(viewerToken);
     expect(await screen.findByText(/for Beth · kept by Owner/)).toBeInTheDocument();
   });
 
   it("never shows the keeper's warning to a viewer", async () => {
-    serveList(withRecipient(viewerListDetail, "Beth", false));
+    serveList(withRecipient(viewerListDetail, "Beth"));
     renderListDetail(viewerToken);
     await screen.findByText(/for Beth · kept by Owner/);
     expect(screen.queryByText(/Leave off anything you're buying/)).not.toBeInTheDocument();
@@ -665,28 +659,21 @@ describe("ListDetail — list recipients", () => {
   // --- owner header ---
 
   it("labels the owner's own recipient list", async () => {
-    serveList(withRecipient(ownerListDetail, "Beth", false));
+    serveList(withRecipient(ownerListDetail, "Beth"));
     renderListDetail(ownerToken);
     expect(await screen.findByText("for Beth")).toBeInTheDocument();
   });
 
-  it("shows the keeper's warning to the owner of an absent-recipient list", async () => {
-    serveList(withRecipient(ownerListDetail, "Beth", false));
+  it("shows the keeper's warning to the owner of a recipient list", async () => {
+    serveList(withRecipient(ownerListDetail, "Beth"));
     renderListDetail(ownerToken);
     expect(
       await screen.findByText(/You can't see or make claims on Beth's list/),
     ).toBeInTheDocument();
   });
 
-  it("shows no warning when the recipient has an account", async () => {
-    serveList(withRecipient(ownerListDetail, "Jane", true));
-    renderListDetail(ownerToken);
-    expect(await screen.findByText("for Jane")).toBeInTheDocument();
-    expect(screen.queryByText(/can't see or make claims/)).not.toBeInTheDocument();
-  });
-
   it("shows nothing extra on the owner's list with no recipient", async () => {
-    serveList(withRecipient(ownerListDetail, null, null));
+    serveList(withRecipient(ownerListDetail, null));
     renderListDetail(ownerToken);
     await screen.findByText("My Wishlist");
     expect(screen.queryByText(/^for /)).not.toBeInTheDocument();
@@ -697,11 +684,11 @@ describe("ListDetail — list recipients", () => {
 
   it("seeds the edit control from the list and can clear the recipient", async () => {
     const put = vi.fn();
-    serveList(withRecipient(ownerListDetail, "Beth", false));
+    serveList(withRecipient(ownerListDetail, "Beth"));
     server.use(
       http.put(`${API}/lists/1`, async ({ request }) => {
         put(await request.json());
-        return HttpResponse.json(withRecipient(ownerListDetail, null, null));
+        return HttpResponse.json(withRecipient(ownerListDetail, null));
       }),
     );
 
@@ -716,26 +703,23 @@ describe("ListDetail — list recipients", () => {
     expect(disclosure).toBeChecked();
     expect(screen.getByRole("textbox", { name: /who is this list for/i }))
       .toHaveValue("Beth");
-    expect(screen.getByRole("radio", { name: "Beth doesn't use this app" }))
-      .toBeChecked();
+    // Nothing left to answer beside the name (NEU-1241).
+    expect(screen.queryByRole("radio")).not.toBeInTheDocument();
 
     await userEvent.click(disclosure);
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(put).toHaveBeenCalled());
-    expect(put.mock.calls[0][0]).toMatchObject({
-      recipient_name: null,
-      recipient_has_account: null,
-    });
+    expect(put.mock.calls[0][0]).toMatchObject({ recipient_name: null });
   });
 
   it("can switch a self-list to a recipient list", async () => {
     const put = vi.fn();
-    serveList(withRecipient(ownerListDetail, null, null));
+    serveList(withRecipient(ownerListDetail, null));
     server.use(
       http.put(`${API}/lists/1`, async ({ request }) => {
         put(await request.json());
-        return HttpResponse.json(withRecipient(ownerListDetail, "Jane", true));
+        return HttpResponse.json(withRecipient(ownerListDetail, "Jane"));
       }),
     );
 
@@ -750,18 +734,14 @@ describe("ListDetail — list recipients", () => {
       screen.getByRole("textbox", { name: /who is this list for/i }),
       "Jane",
     );
-    await userEvent.click(screen.getByRole("radio", { name: "Jane uses this app" }));
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(put).toHaveBeenCalled());
-    expect(put.mock.calls[0][0]).toMatchObject({
-      recipient_name: "Jane",
-      recipient_has_account: true,
-    });
+    expect(put.mock.calls[0][0]).toMatchObject({ recipient_name: "Jane" });
   });
 
-  it("cannot save while the disclosure is open and no radio is chosen", async () => {
-    serveList(withRecipient(ownerListDetail, null, null));
+  it("cannot save while the disclosure is open and the name is blank", async () => {
+    serveList(withRecipient(ownerListDetail, null));
     renderListDetail(ownerToken);
 
     await userEvent.click(await screen.findByRole("button", { name: "List actions" }));
@@ -776,24 +756,15 @@ describe("ListDetail — list recipients", () => {
   // --- link placement (§2.5) ---
 
   it("links the owner's name on a list with no recipient", async () => {
-    serveListConnectedToOwner(withRecipient(viewerListDetail, null, null));
+    serveListConnectedToOwner(withRecipient(viewerListDetail, null));
     renderListDetail(viewerToken);
 
     const link = await screen.findByRole("link", { name: "Owner" });
     expect(link).toHaveAttribute("href", "/people/55");
   });
 
-  it("links the recipient's name on a shared-account list — same owner profile", async () => {
-    serveListConnectedToOwner(withRecipient(viewerListDetail, "Jane", true));
-    renderListDetail(viewerToken);
-
-    // Jane is the name showing, but the account behind the list is still the owner's.
-    const link = await screen.findByRole("link", { name: "Jane" });
-    expect(link).toHaveAttribute("href", "/people/55");
-  });
-
   it("puts the link on the keeper, leaving the absent recipient plain text", async () => {
-    serveListConnectedToOwner(withRecipient(viewerListDetail, "Beth", false));
+    serveListConnectedToOwner(withRecipient(viewerListDetail, "Beth"));
     renderListDetail(viewerToken);
 
     const link = await screen.findByRole("link", { name: "Owner" });
@@ -802,20 +773,6 @@ describe("ListDetail — list recipients", () => {
     expect(screen.queryByRole("link", { name: "Beth" })).not.toBeInTheDocument();
   });
 
-  it("cannot save with the disclosure open and the name left blank", async () => {
-    serveList(withRecipient(ownerListDetail, null, null));
-    renderListDetail(ownerToken);
-
-    await userEvent.click(await screen.findByRole("button", { name: "List actions" }));
-    await userEvent.click(screen.getByRole("button", { name: "Edit" }));
-    await userEvent.click(
-      screen.getByRole("checkbox", { name: "This list is for someone else" }),
-    );
-    await userEvent.click(screen.getByRole("radio", { name: "They use this app" }));
-
-    // Submitting here would silently save a plain self-list.
-    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
-  });
 });
 
 describe("ListDetail — who is this list for (shared account)", () => {
@@ -831,7 +788,6 @@ describe("ListDetail — who is this list for (shared account)", () => {
   const markedFor = (personId: number | null, personName: string | null) => ({
     ...ownerListDetail,
     recipient_name: null,
-    recipient_has_account: null,
     account_person_id: personId,
     account_person_name: personName,
   });
@@ -883,7 +839,6 @@ describe("ListDetail — who is this list for (shared account)", () => {
     expect(put.mock.calls[0][0]).toMatchObject({
       account_person_id: 5,
       recipient_name: null,
-      recipient_has_account: null,
     });
   });
 
@@ -911,14 +866,12 @@ describe("ListDetail — who is this list for (shared account)", () => {
 
     await userEvent.click(screen.getByRole("radio", { name: "Someone else" }));
     await userEvent.type(screen.getByRole("textbox", { name: /their name/i }), "Beth");
-    await userEvent.click(screen.getByRole("radio", { name: "Beth doesn't use this app" }));
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(put).toHaveBeenCalled());
     expect(put.mock.calls[0][0]).toMatchObject({
       account_person_id: null,
       recipient_name: "Beth",
-      recipient_has_account: false,
     });
   });
 });
@@ -938,7 +891,6 @@ describe("ListDetail — the edit picker while the account is still loading", ()
         HttpResponse.json({
           ...ownerListDetail,
           recipient_name: null,
-          recipient_has_account: null,
           account_person_id: 4,
           account_person_name: "Gran",
         }),

@@ -299,11 +299,9 @@ function ViewerHeader({
   const connectionId = connections.data?.find((c) => c.user.id === list.owner_id)?.id;
   const attribution = attributionFor(list);
 
-  // The link always points at the owner's profile — the account behind the list —
-  // whichever name is showing. On a shared-account list that name is the
-  // recipient's, which is still the right profile to reach. On an "absent" list
-  // the link moves to the keeper: linking "Beth" to Tom's profile would simply
-  // be wrong.
+  // The link always points at the owner's profile — the account behind the list.
+  // On an "absent" list the link moves to the keeper rather than the recipient:
+  // linking "Beth" to Tom's profile would simply be wrong.
   const linkToOwner = (label: string) =>
     connectionId ? (
       <Link to={`/people/${connectionId}`} className="text-blue-600 hover:underline">{label}</Link>

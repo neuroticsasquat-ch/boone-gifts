@@ -71,7 +71,6 @@ function sharedList(overrides: Record<string, unknown>) {
     owner_id: 2,
     owner_name: "Jane Boone",
     recipient_name: null,
-    recipient_has_account: null,
     is_archived: false,
     gift_count: 0,
     claimed_count: 0,
@@ -190,7 +189,7 @@ describe("Lists", () => {
         }),
         sharedList({
           id: 3, name: "Beth's List", owner_name: "Tom Boone",
-          recipient_name: "Beth", recipient_has_account: false,
+          recipient_name: "Beth",
           shared_via: { kind: "family", id: 1, name: "Boone Family" },
         }),
       ],

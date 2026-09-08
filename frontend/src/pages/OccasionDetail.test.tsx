@@ -251,10 +251,10 @@ describe("OccasionDetail", () => {
           ...sampleOccasion,
           lists: [
             { id: 30, name: "Beth's List", description: null, owner_id: 3, owner_name: "Tom",
-              recipient_name: "Beth", recipient_has_account: false,
+              recipient_name: "Beth",
               created_at: "2026-01-01", updated_at: "2026-01-01" },
             { id: 31, name: "Plain List", description: null, owner_id: 4, owner_name: "Alice",
-              recipient_name: null, recipient_has_account: null,
+              recipient_name: null,
               created_at: "2026-01-01", updated_at: "2026-01-01" },
           ],
         })

@@ -3,10 +3,8 @@
  * live, so the display sites cannot drift apart (NEU-1216 §2.5).
  *
  * A list names who it is *for* (`recipient_name`) separately from the account
- * that owns it. `recipient_has_account` is three-valued and must never be read
- * directly by a caller: `!recipient_has_account` is also true for a list with no
- * recipient at all, which is exactly how the "kept by" label and the keeper's
- * warning would get shown by mistake.
+ * that owns it. Since NEU-1241 a recipient means exactly one thing: a person
+ * with no account, whose list someone else keeps (project spec §5.4).
  */
 
 import type { SharedVia } from "../types";
@@ -14,10 +12,9 @@ import type { SharedVia } from "../types";
 /** The fields of a list this module reads. Structural, so every list shape fits. */
 export interface ListLike {
   owner_name: string;
-  // Optional, not because the API omits them, but because a response cached from
-  // before these columns existed does.
+  // Optional, not because the API omits it, but because a response cached from
+  // before this column existed does.
   recipient_name?: string | null;
-  recipient_has_account?: boolean | null;
   /** The account person this list is marked for, on a shared account (NEU-1237).
    * Read only by the owner-side `recipientLabel`: an account person is a label
    * *inside* the account, and to everyone else the account is one identity
@@ -32,8 +29,6 @@ export type ListAttribution =
   /** No recipient: the person the list came from — the sharing user when the
    *  list carries one, else its owner. "from {subject}" */
   | { kind: "owner"; subject: string; keeper: null }
-  /** A recipient who has an account — typically a shared login. "from {subject}" */
-  | { kind: "shared"; subject: string; keeper: null }
   /** Reached the viewer through a family they belong to. The family is a source,
    *  not a person, so it reads as a bare label: "{subject}" */
   | { kind: "family"; subject: string; keeper: null }
@@ -43,23 +38,19 @@ export type ListAttribution =
 
 /**
  * How a *viewer* sees this list. `kind` selects the preposition and tells the
- * caller which half to link: `subject` for "owner"/"shared", `keeper` for
- * "absent" — linking the absent recipient's name to the keeper's profile would
- * simply be wrong. "family" names a group, so it has no profile to link at all.
+ * caller which half to link: `subject` for "owner", `keeper` for "absent" —
+ * linking the absent recipient's name to the keeper's profile would simply be
+ * wrong. "family" names a group, so it has no profile to link at all.
  *
- * Who the list is *for* still comes first: a recipient — absent or not — outranks
- * `shared_via`, which replaces only the line that used to name the owner and
- * nothing else (NEU-1235). So a list kept for Beth reads "for Beth · kept by Tom"
- * however it reached the viewer, and a shared login's list still reads "from Jane"
- * rather than naming the account or the family it came through.
+ * Who the list is *for* still comes first: a recipient outranks `shared_via`,
+ * which replaces only the line that used to name the owner and nothing else
+ * (NEU-1235). So a list kept for Beth reads "for Beth · kept by Tom" however it
+ * reached the viewer.
  */
 export function attributionFor(list: ListLike): ListAttribution {
   const recipient = recipientNameOf(list);
   if (recipient !== null) {
-    if (list.recipient_has_account === false) {
-      return { kind: "absent", subject: recipient, keeper: list.owner_name };
-    }
-    return { kind: "shared", subject: recipient, keeper: null };
+    return { kind: "absent", subject: recipient, keeper: list.owner_name };
   }
   if (list.shared_via?.kind === "family") {
     return { kind: "family", subject: list.shared_via.name, keeper: null };
@@ -94,15 +85,16 @@ export function accountPersonNameOf(list: ListLike): string | null {
 /**
  * Whether this list is kept on behalf of someone who has no account and will
  * never log in — the only state in which the keeper's warning applies. Mirrors
- * `GiftList.kept_for_absent_person` on the backend.
+ * `GiftList.kept_for_absent_person` on the backend, which is likewise now just
+ * "has a recipient name" (NEU-1230).
  */
 export function isKeptForAbsentPerson(list: ListLike): boolean {
-  return recipientNameOf(list) !== null && list.recipient_has_account === false;
+  return recipientNameOf(list) !== null;
 }
 
 /**
  * The recipient's name, or null when there isn't one. Collapses the shapes a
- * caller can actually hold: a response predating these columns omits the field
+ * caller can actually hold: a response predating this column omits the field
  * entirely, and an empty name is no name (the backend normalizes it to NULL).
  */
 export function recipientNameOf(list: ListLike): string | null {

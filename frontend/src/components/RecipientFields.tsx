@@ -26,11 +26,7 @@ export function RecipientFields({
           type="checkbox"
           checked={value.enabled}
           onChange={(e) =>
-            onChange(
-              e.target.checked
-                ? { ...value, enabled: true }
-                : { enabled: false, name: "", hasAccount: null },
-            )
+            onChange(e.target.checked ? { ...value, enabled: true } : { enabled: false, name: "" })
           }
           className="rounded border-gray-300"
         />
@@ -47,13 +43,14 @@ export function RecipientFields({
 }
 
 /**
- * Who the list is for and whether they use the app — the body of the control,
- * with no disclosure of its own. Rendered under the checkbox above, and under
- * "Someone else" in the shared-account picker.
+ * Who the list is for — the body of the control, with no disclosure of its own.
+ * Rendered under the checkbox above, and under "Someone else" in the
+ * shared-account picker.
  *
- * The radio is required rather than a default-off checkbox because the flag is a
- * property of the person, not the list, and a default is exactly how it would
- * drift across that person's lists.
+ * "Someone else" now means one thing only: a person who does not use the app
+ * (NEU-1241; project spec §5.4). The co-resident case the old "they use this
+ * app" radio described is the account-people picker instead, so the keeper's
+ * warning is unconditional here — it is the only case left.
  *
  * `nameLabel` exists because the same field asks a differently-shaped question in
  * each place: standing alone it *is* "Who is this list for?", while under the
@@ -69,13 +66,6 @@ export function RecipientDetails({
   nameLabel?: string;
 }) {
   const displayName = value.name.trim();
-  // Before a name is typed the radio still has to read as a sentence, and the
-  // fallback subject is plural: "Beth uses this app" but "They use this app",
-  // so the verb travels with the subject.
-  const usesLabel = displayName ? `${displayName} uses this app` : "They use this app";
-  const doesNotUseLabel = displayName
-    ? `${displayName} doesn't use this app`
-    : "They don't use this app";
   // In the warning the name appears twice, once as an object and once as a
   // subject, so the fallback needs both cases to stay grammatical.
   const warningObject = displayName || "them";
@@ -93,37 +83,12 @@ export function RecipientDetails({
         />
       </label>
 
-      <div role="radiogroup" aria-label="Does this person use the app?" className="space-y-2">
-        <label className="flex items-center gap-2">
-          <input
-            type="radio"
-            name="recipient-has-account"
-            checked={value.hasAccount === true}
-            onChange={() => onChange({ ...value, hasAccount: true })}
-            className="border-gray-300"
-          />
-          <span className="text-sm text-gray-700">{usesLabel}</span>
-        </label>
-        <label className="flex items-center gap-2">
-          <input
-            type="radio"
-            name="recipient-has-account"
-            checked={value.hasAccount === false}
-            onChange={() => onChange({ ...value, hasAccount: false })}
-            className="border-gray-300"
-          />
-          <span className="text-sm text-gray-700">{doesNotUseLabel}</span>
-        </label>
-      </div>
-
-      {value.hasAccount === false && (
-        <p className="text-sm text-gray-600">
-          You won't see who's claimed what on this list, and you can't claim anything on
-          it yourself. So if there's something you're planning to get {warningObject},
-          leave it off — otherwise someone else may buy it too, and {warningSubject} will
-          end up with two.
-        </p>
-      )}
+      <p className="text-sm text-gray-600">
+        You won't see who's claimed what on this list, and you can't claim anything on
+        it yourself. So if there's something you're planning to get {warningObject},
+        leave it off — otherwise someone else may buy it too, and {warningSubject} will
+        end up with two.
+      </p>
     </>
   );
 }
