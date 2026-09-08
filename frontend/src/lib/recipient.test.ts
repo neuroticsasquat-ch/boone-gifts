@@ -56,6 +56,16 @@ describe("recipientIncomplete", () => {
 });
 
 describe("recipientValueFrom", () => {
+  it("reads a response that omits the dropped has-account column as unanswered", () => {
+    // The backend dropped `recipient_has_account` (NEU-1230) before the radio
+    // itself goes (NEU-1241). `undefined` here would read as *answered*, letting
+    // an edit save with neither radio selected.
+    const value = recipientValueFrom({ recipient_name: "Beth" });
+    expect(value.hasAccount).toBeNull();
+    expect(recipientIncomplete(value)).toBe(true);
+  });
+
+
   it("seeds from a list with a recipient", () => {
     expect(
       recipientValueFrom({ recipient_name: "Beth", recipient_has_account: false }),

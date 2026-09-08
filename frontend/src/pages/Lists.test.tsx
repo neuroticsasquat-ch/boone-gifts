@@ -507,3 +507,26 @@ describe("Lists — empty states", () => {
     expect(screen.getByText("No archived lists shared with you.")).toBeInTheDocument();
   });
 });
+
+describe("Lists — shared account labels", () => {
+  // On a shared account the owner's own rows say which of the account's people
+  // each list is for (NEU-1237). A household list says nothing, which is the
+  // same as every row on a non-shared account.
+  it("labels an owned row with the person it is marked for", async () => {
+    lists({
+      owned: [
+        ownedList({
+          id: 1, name: "Gran's List",
+          account_person_id: 4, account_person_name: "Gran",
+        }),
+        ownedList({ id: 2, name: "Christmas 2026" }),
+      ],
+    });
+
+    renderLists();
+
+    expect(await screen.findByText("Gran's List")).toBeInTheDocument();
+    expect(screen.getByText("for Gran")).toBeInTheDocument();
+    expect(screen.getAllByText(/^for /)).toHaveLength(1);
+  });
+});

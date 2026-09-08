@@ -283,3 +283,142 @@ describe("CreateList — list recipients", () => {
     expect(screen.getByRole("button", { name: /create list/i })).toBeDisabled();
   });
 });
+
+describe("CreateList — who is this list for (shared account)", () => {
+  const sharedAccount = {
+    is_shared_account: true,
+    people: [
+      { id: 4, name: "Gran" },
+      { id: 5, name: "Grandpa" },
+    ],
+  };
+
+  function sharedAccountForm(authToken = fullModeToken) {
+    const posted = vi.fn();
+    server.use(
+      http.get(`${API}/families`, () => HttpResponse.json([])),
+      http.get(`${API}/account`, () => HttpResponse.json(sharedAccount)),
+      http.post(`${API}/lists`, async ({ request }) => {
+        posted(await request.json());
+        return HttpResponse.json({ id: 1 }, { status: 201 });
+      }),
+    );
+    renderCreateList(authToken);
+    return posted;
+  }
+
+  it("asks who the list is for, naming the account's people", async () => {
+    sharedAccountForm();
+
+    expect(await screen.findByRole("radio", { name: "Gran" })).not.toBeChecked();
+    expect(screen.getByRole("radio", { name: "Grandpa" })).not.toBeChecked();
+    expect(screen.getByRole("radio", { name: "Both of us" })).not.toBeChecked();
+    expect(screen.getByRole("radio", { name: "Someone else" })).not.toBeChecked();
+    // The picker replaces the standalone disclosure — "Someone else" is one of
+    // its answers, not a checkbox beside it.
+    expect(
+      screen.queryByRole("checkbox", { name: "This list is for someone else" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("cannot be submitted until the question is answered", async () => {
+    sharedAccountForm();
+
+    await userEvent.type(await screen.findByRole("textbox", { name: /^name/i }), "Christmas");
+    await screen.findByRole("radio", { name: "Gran" });
+    expect(screen.getByRole("button", { name: /create list/i })).toBeDisabled();
+
+    await userEvent.click(screen.getByRole("radio", { name: "Gran" }));
+    expect(screen.getByRole("button", { name: /create list/i })).toBeEnabled();
+  });
+
+  it("posts the chosen person and no recipient", async () => {
+    const posted = sharedAccountForm();
+
+    await userEvent.type(await screen.findByRole("textbox", { name: /^name/i }), "Gran's List");
+    await userEvent.click(await screen.findByRole("radio", { name: "Gran" }));
+    await userEvent.click(screen.getByRole("button", { name: /create list/i }));
+
+    await waitFor(() => expect(posted).toHaveBeenCalled());
+    expect(posted.mock.calls[0][0]).toMatchObject({
+      name: "Gran's List",
+      account_person_id: 4,
+      recipient_name: null,
+      recipient_has_account: null,
+    });
+  });
+
+  it("posts nulls for 'Both of us' — a household list", async () => {
+    const posted = sharedAccountForm();
+
+    await userEvent.type(await screen.findByRole("textbox", { name: /^name/i }), "Ours");
+    await userEvent.click(await screen.findByRole("radio", { name: "Both of us" }));
+    await userEvent.click(screen.getByRole("button", { name: /create list/i }));
+
+    await waitFor(() => expect(posted).toHaveBeenCalled());
+    expect(posted.mock.calls[0][0]).toMatchObject({
+      account_person_id: null,
+      recipient_name: null,
+      recipient_has_account: null,
+    });
+  });
+
+  it("reveals the recipient fields under 'Someone else' and posts the name alone", async () => {
+    const posted = sharedAccountForm();
+
+    await userEvent.type(await screen.findByRole("textbox", { name: /^name/i }), "Beth's List");
+    expect(screen.queryByRole("textbox", { name: /their name/i })).not.toBeInTheDocument();
+
+    await userEvent.click(await screen.findByRole("radio", { name: "Someone else" }));
+    await userEvent.type(screen.getByRole("textbox", { name: /their name/i }), "Beth");
+    // Its own question is still unanswered, so the form is still blocked.
+    expect(screen.getByRole("button", { name: /create list/i })).toBeDisabled();
+
+    await userEvent.click(screen.getByRole("radio", { name: "Beth doesn't use this app" }));
+    await userEvent.click(screen.getByRole("button", { name: /create list/i }));
+
+    await waitFor(() => expect(posted).toHaveBeenCalled());
+    expect(posted.mock.calls[0][0]).toMatchObject({
+      recipient_name: "Beth",
+      recipient_has_account: false,
+      account_person_id: null,
+    });
+  });
+
+  it("clears the typed recipient when a person is chosen instead", async () => {
+    const posted = sharedAccountForm();
+
+    await userEvent.type(await screen.findByRole("textbox", { name: /^name/i }), "Mine");
+    await userEvent.click(await screen.findByRole("radio", { name: "Someone else" }));
+    await userEvent.type(screen.getByRole("textbox", { name: /their name/i }), "Beth");
+    await userEvent.click(screen.getByRole("radio", { name: "Grandpa" }));
+
+    expect(screen.queryByRole("textbox", { name: /their name/i })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /create list/i }));
+    await waitFor(() => expect(posted).toHaveBeenCalled());
+    expect(posted.mock.calls[0][0]).toMatchObject({
+      account_person_id: 5,
+      recipient_name: null,
+    });
+  });
+
+  it("asks the same question in simple mode — a shared household is its audience", async () => {
+    sharedAccountForm(simpleModeToken);
+
+    expect(await screen.findByRole("radio", { name: "Gran" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Both of us" })).toBeInTheDocument();
+  });
+
+  it("shows no picker at all on a non-shared account", async () => {
+    server.use(http.get(`${API}/families`, () => HttpResponse.json([])));
+
+    renderCreateList(fullModeToken);
+
+    expect(
+      await screen.findByRole("checkbox", { name: "This list is for someone else" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: "Both of us" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: "Someone else" })).not.toBeInTheDocument();
+  });
+});

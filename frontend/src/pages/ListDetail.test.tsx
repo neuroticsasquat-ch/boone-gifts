@@ -817,3 +817,155 @@ describe("ListDetail — list recipients", () => {
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
   });
 });
+
+describe("ListDetail — who is this list for (shared account)", () => {
+  const sharedAccount = {
+    is_shared_account: true,
+    people: [
+      { id: 4, name: "Gran" },
+      { id: 5, name: "Grandpa" },
+    ],
+  };
+
+  /** An owner's list, optionally already marked for one of the account's people. */
+  const markedFor = (personId: number | null, personName: string | null) => ({
+    ...ownerListDetail,
+    recipient_name: null,
+    recipient_has_account: null,
+    account_person_id: personId,
+    account_person_name: personName,
+  });
+
+  function serveSharedAccount(list: object) {
+    const put = vi.fn();
+    server.use(
+      http.get(`${API}/lists/1`, () => HttpResponse.json(list)),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
+      http.get(`${API}/account`, () => HttpResponse.json(sharedAccount)),
+      http.put(`${API}/lists/1`, async ({ request }) => {
+        put(await request.json());
+        return HttpResponse.json(list);
+      }),
+    );
+    return put;
+  }
+
+  async function openEditor() {
+    await userEvent.click(await screen.findByRole("button", { name: "List actions" }));
+    await userEvent.click(screen.getByRole("button", { name: "Edit" }));
+    // The picker only replaces the disclosure once GET /account has answered.
+    await screen.findByRole("radio", { name: "Gran" });
+  }
+
+  it("labels the header with the person the list is marked for", async () => {
+    serveSharedAccount(markedFor(4, "Gran"));
+
+    renderListDetail(ownerToken);
+
+    expect(await screen.findByText("for Gran")).toBeInTheDocument();
+  });
+
+  it("seeds the picker from the list and can move it to the other person", async () => {
+    const put = serveSharedAccount(markedFor(4, "Gran"));
+
+    renderListDetail(ownerToken);
+    await openEditor();
+
+    expect(screen.getByRole("radio", { name: "Gran" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Grandpa" })).not.toBeChecked();
+
+    await userEvent.click(screen.getByRole("radio", { name: "Grandpa" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(put).toHaveBeenCalled());
+    expect(put.mock.calls[0][0]).toMatchObject({
+      account_person_id: 5,
+      recipient_name: null,
+      recipient_has_account: null,
+    });
+  });
+
+  it("seeds a list marked for neither as the household answer", async () => {
+    const put = serveSharedAccount(markedFor(null, null));
+
+    renderListDetail(ownerToken);
+    await openEditor();
+
+    expect(screen.getByRole("radio", { name: "Both of us" })).toBeChecked();
+
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(put).toHaveBeenCalled());
+    expect(put.mock.calls[0][0]).toMatchObject({
+      account_person_id: null,
+      recipient_name: null,
+    });
+  });
+
+  it("clears the person when the list moves to someone else", async () => {
+    const put = serveSharedAccount(markedFor(4, "Gran"));
+
+    renderListDetail(ownerToken);
+    await openEditor();
+
+    await userEvent.click(screen.getByRole("radio", { name: "Someone else" }));
+    await userEvent.type(screen.getByRole("textbox", { name: /their name/i }), "Beth");
+    await userEvent.click(screen.getByRole("radio", { name: "Beth doesn't use this app" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(put).toHaveBeenCalled());
+    expect(put.mock.calls[0][0]).toMatchObject({
+      account_person_id: null,
+      recipient_name: "Beth",
+      recipient_has_account: false,
+    });
+  });
+});
+
+describe("ListDetail — the edit picker while the account is still loading", () => {
+  // Until GET /account answers there is no honest way to draw a list already
+  // marked for one of the account's people: the non-shared disclosure would read
+  // "for no one", and one click on it would send exactly that.
+  it("shows no recipient control at all, rather than an unchecked disclosure", async () => {
+    let releaseAccount: (() => void) | undefined;
+    const accountPending = new Promise<void>((resolve) => {
+      releaseAccount = resolve;
+    });
+
+    server.use(
+      http.get(`${API}/lists/1`, () =>
+        HttpResponse.json({
+          ...ownerListDetail,
+          recipient_name: null,
+          recipient_has_account: null,
+          account_person_id: 4,
+          account_person_name: "Gran",
+        }),
+      ),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
+      http.get(`${API}/account`, async () => {
+        await accountPending;
+        return HttpResponse.json({
+          is_shared_account: true,
+          people: [{ id: 4, name: "Gran" }, { id: 5, name: "Grandpa" }],
+        });
+      }),
+    );
+
+    renderListDetail(ownerToken);
+
+    await userEvent.click(await screen.findByRole("button", { name: "List actions" }));
+    await userEvent.click(screen.getByRole("button", { name: "Edit" }));
+
+    expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("checkbox", { name: "This list is for someone else" }),
+    ).not.toBeInTheDocument();
+
+    releaseAccount!();
+    expect(await screen.findByRole("radio", { name: "Gran" })).toBeChecked();
+  });
+});

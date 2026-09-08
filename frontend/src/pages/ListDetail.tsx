@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from "react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getList, updateList, deleteList } from "../api/lists";
 import { getConnections } from "../api/connections";
+import { getAccount } from "../api/account";
 import { useAuth } from "../hooks/useAuth";
 import { useTitle } from "../hooks/useTitle";
 import type { GiftListDetailOwner, GiftListDetailViewer } from "../types";
@@ -14,13 +15,13 @@ import { SharingPanel } from "./list-detail/SharingPanel";
 import { SharingSummary } from "./list-detail/SharingSummary";
 import { OccasionPicker } from "./list-detail/OccasionPicker";
 import { attributionFor, isKeptForAbsentPerson, recipientLabel, recipientNameOf } from "../lib/attribution";
-import { RecipientFields } from "../components/RecipientFields";
+import { ListForFields } from "../components/ListForFields";
 import {
-  recipientIncomplete,
-  recipientPayload,
-  recipientValueFrom,
-  type RecipientValue,
-} from "../lib/recipient";
+  listForIncomplete,
+  listForPayload,
+  listForValueFrom,
+  type ListForValue,
+} from "../lib/list-for";
 
 function isOwnerView(list: GiftListDetailOwner | GiftListDetailViewer, userId: number): list is GiftListDetailOwner {
   return list.owner_id === userId;
@@ -386,9 +387,10 @@ function EditListHeader({
 }) {
   const [name, setName] = useState(list.name);
   const [description, setDescription] = useState(list.description ?? "");
-  // Every transition is permitted — both fields are display-only, so nothing
+  // Every transition is permitted — all three fields are display-only, so nothing
   // cascades: no access path shifts and no claim is invalidated.
-  const [recipient, setRecipient] = useState<RecipientValue>(recipientValueFrom(list));
+  const [listFor, setListFor] = useState<ListForValue>(listForValueFrom(list));
+  const account = useQuery({ queryKey: ["account"], queryFn: getAccount });
 
   const mutation = useMutation({
     mutationFn: (data: Parameters<typeof updateList>[1]) => updateList(listId, data),
@@ -404,7 +406,7 @@ function EditListHeader({
     mutation.mutate({
       name,
       description: description || undefined,
-      ...recipientPayload(recipient),
+      ...listForPayload(listFor),
     });
   }
 
@@ -430,11 +432,14 @@ function EditListHeader({
           className="mt-1 block w-full rounded border border-gray-300 px-3 py-2"
         />
       </label>
-      <RecipientFields value={recipient} onChange={setRecipient} />
+      <ListForFields account={account.data} value={listFor} onChange={setListFor} />
       <div className="flex gap-2">
         <button
           type="submit"
-          disabled={mutation.isPending || recipientIncomplete(recipient)}
+          disabled={
+            mutation.isPending ||
+            listForIncomplete(listFor, account.data?.is_shared_account ?? false)
+          }
           className="rounded bg-blue-600 px-3 py-1 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
         >
           {mutation.isPending ? "Saving…" : "Save"}

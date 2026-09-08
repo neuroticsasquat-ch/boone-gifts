@@ -18,6 +18,11 @@ export interface ListLike {
   // before these columns existed does.
   recipient_name?: string | null;
   recipient_has_account?: boolean | null;
+  /** The account person this list is marked for, on a shared account (NEU-1237).
+   * Read only by the owner-side `recipientLabel`: an account person is a label
+   * *inside* the account, and to everyone else the account is one identity
+   * (project spec §5.1), so no viewer-side line names them. */
+  account_person_name?: string | null;
   /** How a shared list reached the viewer (NEU-1227). Absent on an owned list,
    * and on the detail responses, which do not carry it. */
   shared_via?: SharedVia | null;
@@ -66,12 +71,24 @@ export function attributionFor(list: ListLike): ListAttribution {
 }
 
 /**
- * How the *owner* sees their own row: "for Beth", or null on a list with no
- * recipient (where today's UI shows no attribution at all).
+ * How the *owner* sees their own row: "for Beth" for a recipient, "for Gran" for
+ * one of their own account's people, or null on a list marked for neither — a
+ * household list, or any list on a non-shared account, where today's UI shows no
+ * attribution at all.
+ *
+ * The two names are mutually exclusive on the API, so the order below only
+ * settles what a response that broke that rule would read as.
  */
 export function recipientLabel(list: ListLike): string | null {
-  const recipient = recipientNameOf(list);
-  return recipient === null ? null : `for ${recipient}`;
+  const name = recipientNameOf(list) ?? accountPersonNameOf(list);
+  return name === null ? null : `for ${name}`;
+}
+
+/** The account person's name, or null when the list is for no one in particular.
+ *  Same empty-string collapse as `recipientNameOf`, for the same reason. */
+export function accountPersonNameOf(list: ListLike): string | null {
+  const name = list.account_person_name?.trim();
+  return name ? name : null;
 }
 
 /**

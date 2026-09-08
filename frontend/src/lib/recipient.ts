@@ -18,15 +18,22 @@ export const NO_RECIPIENT: RecipientValue = {
   hasAccount: null,
 };
 
-/** Seed the control from a list's stored values, for the edit form. */
+/**
+ * Seed the control from a list's stored values, for the edit form.
+ *
+ * `recipient_has_account` is normalized to null when the response omits it: the
+ * backend dropped the column (NEU-1230) ahead of the radio's own deletion
+ * (NEU-1241), and `undefined` would read as *answered* to `recipientIncomplete`,
+ * letting an edit be saved with neither radio selected.
+ */
 export function recipientValueFrom(list: {
   recipient_name: string | null;
-  recipient_has_account: boolean | null;
+  recipient_has_account?: boolean | null;
 }): RecipientValue {
   return {
     enabled: list.recipient_name !== null,
     name: list.recipient_name ?? "",
-    hasAccount: list.recipient_has_account,
+    hasAccount: list.recipient_has_account ?? null,
   };
 }
 

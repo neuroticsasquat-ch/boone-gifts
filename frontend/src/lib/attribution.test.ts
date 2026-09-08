@@ -113,6 +113,19 @@ describe("recipientLabel", () => {
   it("is null on a list with no recipient", () => {
     expect(recipientLabel(list())).toBeNull();
   });
+
+  it("labels a list marked for one of the account's own people", () => {
+    expect(recipientLabel(list({ account_person_name: "Gran" }))).toBe("for Gran");
+  });
+
+  it("is null on a household list of a shared account", () => {
+    expect(recipientLabel(list({ account_person_name: null }))).toBeNull();
+  });
+
+  it("says nothing to a viewer about an account person — the account is one identity", () => {
+    expect(attributionFor(list({ account_person_name: "Gran", owner_name: "Gran & Grandpa" })))
+      .toEqual({ kind: "owner", subject: "Gran & Grandpa", keeper: null });
+  });
 });
 
 describe("isKeptForAbsentPerson", () => {

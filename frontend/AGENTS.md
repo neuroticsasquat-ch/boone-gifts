@@ -58,6 +58,7 @@ src/
                      # getListFamilies / shareListWithFamily / unshareListFromFamily
     gifts.ts         # Gift CRUD + claim/unclaim
     families.ts      # 13 functions — see "Families" below
+    account.ts       # GET/PUT /account — the shared-account flag and its people
     connections.ts, shares.ts, occasions.ts, invites.ts, users.ts, meta.ts
   contexts/AuthContext.tsx   # Access token in memory, silent refresh on mount, toggleSimpleMode
   hooks/             # useAuth, useTitle
@@ -69,6 +70,8 @@ src/
     ActionableBanner.tsx  # Pending connection requests + family invites, accept/decline
                           # inline. The one implementation; renders nothing when empty
     ListAttribution.tsx   # "from Jane" / "for Beth · kept by Tom" row lines
+    ListForFields.tsx     # "Who is this list for?" — the shared-account picker,
+                          # falling back to RecipientFields on a normal account
     RecipientFields.tsx   # The "this list is for someone else" control
   pages/             # One per route (see table below), plus Occasions.tsx and
                      # OccasionDetail.tsx — still unrouted; the Lists page's
@@ -78,7 +81,8 @@ src/
                      # "Shared with …" line), SharingPanel (the combined people
                      # + families picker behind the header's Change control),
                      # OccasionPicker (the ⋯ menu's "Add to an occasion…")
-  lib/               # attribution.ts, recipient.ts — list recipient/attribution logic
+  lib/               # attribution.ts, recipient.ts, list-for.ts — who a list is for,
+                     # and how that reads on a row
   types/index.ts     # Types mirroring the backend Pydantic schemas
   test/
     setup.ts         # Vitest setup (Testing Library + MSW)
@@ -171,6 +175,33 @@ Visibility is an explicit grant on the backend — per-(list, user) for people, 
 ## Recipients
 
 A list can name a recipient. `RecipientFields.tsx` is the shared "this list is for someone else" control (create form and edit header); `lib/recipient.ts` holds its value type and payload mapping, `lib/attribution.ts` turns a list into its display line, and `ListAttribution.tsx` renders it — "from Jane" for a list someone shared, "for Beth · kept by Tom" for one kept on behalf of a person with no account.
+
+## Who is this list for?
+
+On a **shared account** every list says which of the account's people it is for, and the create form
+and edit header ask outright: a required radio group naming each person, plus "Both of us" and
+"Someone else" (NEU-1237). `ListForFields.tsx` is that picker and the single control both forms
+mount; `lib/list-for.ts` holds the answer as one tagged union and maps it to the three fields the API
+takes.
+
+- **The requirement lives on the client.** `POST /lists` accepts a list that names neither person nor
+  recipient — that is a household list — so nothing server-side forces an answer. "Both of us" is how
+  the household case is said out loud, and it sends `null` for both fields.
+- **Exclusivity is structural.** `account_person_id` and `recipient_name` are mutually exclusive on
+  the API (400 either way round); modelling the answer as a union means switching branches drops the
+  other's value, so both can never travel set. Choosing a person clears a typed recipient name and
+  choosing "Someone else" clears the person — in the UI as well as the payload.
+- **"Someone else" is a branch of the picker, not a sibling.** `RecipientFields`' disclosure checkbox
+  is *the* control on a non-shared account and is absent on a shared one, where the radio is the
+  disclosure; both render the same `RecipientDetails` body underneath.
+- **A non-shared account sees no picker at all** — the form is today's. `GET /account` (`["account"]`,
+  shared with the Account page's card) is what tells the two apart, and until it answers the form
+  renders the non-shared shape.
+- **Both modes ask.** A shared household is exactly who simple mode is for, so the picker is never
+  subtracted.
+- The owner-side label — "for Gran" on their own rows and in the list header — comes from
+  `recipientLabel` in `lib/attribution.ts`. A *viewer* is told nothing about account people: to
+  everyone else the account is one identity (project spec §5.1).
 
 ## Occasions
 

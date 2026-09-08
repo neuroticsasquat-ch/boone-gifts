@@ -54,6 +54,11 @@ export interface GiftList {
    * there is no recipient at all. Never read it directly — go through
    * `attributionFor` / `recipientLabel` in `lib/attribution`. */
   recipient_has_account: boolean | null;
+  /** The account person this list is marked for, on a shared account. Mutually
+   * exclusive with `recipient_name`; both null on a household list. */
+  account_person_id: number | null;
+  /** That person's name, so a row can read "for Gran" without a second request. */
+  account_person_name: string | null;
   is_archived: boolean;
   gift_count: number;
   claimed_count: number;
@@ -106,6 +111,11 @@ export interface GiftListDetailOwner {
    * there is no recipient at all. Never read it directly — go through
    * `attributionFor` / `recipientLabel` in `lib/attribution`. */
   recipient_has_account: boolean | null;
+  /** The account person this list is marked for, on a shared account. Mutually
+   * exclusive with `recipient_name`; both null on a household list. */
+  account_person_id: number | null;
+  /** That person's name, so a row can read "for Gran" without a second request. */
+  account_person_name: string | null;
   is_archived: boolean;
   gifts: GiftOwnerView[];
   created_at: string;
@@ -124,6 +134,11 @@ export interface GiftListDetailViewer {
    * there is no recipient at all. Never read it directly — go through
    * `attributionFor` / `recipientLabel` in `lib/attribution`. */
   recipient_has_account: boolean | null;
+  /** The account person this list is marked for, on a shared account. Mutually
+   * exclusive with `recipient_name`; both null on a household list. */
+  account_person_id: number | null;
+  /** That person's name, so a row can read "for Gran" without a second request. */
+  account_person_name: string | null;
   is_archived: boolean;
   gifts: Gift[];
   created_at: string;

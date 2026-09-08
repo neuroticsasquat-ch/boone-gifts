@@ -25,6 +25,9 @@ export async function createList(data: {
   family_ids?: number[];
   recipient_name?: string | null;
   recipient_has_account?: boolean | null;
+  /** The account person this list is for. Mutually exclusive with
+   *  `recipient_name` — the backend answers 400 if both arrive set. */
+  account_person_id?: number | null;
 }): Promise<GiftList> {
   const response = await apiClient.post<GiftList>("/lists", data);
   return response.data;
@@ -38,6 +41,9 @@ export async function updateList(
     is_archived?: boolean;
     recipient_name?: string | null;
     recipient_has_account?: boolean | null;
+    /** The account person this list is for. Mutually exclusive with
+     *  `recipient_name` — the backend answers 400 if both arrive set. */
+    account_person_id?: number | null;
   },
 ): Promise<GiftList> {
   const response = await apiClient.put<GiftList>(`/lists/${id}`, data);
