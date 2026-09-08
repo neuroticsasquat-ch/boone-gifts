@@ -378,7 +378,44 @@ describe("ListDetail — no tab bar", () => {
 
     renderListDetail(ownerToken);
 
-    expect(await screen.findByText("Not shared with anyone yet")).toBeInTheDocument();
+    // The whole mitigation for a list now being able to reach nobody, so the
+    // wording is fixed and it says nothing about claims.
+    expect(
+      await screen.findByText("This list isn't shared with anyone."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Change" })).toBeInTheDocument();
+  });
+
+  it("does not claim a list is unshared when the sharing state failed to load", async () => {
+    server.use(
+      http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/shares`, () => new HttpResponse(null, { status: 500 })),
+      http.get(`${API}/lists/1/families`, () => new HttpResponse(null, { status: 500 })),
+    );
+
+    renderListDetail(ownerToken);
+
+    // An empty answer and no answer at all are different things, and only one of
+    // them is the state this notice exists to report.
+    expect(await screen.findByText(/couldn't load who this list/i)).toBeInTheDocument();
+    expect(
+      screen.queryByText("This list isn't shared with anyone."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps the unshared notice off a viewer's copy of the list", async () => {
+    server.use(
+      http.get(`${API}/lists/1`, () => HttpResponse.json(viewerListDetail)),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+    );
+
+    renderListDetail(viewerToken);
+
+    await screen.findByText("My Wishlist");
+    expect(
+      screen.queryByText("This list isn't shared with anyone."),
+    ).not.toBeInTheDocument();
   });
 
   it("opens the family controls from Change", async () => {

@@ -17,27 +17,34 @@ export function CreateList() {
   useTitle("New List");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [familyIds, setFamilyIds] = useState<number[]>([]);
+  // `null` is "the owner hasn't touched the checkboxes", which is what makes the
+  // pre-check a default rather than state seeded from an effect: the families
+  // query can answer late, and the answer is still every family.
+  const [familyIds, setFamilyIds] = useState<number[] | null>(null);
   const [listFor, setListFor] = useState<ListForValue>(LIST_FOR_UNANSWERED);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
 
-  // Owners opt in family by family, unchecked.
+  // Every family the owner belongs to arrives checked — the default that replaces
+  // the auto-grant retired in NEU-1261 (project spec §8). Unchecking is free.
   const families = useQuery({
     queryKey: ["families"],
     queryFn: getFamilies,
   });
-  const showFamilies = (families.data ?? []).length > 0;
+  const allFamilies = families.data ?? [];
+  const showFamilies = allFamilies.length > 0;
+  const selectedFamilyIds = familyIds ?? allFamilies.map((f) => f.id);
 
   // On a shared account every list says who it is for, and the answer is required
   // (project spec §5.2).
   const account = useQuery({ queryKey: ["account"], queryFn: getAccount });
 
   function toggleFamily(id: number) {
-    setFamilyIds((current) =>
-      current.includes(id) ? current.filter((f) => f !== id) : [...current, id],
-    );
+    const next = new Set(selectedFamilyIds);
+    if (!next.delete(id)) next.add(id);
+    // Keep the payload in the families' own order, however the boxes were toggled.
+    setFamilyIds(allFamilies.map((f) => f.id).filter((f) => next.has(f)));
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -49,7 +56,7 @@ export function CreateList() {
         name,
         description: description || undefined,
         ...listForPayload(listFor),
-        ...(showFamilies ? { family_ids: familyIds } : {}),
+        ...(showFamilies ? { family_ids: selectedFamilyIds } : {}),
       });
       navigate(`/lists/${list.id}`, { replace: true });
     } catch {
@@ -88,14 +95,15 @@ export function CreateList() {
           <fieldset className="mb-6">
             <legend className="text-sm font-medium text-gray-700">Share with families</legend>
             <p className="mt-1 text-sm text-gray-500">
-              You can change this later from the list's Families tab.
+              Uncheck any you'd rather keep it from. You can change this later from
+              the list itself.
             </p>
             <div className="mt-2 space-y-2">
-              {families.data!.map((family) => (
+              {allFamilies.map((family) => (
                 <label key={family.id} className="flex items-center gap-2">
                   <input
                     type="checkbox"
-                    checked={familyIds.includes(family.id)}
+                    checked={selectedFamilyIds.includes(family.id)}
                     onChange={() => toggleFamily(family.id)}
                     className="rounded border-gray-300"
                   />
@@ -110,6 +118,10 @@ export function CreateList() {
             type="submit"
             disabled={
               submitting ||
+              // Submitting before the families answer would post no family_ids at
+              // all, silently skipping the pre-check and creating the list that
+              // reaches nobody.
+              families.isPending ||
               listForIncomplete(listFor, account.data?.is_shared_account ?? false)
             }
             className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"

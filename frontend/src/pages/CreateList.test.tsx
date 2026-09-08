@@ -44,17 +44,17 @@ function renderCreateList(authToken: string) {
 }
 
 describe("CreateList — family sharing", () => {
-  it("lists the user's families as unchecked checkboxes", async () => {
+  it("lists the user's families pre-checked", async () => {
     server.use(http.get(`${API}/families`, () => HttpResponse.json(families)));
 
     renderCreateList(authToken);
 
     const boones = await screen.findByRole("checkbox", { name: "The Boones" });
-    expect(boones).not.toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "The Smiths" })).not.toBeChecked();
+    expect(boones).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "The Smiths" })).toBeChecked();
   });
 
-  it("posts family_ids for exactly the families checked", async () => {
+  it("posts family_ids for every family when the default is left alone", async () => {
     const posted = vi.fn();
     server.use(
       http.get(`${API}/families`, () => HttpResponse.json(families)),
@@ -67,14 +67,34 @@ describe("CreateList — family sharing", () => {
     renderCreateList(authToken);
 
     await userEvent.type(await screen.findByRole("textbox", { name: /name/i }), "Birthday");
-    await userEvent.click(screen.getByRole("checkbox", { name: "The Boones" }));
+    await screen.findByRole("checkbox", { name: "The Boones" });
+    await userEvent.click(screen.getByRole("button", { name: /create list/i }));
+
+    await waitFor(() => expect(posted).toHaveBeenCalled());
+    expect(posted.mock.calls[0][0]).toMatchObject({ name: "Birthday", family_ids: [7, 8] });
+  });
+
+  it("posts family_ids for exactly the families left checked", async () => {
+    const posted = vi.fn();
+    server.use(
+      http.get(`${API}/families`, () => HttpResponse.json(families)),
+      http.post(`${API}/lists`, async ({ request }) => {
+        posted(await request.json());
+        return HttpResponse.json({ id: 1 }, { status: 201 });
+      }),
+    );
+
+    renderCreateList(authToken);
+
+    await userEvent.type(await screen.findByRole("textbox", { name: /name/i }), "Birthday");
+    await userEvent.click(await screen.findByRole("checkbox", { name: "The Smiths" }));
     await userEvent.click(screen.getByRole("button", { name: /create list/i }));
 
     await waitFor(() => expect(posted).toHaveBeenCalled());
     expect(posted.mock.calls[0][0]).toMatchObject({ name: "Birthday", family_ids: [7] });
   });
 
-  it("posts an empty family_ids when nothing is checked", async () => {
+  it("posts an empty family_ids when every family is unchecked", async () => {
     const posted = vi.fn();
     server.use(
       http.get(`${API}/families`, () => HttpResponse.json(families)),
@@ -87,11 +107,51 @@ describe("CreateList — family sharing", () => {
     renderCreateList(authToken);
 
     await userEvent.type(await screen.findByRole("textbox", { name: /name/i }), "Private");
-    await screen.findByRole("checkbox", { name: "The Boones" });
+    await userEvent.click(await screen.findByRole("checkbox", { name: "The Boones" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "The Smiths" }));
     await userEvent.click(screen.getByRole("button", { name: /create list/i }));
 
     await waitFor(() => expect(posted).toHaveBeenCalled());
     expect(posted.mock.calls[0][0]).toMatchObject({ family_ids: [] });
+  });
+
+  it("keeps an unchecked family unchecked when the form re-renders", async () => {
+    server.use(http.get(`${API}/families`, () => HttpResponse.json(families)));
+
+    renderCreateList(authToken);
+
+    await userEvent.click(await screen.findByRole("checkbox", { name: "The Boones" }));
+    // Typing re-renders the form; the default must not reassert itself over a
+    // deliberate uncheck.
+    await userEvent.type(screen.getByRole("textbox", { name: /name/i }), "Birthday");
+
+    expect(screen.getByRole("checkbox", { name: "The Boones" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "The Smiths" })).toBeChecked();
+  });
+
+  it("cannot be submitted before the families have answered", async () => {
+    let answer: (() => void) | undefined;
+    const answered = new Promise<void>((resolve) => {
+      answer = resolve;
+    });
+    server.use(
+      http.get(`${API}/families`, async () => {
+        await answered;
+        return HttpResponse.json(families);
+      }),
+    );
+
+    renderCreateList(authToken);
+
+    // Submitting here would post no family_ids at all and create exactly the
+    // list that reaches nobody — the pre-check would be silently skipped.
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /create list/i })).toBeDisabled()
+    );
+
+    answer!();
+    expect(await screen.findByRole("checkbox", { name: "The Boones" })).toBeChecked();
+    expect(screen.getByRole("button", { name: /create list/i })).toBeEnabled();
   });
 
   it("hides the section when the user belongs to no families", async () => {
