@@ -37,7 +37,7 @@ export function ActionableBanner() {
     queryClient.invalidateQueries({ queryKey: ["connectionRequests"] });
     queryClient.invalidateQueries({ queryKey: ["connections"] });
     queryClient.invalidateQueries({ queryKey: ["lists", "shared"] });
-    queryClient.invalidateQueries({ queryKey: ["occasions"] });
+    queryClient.invalidateQueries({ queryKey: ["folders"] });
   };
 
   // Declining adds nothing — only the pending list (and so the badge) changes.

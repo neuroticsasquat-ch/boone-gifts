@@ -94,7 +94,7 @@ describe("Layout", () => {
     renderLayout();
     await screen.findByLabelText("Account menu");
 
-    for (const label of ["Home", "Connect", "Connections", "Families", "Family Lists", "Occasions"]) {
+    for (const label of ["Home", "Connect", "Connections", "Families", "Family Lists", "Folders"]) {
       expect(within(bottomNav()).queryByText(label)).not.toBeInTheDocument();
       expect(within(topNav()).queryByText(label)).not.toBeInTheDocument();
     }

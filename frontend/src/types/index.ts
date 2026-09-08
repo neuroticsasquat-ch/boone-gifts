@@ -169,8 +169,8 @@ export interface ListShare {
   created_at: string;
 }
 
-// Occasions
-export interface Occasion {
+// Folders
+export interface Folder {
   id: number;
   name: string;
   description: string | null;
@@ -180,7 +180,7 @@ export interface Occasion {
   updated_at: string;
 }
 
-export interface OccasionDetail {
+export interface FolderDetail {
   id: number;
   name: string;
   description: string | null;

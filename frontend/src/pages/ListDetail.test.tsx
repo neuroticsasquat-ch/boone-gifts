@@ -102,8 +102,8 @@ describe("ListDetail sharing panel", () => {
       http.get(`${API}/lists/1/families`, () =>
         HttpResponse.json([{ id: 7, name: "The Boones", shared: true }])
       ),
-      http.get(`${API}/occasions`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => HttpResponse.json([])),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
     );
 
     renderListDetail(ownerToken);
@@ -119,8 +119,8 @@ describe("ListDetail sharing panel", () => {
     server.use(
       http.get(`${API}/lists/1`, () => HttpResponse.json(viewerListDetail)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => HttpResponse.json([])),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
     );
 
     renderListDetail(viewerToken);
@@ -148,8 +148,8 @@ describe("AddGiftForm URL Auto-Populate", () => {
       http.get(`${API}/connections`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => HttpResponse.json([])),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
       http.get(`${API}/meta`, () =>
         HttpResponse.json({
           title: "Cool Gadget",
@@ -179,8 +179,8 @@ describe("AddGiftForm URL Auto-Populate", () => {
       http.get(`${API}/connections`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => HttpResponse.json([])),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
       http.get(`${API}/meta`, () =>
         HttpResponse.json({
           title: "From Meta",
@@ -215,8 +215,8 @@ describe("AddGiftForm URL Auto-Populate", () => {
       http.get(`${API}/connections`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => HttpResponse.json([])),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
       http.get(`${API}/meta`, () => HttpResponse.error()),
     );
 
@@ -256,8 +256,8 @@ describe("Gift list item responsive layout", () => {
       http.get(`${API}/connections`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => HttpResponse.json([])),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
     );
 
     renderListDetail(ownerToken);
@@ -271,8 +271,8 @@ describe("Gift list item responsive layout", () => {
     server.use(
       http.get(`${API}/lists/1`, () => HttpResponse.json(viewerListWithGift)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => HttpResponse.json([])),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
     );
 
     renderListDetail(viewerToken);
@@ -288,8 +288,8 @@ describe("Gift list item responsive layout", () => {
       http.get(`${API}/connections`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => HttpResponse.json([])),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
     );
 
     renderListDetail(ownerToken);
@@ -305,8 +305,8 @@ describe("Gift list item responsive layout", () => {
       http.get(`${API}/connections`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => HttpResponse.json([])),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
     );
 
     renderListDetail(ownerToken);
@@ -320,8 +320,8 @@ describe("Gift list item responsive layout", () => {
     server.use(
       http.get(`${API}/lists/1`, () => HttpResponse.json(viewerListWithGift)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => HttpResponse.json([])),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
     );
 
     renderListDetail(viewerToken);
@@ -344,7 +344,7 @@ describe("ListDetail — no tab bar", () => {
 
     await screen.findByText("My Wishlist");
     expect(screen.getByText("Add a gift")).toBeInTheDocument();
-    for (const tab of [/^gifts$/i, /^occasions$/i, /^shared with$/i, /^families$/i]) {
+    for (const tab of [/^gifts$/i, /^folders$/i, /^shared with$/i, /^families$/i]) {
       expect(screen.queryByRole("button", { name: tab })).not.toBeInTheDocument();
     }
   });
@@ -491,7 +491,7 @@ describe("ListDetail — header actions menu", () => {
     await waitFor(() => expect(deleted).toBe(true));
   });
 
-  it("gives a viewer the menu, holding the occasion action alone", async () => {
+  it("gives a viewer the menu, holding the folder action alone", async () => {
     server.use(
       http.get(`${API}/lists/1`, () => HttpResponse.json(viewerListDetail)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
@@ -502,15 +502,15 @@ describe("ListDetail — header actions menu", () => {
     await screen.findByText("My Wishlist");
     await userEvent.click(screen.getByRole("button", { name: "List actions" }));
 
-    expect(screen.getByRole("button", { name: "Add to an occasion…" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add to a folder…" })).toBeInTheDocument();
     for (const owned of ["Edit", "Archive", "Delete"]) {
       expect(screen.queryByRole("button", { name: owned })).not.toBeInTheDocument();
     }
   });
 });
 
-describe("ListDetail — add to an occasion", () => {
-  const occasions = [
+describe("ListDetail — add to a folder", () => {
+  const folders = [
     {
       id: 3,
       name: "Christmas 2026",
@@ -522,18 +522,18 @@ describe("ListDetail — add to an occasion", () => {
     },
   ];
 
-  function serveOccasions() {
+  function serveFolders() {
     server.use(
-      http.get(`${API}/occasions`, () => HttpResponse.json(occasions)),
-      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => HttpResponse.json(folders)),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
     );
   }
 
   async function openFromMenu() {
     await screen.findByText("My Wishlist");
     await userEvent.click(screen.getByRole("button", { name: "List actions" }));
-    await userEvent.click(screen.getByRole("button", { name: "Add to an occasion…" }));
-    return screen.getByRole("region", { name: "Add to an occasion" });
+    await userEvent.click(screen.getByRole("button", { name: "Add to a folder…" }));
+    return screen.getByRole("region", { name: "Add to a folder" });
   }
 
   it("opens the picker from the owner's menu", async () => {
@@ -543,7 +543,7 @@ describe("ListDetail — add to an occasion", () => {
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
     );
-    serveOccasions();
+    serveFolders();
 
     renderListDetail(ownerToken);
 
@@ -558,7 +558,7 @@ describe("ListDetail — add to an occasion", () => {
       http.get(`${API}/lists/1`, () => HttpResponse.json(viewerListDetail)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
     );
-    serveOccasions();
+    serveFolders();
 
     renderListDetail(viewerToken);
 
@@ -566,21 +566,21 @@ describe("ListDetail — add to an occasion", () => {
     expect(await within(panel).findByRole("checkbox", { name: /christmas 2026/i })).toBeInTheDocument();
   });
 
-  // Simple mode has no occasion filter on /lists, so it cannot read an occasion
+  // Simple mode has no folder filter on /lists, so it cannot read a folder
   // back — offering to file a list into one would strand the membership.
   it("hides the action in simple mode, leaving the rest of the menu", async () => {
     server.use(
       http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
     );
-    serveOccasions();
+    serveFolders();
 
     renderListDetail(simpleModeOwnerToken);
 
     await screen.findByText("My Wishlist");
     await userEvent.click(screen.getByRole("button", { name: "List actions" }));
 
-    expect(screen.queryByRole("button", { name: "Add to an occasion…" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add to a folder…" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
   });
@@ -592,7 +592,7 @@ describe("ListDetail — add to an occasion", () => {
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
     );
-    serveOccasions();
+    serveFolders();
 
     renderListDetail(ownerToken);
 

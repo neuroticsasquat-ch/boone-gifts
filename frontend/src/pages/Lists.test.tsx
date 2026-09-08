@@ -34,12 +34,12 @@ function noLists() {
   server.use(http.get(`${API}/lists`, () => HttpResponse.json([])));
 }
 
-/** The viewer's occasions: what the filter's `<select>` lists, and what each one
+/** The viewer's folders: what the filter's `<select>` lists, and what each one
  *  reports as its member lists when selected. */
-function occasions(all: { id: number; name: string; lists?: unknown[] }[]) {
-  const summary = (occasion: { id: number; name: string }) => ({
-    id: occasion.id,
-    name: occasion.name,
+function folders(all: { id: number; name: string; lists?: unknown[] }[]) {
+  const summary = (folder: { id: number; name: string }) => ({
+    id: folder.id,
+    name: folder.name,
     description: null,
     owner_id: 1,
     is_archived: false,
@@ -48,11 +48,11 @@ function occasions(all: { id: number; name: string; lists?: unknown[] }[]) {
   });
 
   server.use(
-    http.get(`${API}/occasions`, () => HttpResponse.json(all.map(summary))),
-    http.get(`${API}/occasions/:id`, ({ params }) => {
-      const occasion = all.find((candidate) => candidate.id === Number(params.id));
-      if (!occasion) return new HttpResponse(null, { status: 404 });
-      return HttpResponse.json({ ...summary(occasion), lists: occasion.lists ?? [] });
+    http.get(`${API}/folders`, () => HttpResponse.json(all.map(summary))),
+    http.get(`${API}/folders/:id`, ({ params }) => {
+      const folder = all.find((candidate) => candidate.id === Number(params.id));
+      if (!folder) return new HttpResponse(null, { status: 404 });
+      return HttpResponse.json({ ...summary(folder), lists: folder.lists ?? [] });
     }),
   );
 }
@@ -251,14 +251,14 @@ describe("Lists", () => {
   });
 });
 
-describe("Lists — occasion filter", () => {
-  it("offers the viewer's occasions, defaulting to all lists", async () => {
+describe("Lists — folder filter", () => {
+  it("offers the viewer's folders, defaulting to all lists", async () => {
     noLists();
-    occasions([{ id: 5, name: "Christmas 2026" }, { id: 6, name: "Birthdays" }]);
+    folders([{ id: 5, name: "Christmas 2026" }, { id: 6, name: "Birthdays" }]);
 
     renderLists();
 
-    const filter = await screen.findByLabelText("Occasion");
+    const filter = await screen.findByLabelText("Folder");
     expect(filter).toHaveValue("all");
     expect(within(filter).getByRole("option", { name: "All lists" })).toBeInTheDocument();
     expect(within(filter).getByRole("option", { name: "Christmas 2026" })).toBeInTheDocument();
@@ -267,33 +267,33 @@ describe("Lists — occasion filter", () => {
 
   // A select whose only option is "All lists" would be dead UI naming a concept
   // it cannot explain.
-  it("hides the select itself when the viewer has no occasions", async () => {
+  it("hides the select itself when the viewer has no folders", async () => {
     noLists();
 
     renderLists();
 
     await screen.findByLabelText("Sort");
-    expect(screen.queryByLabelText("Occasion")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Folder")).not.toBeInTheDocument();
   });
 
-  // The occasions pages lost their route (NEU-1231), so this is the only
-  // introduction to the concept — and a viewer with no occasions yet is exactly
+  // The folders pages lost their route (NEU-1231), so this is the only
+  // introduction to the concept — and a viewer with no folders yet is exactly
   // the one who needs it, so the explanation does NOT hide with the select.
-  it("explains what an occasion is, whether or not the viewer has any", async () => {
+  it("explains what a folder is, whether or not the viewer has any", async () => {
     noLists();
-    occasions([{ id: 5, name: "Christmas 2026" }]);
+    folders([{ id: 5, name: "Christmas 2026" }]);
 
     const { unmount } = renderLists();
 
-    await screen.findByLabelText("Occasion");
-    expect(screen.getByText(/Occasions group lists together/)).toBeInTheDocument();
+    await screen.findByLabelText("Folder");
+    expect(screen.getByText(/Folders group lists together/)).toBeInTheDocument();
     unmount();
 
     server.resetHandlers();
     noLists();
     renderLists();
 
-    expect(await screen.findByText(/Occasions group lists together/)).toBeInTheDocument();
+    expect(await screen.findByText(/Folders group lists together/)).toBeInTheDocument();
     // With none to pick from, it says where they come from instead.
     expect(screen.getByText(/Open a list to file it under one/)).toBeInTheDocument();
   });
@@ -306,11 +306,11 @@ describe("Lists — occasion filter", () => {
         sharedList({ id: 4, name: "Carol's Wishlist", shared_via: { kind: "family", id: 1, name: "Boone Family" } }),
       ],
     });
-    occasions([{ id: 5, name: "Christmas 2026", lists: [{ id: 1 }, { id: 3 }] }]);
+    folders([{ id: 5, name: "Christmas 2026", lists: [{ id: 1 }, { id: 3 }] }]);
 
     renderLists();
 
-    await userEvent.selectOptions(await screen.findByLabelText("Occasion"), "5");
+    await userEvent.selectOptions(await screen.findByLabelText("Folder"), "5");
 
     // One from each section survives; the other two are filtered out of both.
     expect(await screen.findByText("Tom's Wishlist")).toBeInTheDocument();
@@ -319,16 +319,16 @@ describe("Lists — occasion filter", () => {
     expect(screen.queryByText("Carol's Wishlist")).not.toBeInTheDocument();
   });
 
-  it("shows a list under each occasion it belongs to", async () => {
+  it("shows a list under each folder it belongs to", async () => {
     lists({ owned: [ownedList({ id: 1, name: "Tom's Wishlist" })] });
-    occasions([
+    folders([
       { id: 5, name: "Christmas 2026", lists: [{ id: 1 }] },
       { id: 6, name: "Birthdays", lists: [{ id: 1 }] },
     ]);
 
     renderLists();
 
-    const filter = await screen.findByLabelText("Occasion");
+    const filter = await screen.findByLabelText("Folder");
 
     await userEvent.selectOptions(filter, "5");
     expect(await screen.findByText("Tom's Wishlist")).toBeInTheDocument();
@@ -342,11 +342,11 @@ describe("Lists — occasion filter", () => {
       owned: [ownedList({ id: 1, name: "Tom's Wishlist" })],
       shared: [sharedList({ id: 3, name: "Jane's Wishlist", shared_via: { kind: "user", id: 2, name: "Jane Boone" } })],
     });
-    occasions([{ id: 5, name: "Christmas 2026", lists: [] }]);
+    folders([{ id: 5, name: "Christmas 2026", lists: [] }]);
 
     renderLists();
 
-    await userEvent.selectOptions(await screen.findByLabelText("Occasion"), "5");
+    await userEvent.selectOptions(await screen.findByLabelText("Folder"), "5");
 
     expect(await screen.findByText("None of your lists are in Christmas 2026.")).toBeInTheDocument();
     expect(screen.getByText("No lists shared with you are in Christmas 2026.")).toBeInTheDocument();
@@ -406,25 +406,25 @@ describe("Lists — sort and archive", () => {
 });
 
 describe("Lists — simple mode", () => {
-  // Purely subtractive: it hides the occasion filter, sort and archive, and
+  // Purely subtractive: it hides the folder filter, sort and archive, and
   // nothing else on this page (project spec §6.1).
-  it("hides the occasion filter, sort and archive — and nothing else", async () => {
+  it("hides the folder filter, sort and archive — and nothing else", async () => {
     lists({
       owned: [ownedList({ id: 1, name: "Tom's Wishlist" })],
       shared: [sharedList({ id: 3, name: "Jane's Wishlist", shared_via: { kind: "user", id: 2, name: "Jane Boone" } })],
     });
-    occasions([{ id: 5, name: "Christmas 2026", lists: [{ id: 1 }] }]);
+    folders([{ id: 5, name: "Christmas 2026", lists: [{ id: 1 }] }]);
 
     renderInSimpleMode();
 
     await screen.findByLabelText("Account menu");
     expect(await screen.findByText("Tom's Wishlist")).toBeInTheDocument();
 
-    expect(screen.queryByLabelText("Occasion")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Folder")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Sort")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /archived lists/ })).not.toBeInTheDocument();
     // The filter's explanation goes with the filter.
-    expect(screen.queryByText(/Occasions group lists together/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Folders group lists together/)).not.toBeInTheDocument();
 
     // Everything else on the page survives, unrelabelled.
     expect(screen.getByRole("link", { name: "New List" })).toBeInTheDocument();
@@ -439,7 +439,7 @@ describe("Lists — simple mode", () => {
   // "full" there flashes up exactly the controls simple mode must hide.
   it("withholds the controls until the session resolves", async () => {
     lists({ owned: [ownedList({ id: 1, name: "Tom's Wishlist" })] });
-    occasions([{ id: 5, name: "Christmas 2026" }]);
+    folders([{ id: 5, name: "Christmas 2026" }]);
 
     renderInSimpleMode({ authDelayMs: 100 });
 

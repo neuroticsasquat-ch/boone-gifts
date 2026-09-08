@@ -45,7 +45,9 @@ describe("routes", () => {
     expect(router.state.location.pathname).toBe("/lists");
   });
 
-  it.each(["/family-lists", "/families", "/families/1", "/occasions", "/occasions/1", "/connections"])(
+  // `/folders*` are the renamed `Folders` / `FolderDetail` pages, which stay
+  // unrouted until the folder page is given a home.
+  it.each(["/family-lists", "/families", "/families/1", "/folders", "/folders/1", "/connections"])(
     "no longer matches the retired route %s",
     (path) => {
       const router = renderAt(path);

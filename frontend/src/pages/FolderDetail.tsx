@@ -2,50 +2,50 @@ import { useState, type FormEvent } from "react";
 import { useParams, useNavigate, Link } from "react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  getOccasion,
-  updateOccasion,
-  deleteOccasion,
-  addOccasionItem,
-  removeOccasionItem,
+  getFolder,
+  updateFolder,
+  deleteFolder,
+  addFolderItem,
+  removeFolderItem,
   getShoppingList,
-} from "../api/occasions";
+} from "../api/folders";
 import { purchaseGift, unpurchaseGift } from "../api/gifts";
 import { getLists } from "../api/lists";
-import type { OccasionDetail as OccasionDetailType, ShoppingListItem } from "../types";
+import type { FolderDetail as FolderDetailType, ShoppingListItem } from "../types";
 import { useTitle } from "../hooks/useTitle";
 import toast from "react-hot-toast";
 import { Spinner } from "../components/Spinner";
 import { ListAttributionLine } from "../components/ListAttribution";
 
-export function OccasionDetail() {
+export function FolderDetail() {
   const { id } = useParams();
-  const occasionId = Number(id);
+  const folderId = Number(id);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [showShoppingList, setShowShoppingList] = useState(false);
 
-  const { data: occasion, isLoading, error, refetch } = useQuery({
-    queryKey: ["occasion", occasionId],
-    queryFn: () => getOccasion(occasionId),
+  const { data: folder, isLoading, error, refetch } = useQuery({
+    queryKey: ["folder", folderId],
+    queryFn: () => getFolder(folderId),
     enabled: !!id,
   });
 
-  useTitle(occasion?.name ?? "Occasion");
+  useTitle(folder?.name ?? "Folder");
 
   if (isLoading) return <Spinner />;
-  if (error || !occasion) return (
+  if (error || !folder) return (
     <div className="text-center py-12">
-      <p className="text-red-600">Failed to load occasion.</p>
+      <p className="text-red-600">Failed to load folder.</p>
       <button onClick={() => refetch()} className="mt-2 text-sm text-blue-600 hover:underline">Try again</button>
     </div>
   );
 
   return (
     <div className="space-y-6">
-      <Link to="/occasions" className="text-sm text-blue-600 hover:underline">&larr; Back to occasions</Link>
-      <OccasionHeader
-        occasion={occasion}
-        occasionId={occasionId}
+      <Link to="/folders" className="text-sm text-blue-600 hover:underline">&larr; Back to folders</Link>
+      <FolderHeader
+        folder={folder}
+        folderId={folderId}
         queryClient={queryClient}
         navigate={navigate}
       />
@@ -64,62 +64,62 @@ export function OccasionDetail() {
         </button>
       </div>
       {showShoppingList ? (
-        <ShoppingList occasionId={occasionId} />
+        <ShoppingList folderId={folderId} />
       ) : (
         <>
-          <OccasionLists
-            occasion={occasion}
-            occasionId={occasionId}
+          <FolderLists
+            folder={folder}
+            folderId={folderId}
             queryClient={queryClient}
           />
-          <AddListForm occasionId={occasionId} occasion={occasion} queryClient={queryClient} />
+          <AddListForm folderId={folderId} folder={folder} queryClient={queryClient} />
         </>
       )}
     </div>
   );
 }
 
-function OccasionHeader({
-  occasion,
-  occasionId,
+function FolderHeader({
+  folder,
+  folderId,
   queryClient,
   navigate,
 }: {
-  occasion: OccasionDetailType;
-  occasionId: number;
+  folder: FolderDetailType;
+  folderId: number;
   queryClient: ReturnType<typeof useQueryClient>;
   navigate: ReturnType<typeof useNavigate>;
 }) {
   const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(occasion.name);
-  const [description, setDescription] = useState(occasion.description ?? "");
+  const [name, setName] = useState(folder.name);
+  const [description, setDescription] = useState(folder.description ?? "");
 
   const updateMutation = useMutation({
-    mutationFn: (data: { name?: string; description?: string }) => updateOccasion(occasionId, data),
+    mutationFn: (data: { name?: string; description?: string }) => updateFolder(folderId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["occasion", occasionId] });
-      queryClient.invalidateQueries({ queryKey: ["occasions"] });
+      queryClient.invalidateQueries({ queryKey: ["folder", folderId] });
+      queryClient.invalidateQueries({ queryKey: ["folders"] });
       setEditing(false);
     },
-    onError: () => toast.error("Failed to update occasion."),
+    onError: () => toast.error("Failed to update folder."),
   });
 
   const archiveMutation = useMutation({
-    mutationFn: () => updateOccasion(occasionId, { is_archived: !occasion.is_archived }),
+    mutationFn: () => updateFolder(folderId, { is_archived: !folder.is_archived }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["occasion", occasionId] });
-      queryClient.invalidateQueries({ queryKey: ["occasions"] });
+      queryClient.invalidateQueries({ queryKey: ["folder", folderId] });
+      queryClient.invalidateQueries({ queryKey: ["folders"] });
     },
-    onError: () => toast.error("Failed to update occasion."),
+    onError: () => toast.error("Failed to update folder."),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: () => deleteOccasion(occasionId),
+    mutationFn: () => deleteFolder(folderId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["occasions"] });
-      navigate("/occasions", { replace: true });
+      queryClient.invalidateQueries({ queryKey: ["folders"] });
+      navigate("/folders", { replace: true });
     },
-    onError: () => toast.error("Failed to delete occasion."),
+    onError: () => toast.error("Failed to delete folder."),
   });
 
   function handleSave(e: FormEvent) {
@@ -128,15 +128,15 @@ function OccasionHeader({
   }
 
   function handleDelete() {
-    if (window.confirm("Delete this occasion? This cannot be undone.")) {
+    if (window.confirm("Delete this folder? This cannot be undone.")) {
       deleteMutation.mutate();
     }
   }
 
   function handleArchiveToggle() {
-    if (occasion.is_archived) {
+    if (folder.is_archived) {
       archiveMutation.mutate();
-    } else if (window.confirm("Archive this occasion?")) {
+    } else if (window.confirm("Archive this folder?")) {
       archiveMutation.mutate();
     }
   }
@@ -189,20 +189,20 @@ function OccasionHeader({
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-gray-900">{occasion.name}</h1>
-            {occasion.is_archived && (
+            <h1 className="text-2xl font-bold text-gray-900">{folder.name}</h1>
+            {folder.is_archived && (
               <span className="inline-block rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600">Archived</span>
             )}
           </div>
-          {occasion.description && <p className="mt-2 text-gray-600">{occasion.description}</p>}
+          {folder.description && <p className="mt-2 text-gray-600">{folder.description}</p>}
         </div>
         <div className="flex gap-2 shrink-0">
           <button
             onClick={handleArchiveToggle}
             disabled={archiveMutation.isPending}
-            className={`rounded px-3 py-1 text-sm font-medium text-white disabled:opacity-50 ${occasion.is_archived ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700"}`}
+            className={`rounded px-3 py-1 text-sm font-medium text-white disabled:opacity-50 ${folder.is_archived ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700"}`}
           >
-            {archiveMutation.isPending ? "…" : occasion.is_archived ? "Unarchive" : "Archive"}
+            {archiveMutation.isPending ? "…" : folder.is_archived ? "Unarchive" : "Archive"}
           </button>
           <button
             onClick={() => setEditing(true)}
@@ -223,31 +223,31 @@ function OccasionHeader({
   );
 }
 
-function OccasionLists({
-  occasion,
-  occasionId,
+function FolderLists({
+  folder,
+  folderId,
   queryClient,
 }: {
-  occasion: OccasionDetailType;
-  occasionId: number;
+  folder: FolderDetailType;
+  folderId: number;
   queryClient: ReturnType<typeof useQueryClient>;
 }) {
   const removeMutation = useMutation({
-    mutationFn: (listId: number) => removeOccasionItem(occasionId, listId),
+    mutationFn: (listId: number) => removeFolderItem(folderId, listId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["occasion", occasionId] });
-      queryClient.invalidateQueries({ queryKey: ["occasions"] });
+      queryClient.invalidateQueries({ queryKey: ["folder", folderId] });
+      queryClient.invalidateQueries({ queryKey: ["folders"] });
     },
     onError: () => toast.error("Failed to remove list."),
   });
 
-  if (occasion.lists.length === 0) {
-    return <p className="text-gray-500">No lists in this occasion.</p>;
+  if (folder.lists.length === 0) {
+    return <p className="text-gray-500">No lists in this folder.</p>;
   }
 
   return (
     <ul className="divide-y divide-gray-200 rounded-lg bg-white shadow">
-      {occasion.lists.map((list) => (
+      {folder.lists.map((list) => (
         <li key={list.id} className="flex items-center justify-between px-4 py-3">
           <Link to={`/lists/${list.id}`} className="min-w-0 flex-1 hover:opacity-75">
             <p className="font-medium text-gray-900">{list.name}</p>
@@ -267,12 +267,12 @@ function OccasionLists({
 }
 
 function AddListForm({
-  occasionId,
-  occasion,
+  folderId,
+  folder,
   queryClient,
 }: {
-  occasionId: number;
-  occasion: OccasionDetailType;
+  folderId: number;
+  folder: FolderDetailType;
   queryClient: ReturnType<typeof useQueryClient>;
 }) {
   const [selectedListId, setSelectedListId] = useState("");
@@ -280,16 +280,16 @@ function AddListForm({
   const allLists = useQuery({ queryKey: ["lists"], queryFn: () => getLists() });
 
   const addMutation = useMutation({
-    mutationFn: (listId: number) => addOccasionItem(occasionId, listId),
+    mutationFn: (listId: number) => addFolderItem(folderId, listId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["occasion", occasionId] });
-      queryClient.invalidateQueries({ queryKey: ["occasions"] });
+      queryClient.invalidateQueries({ queryKey: ["folder", folderId] });
+      queryClient.invalidateQueries({ queryKey: ["folders"] });
       setSelectedListId("");
     },
     onError: () => toast.error("Failed to add list."),
   });
 
-  const existingListIds = new Set(occasion.lists.map((l) => l.id));
+  const existingListIds = new Set(folder.lists.map((l) => l.id));
   const availableLists = (allLists.data ?? []).filter((l) => !existingListIds.has(l.id));
 
   if (availableLists.length === 0) return null;
@@ -331,19 +331,19 @@ function AddListForm({
   );
 }
 
-function ShoppingList({ occasionId }: { occasionId: number }) {
+function ShoppingList({ folderId }: { folderId: number }) {
   const queryClient = useQueryClient();
 
   const { data: items = [], isLoading, error } = useQuery({
-    queryKey: ["shoppingList", occasionId],
-    queryFn: () => getShoppingList(occasionId),
+    queryKey: ["shoppingList", folderId],
+    queryFn: () => getShoppingList(folderId),
   });
 
   const purchaseMutation = useMutation({
     mutationFn: ({ listId, giftId }: { listId: number; giftId: number }) =>
       purchaseGift(listId, giftId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["shoppingList", occasionId] });
+      queryClient.invalidateQueries({ queryKey: ["shoppingList", folderId] });
       toast.success("Marked as purchased!");
     },
     onError: () => toast.error("Failed to mark as purchased."),
@@ -353,7 +353,7 @@ function ShoppingList({ occasionId }: { occasionId: number }) {
     mutationFn: ({ listId, giftId }: { listId: number; giftId: number }) =>
       unpurchaseGift(listId, giftId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["shoppingList", occasionId] });
+      queryClient.invalidateQueries({ queryKey: ["shoppingList", folderId] });
       toast.success("Marked as not purchased.");
     },
     onError: () => toast.error("Failed to update purchase status."),
@@ -373,7 +373,7 @@ function ShoppingList({ occasionId }: { occasionId: number }) {
   if (items.length === 0) {
     return (
       <div className="rounded-lg bg-white p-6 shadow text-center">
-        <p className="text-gray-500">No claimed gifts in this occasion.</p>
+        <p className="text-gray-500">No claimed gifts in this folder.</p>
         <p className="text-sm text-gray-400 mt-1">Claim gifts from shared lists to see them here.</p>
       </div>
     );

@@ -13,11 +13,13 @@ architecture live in [`AGENTS.md`](AGENTS.md); this file is only about what the 
 | **for Beth** | This list is kept for a person with no account | `components/ListAttribution.tsx`, `lib/attribution.ts` |
 | **People** | Connections and families together — everyone I share with | `pages/People.tsx` |
 | **Family** | A named group of people; lists can be shared to it wholesale | `pages/FamilyDetail.tsx` |
-| **Occasion** | My saved grouping of lists — "Christmas 2026". Was called a *collection* | `pages/Occasions*.tsx` |
+| **Folder** | My saved grouping of lists — "Christmas 2026". Was called a *collection*, then an *occasion* | `pages/Folder*.tsx` |
 | **Claim** / "I'll get this" | My private intent to buy a gift. Never visible to the list's owner | `pages/list-detail/GiftsTab.tsx` |
 | **Account person** | A named person on a shared login; a list can be marked as being for one | `components/ListForFields.tsx` |
 
-Words the UI must **not** use: "collection" (say occasion), "family list" (a list shared via a family
+Words the UI must **not** use: "collection" (rejected outright — it reads too close to "connection"),
+"occasion" for a folder (the word is reserved for a family's shared occasion — see
+[`docs/adr/0002-occasion-and-folder.md`](docs/adr/0002-occasion-and-folder.md)), "family list" (a list shared via a family
 is just a shared list, labelled with the family), "connect"/"collect" as navigation labels, "they use
 this app".
 

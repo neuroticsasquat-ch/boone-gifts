@@ -35,12 +35,12 @@ export function People() {
   const connections = useQuery({ queryKey: ["connections"], queryFn: getConnections });
 
   // Removing a connection withdraws what that person shared, so the shared
-  // scope and the occasions built over it go stale with the connection list.
+  // scope and the folders built over it go stale with the connection list.
   const invalidateConnections = () => {
     queryClient.invalidateQueries({ queryKey: ["connections"] });
     queryClient.invalidateQueries({ queryKey: ["connectionRequests"] });
     queryClient.invalidateQueries({ queryKey: ["lists", "shared"] });
-    queryClient.invalidateQueries({ queryKey: ["occasions"] });
+    queryClient.invalidateQueries({ queryKey: ["folders"] });
   };
 
   const removeMutation = useMutation({

@@ -13,7 +13,7 @@ import { Spinner } from "../components/Spinner";
 import { GiftsTab } from "./list-detail/GiftsTab";
 import { SharingPanel } from "./list-detail/SharingPanel";
 import { SharingSummary } from "./list-detail/SharingSummary";
-import { OccasionPicker } from "./list-detail/OccasionPicker";
+import { FolderPicker } from "./list-detail/FolderPicker";
 import { attributionFor, isKeptForAbsentPerson, recipientLabel, recipientNameOf } from "../lib/attribution";
 import { ListForFields } from "../components/ListForFields";
 import {
@@ -36,9 +36,9 @@ export function ListDetail() {
   const [editing, setEditing] = useState(false);
   // One header panel at a time — both open in the same slot under the header,
   // and two of them stacked there would bury the gifts.
-  const [panel, setPanel] = useState<"sharing" | "occasions" | null>(null);
+  const [panel, setPanel] = useState<"sharing" | "folders" | null>(null);
 
-  function togglePanel(next: "sharing" | "occasions") {
+  function togglePanel(next: "sharing" | "folders") {
     setPanel((open) => (open === next ? null : next));
   }
 
@@ -65,13 +65,13 @@ export function ListDetail() {
   );
 
   const isOwner = user !== null && isOwnerView(list, user.id);
-  // Simple mode hides the occasion filter on /lists (project spec §6.1), so it
-  // has no way to read an occasion back. Offering to file a list into one here
+  // Simple mode hides the folder filter on /lists (project spec §6.1), so it
+  // has no way to read a folder back. Offering to file a list into one here
   // would leave membership its owner can never see — the orphaned-concept
   // problem this project set out to end, not restage. Subtractive, as §6.1
   // requires: the wording and the destination are the same in both modes when
   // it shows at all.
-  const canAddToOccasion = !user?.simple_mode;
+  const canAddToFolder = !user?.simple_mode;
 
   return (
     <div className="space-y-6">
@@ -90,13 +90,13 @@ export function ListDetail() {
             onEdit={() => setEditing(true)}
             simpleMode={!!user?.simple_mode}
             onChangeSharing={() => togglePanel("sharing")}
-            onAddToOccasion={canAddToOccasion ? () => togglePanel("occasions") : undefined}
+            onAddToFolder={canAddToFolder ? () => togglePanel("folders") : undefined}
           />
         )
       ) : (
         <ViewerHeader
           list={list as GiftListDetailViewer}
-          onAddToOccasion={canAddToOccasion ? () => togglePanel("occasions") : undefined}
+          onAddToFolder={canAddToFolder ? () => togglePanel("folders") : undefined}
         />
       )}
 
@@ -110,9 +110,9 @@ export function ListDetail() {
         />
       )}
 
-      {/* Occasions — likewise the only way in, for owner and viewer alike. */}
-      {panel === "occasions" && (
-        <OccasionPicker
+      {/* Folders — likewise the only way in, for owner and viewer alike. */}
+      {panel === "folders" && (
+        <FolderPicker
           listId={listId}
           queryClient={queryClient}
           onClose={() => setPanel(null)}
@@ -135,7 +135,7 @@ function OwnerHeader({
   onEdit,
   simpleMode,
   onChangeSharing,
-  onAddToOccasion,
+  onAddToFolder,
 }: {
   list: GiftListDetailOwner;
   listId: number;
@@ -144,7 +144,7 @@ function OwnerHeader({
   onEdit: () => void;
   simpleMode: boolean;
   onChangeSharing: () => void;
-  onAddToOccasion?: () => void;
+  onAddToFolder?: () => void;
 }) {
   const archiveMutation = useMutation({
     mutationFn: () => updateList(listId, { is_archived: !list.is_archived }),
@@ -205,7 +205,7 @@ function OwnerHeader({
         <HeaderMenu
           pending={archiveMutation.isPending || deleteMutation.isPending}
           items={[
-            ...(onAddToOccasion ? [{ label: ADD_TO_OCCASION, onClick: onAddToOccasion }] : []),
+            ...(onAddToFolder ? [{ label: ADD_TO_FOLDER, onClick: onAddToFolder }] : []),
             { label: "Edit", onClick: onEdit },
             { label: list.is_archived ? "Unarchive" : "Archive", onClick: handleArchiveToggle },
             { label: "Delete", onClick: handleDelete, danger: true, separatorBefore: true },
@@ -217,11 +217,11 @@ function OwnerHeader({
 }
 
 /**
- * The occasion action reads the same for an owner and a viewer, so it is written
+ * The folder action reads the same for an owner and a viewer, so it is written
  * once — the two headers must not drift apart on the wording of the only entry
  * point a viewer has.
  */
-const ADD_TO_OCCASION = "Add to an occasion…";
+const ADD_TO_FOLDER = "Add to a folder…";
 
 type HeaderMenuItem = {
   label: string;
@@ -232,8 +232,8 @@ type HeaderMenuItem = {
 
 /**
  * The header's `⋯` menu, so the header can lead with the list itself and its
- * sharing line. An owner's holds the occasion action plus edit, archive and
- * delete; a viewer's holds the occasion action alone.
+ * sharing line. An owner's holds the folder action plus edit, archive and
+ * delete; a viewer's holds the folder action alone.
  */
 function HeaderMenu({ items, pending = false }: { items: HeaderMenuItem[]; pending?: boolean }) {
   const [open, setOpen] = useState(false);
@@ -290,10 +290,10 @@ function HeaderMenu({ items, pending = false }: { items: HeaderMenuItem[]; pendi
 
 function ViewerHeader({
   list,
-  onAddToOccasion,
+  onAddToFolder,
 }: {
   list: GiftListDetailViewer;
-  onAddToOccasion?: () => void;
+  onAddToFolder?: () => void;
 }) {
   const connections = useQuery({ queryKey: ["connections"], queryFn: getConnections });
   const connectionId = connections.data?.find((c) => c.user.id === list.owner_id)?.id;
@@ -323,11 +323,11 @@ function ViewerHeader({
       }
       isArchived={list.is_archived}
       // No owner controls, but the menu itself stays: filing someone else's list
-      // under an occasion of your own is the main use of the feature, and this
+      // under a folder of your own is the main use of the feature, and this
       // is a viewer's only way to reach it.
       actions={
-        onAddToOccasion && (
-          <HeaderMenu items={[{ label: ADD_TO_OCCASION, onClick: onAddToOccasion }]} />
+        onAddToFolder && (
+          <HeaderMenu items={[{ label: ADD_TO_FOLDER, onClick: onAddToFolder }]} />
         )
       }
     />

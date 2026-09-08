@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { Link } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { getLists } from "../api/lists";
-import { getOccasion, getOccasions } from "../api/occasions";
+import { getFolder, getFolders } from "../api/folders";
 import { useAuth } from "../hooks/useAuth";
 import { useTitle } from "../hooks/useTitle";
 import { Spinner } from "../components/Spinner";
@@ -13,8 +13,8 @@ import { ActionableBanner } from "../components/ActionableBanner";
 
 type SortBy = "updated" | "name" | "created";
 
-/** The filter's "no occasion chosen" value. `<select>` values are strings, so the
- *  occasion ids alongside it are stringified too. */
+/** The filter's "no folder chosen" value. `<select>` values are strings, so the
+ *  folder ids alongside it are stringified too. */
 const ALL_LISTS = "all";
 
 function sortLists(lists: GiftList[], sortBy: SortBy) {
@@ -25,21 +25,21 @@ function sortLists(lists: GiftList[], sortBy: SortBy) {
   });
 }
 
-/** A section's rows: narrowed to the selected occasion, then sorted. `occasionIds`
- *  is null while the occasion's membership is still loading, which shows nothing
+/** A section's rows: narrowed to the selected folder, then sorted. `folderIds`
+ *  is null while the folder's membership is still loading, which shows nothing
  *  rather than briefly showing everything. */
 function visibleLists(
   lists: GiftList[],
-  { filtering, occasionIds, sortBy }: { filtering: boolean; occasionIds: Set<number> | null; sortBy: SortBy },
+  { filtering, folderIds, sortBy }: { filtering: boolean; folderIds: Set<number> | null; sortBy: SortBy },
 ) {
   if (!filtering) return sortLists(lists, sortBy);
-  return sortLists(occasionIds ? lists.filter((list) => occasionIds.has(list.id)) : [], sortBy);
+  return sortLists(folderIds ? lists.filter((list) => folderIds.has(list.id)) : [], sortBy);
 }
 
 export function Lists() {
   useTitle("Lists");
   const { user, isLoading: authLoading } = useAuth();
-  // Simple mode is purely subtractive: it hides the occasion filter, sort and
+  // Simple mode is purely subtractive: it hides the folder filter, sort and
   // archive, and nothing else on this page (project spec §6.1). Withheld until
   // the session resolves, so a simple-mode viewer never sees them flash by while
   // the silent refresh is still in flight.
@@ -47,7 +47,7 @@ export function Lists() {
 
   const [showArchived, setShowArchived] = useState(false);
   const [sortBy, setSortBy] = useState<SortBy>("updated");
-  const [occasionId, setOccasionId] = useState<number | null>(null);
+  const [folderId, setFolderId] = useState<number | null>(null);
 
   const ownedLists = useQuery({
     queryKey: ["lists", "owned", { archived: showArchived }],
@@ -58,44 +58,44 @@ export function Lists() {
     queryFn: () => getLists("shared", showArchived || undefined),
   });
 
-  // The occasions pages lost their route (NEU-1231), so this filter is now the
+  // The folders pages lost their route (NEU-1231), so this filter is now the
   // primary place a user meets the concept — hence the explanatory caption below.
-  const occasions = useQuery({
-    queryKey: ["occasions", { archived: false }],
-    queryFn: () => getOccasions(),
+  const folders = useQuery({
+    queryKey: ["folders", { archived: false }],
+    queryFn: () => getFolders(),
     enabled: showControls,
   });
-  const selectedOccasion = useQuery({
-    queryKey: ["occasion", occasionId],
-    queryFn: () => getOccasion(occasionId as number),
-    enabled: occasionId !== null,
+  const selectedFolder = useQuery({
+    queryKey: ["folder", folderId],
+    queryFn: () => getFolder(folderId as number),
+    enabled: folderId !== null,
   });
 
-  // Membership is the occasion's own list of lists, so a list in several
-  // occasions is matched by each of them.
-  const occasionListIds = useMemo(() => {
-    if (!selectedOccasion.data) return null;
-    return new Set(selectedOccasion.data.lists.map((list) => list.id));
-  }, [selectedOccasion.data]);
+  // Membership is the folder's own list of lists, so a list in several
+  // folders is matched by each of them.
+  const folderListIds = useMemo(() => {
+    if (!selectedFolder.data) return null;
+    return new Set(selectedFolder.data.lists.map((list) => list.id));
+  }, [selectedFolder.data]);
 
   // A select whose only option is "All lists" would name a concept it cannot
   // explain, so the filter itself waits until there is something to filter by.
-  const hasOccasions = (occasions.data?.length ?? 0) > 0;
-  const filtering = occasionId !== null;
-  const occasionName = selectedOccasion.data?.name
-    ?? occasions.data?.find((occasion) => occasion.id === occasionId)?.name
-    ?? "this occasion";
+  const hasFolders = (folders.data?.length ?? 0) > 0;
+  const filtering = folderId !== null;
+  const folderName = selectedFolder.data?.name
+    ?? folders.data?.find((folder) => folder.id === folderId)?.name
+    ?? "this folder";
 
   const visibleOwned = useMemo(
-    () => visibleLists(ownedLists.data ?? [], { filtering, occasionIds: occasionListIds, sortBy }),
-    [ownedLists.data, filtering, occasionListIds, sortBy],
+    () => visibleLists(ownedLists.data ?? [], { filtering, folderIds: folderListIds, sortBy }),
+    [ownedLists.data, filtering, folderListIds, sortBy],
   );
   // "Most recent" is the order the server already returns, so the section renders
   // the server's merge of the direct and family grants until the viewer says
   // otherwise. Sorting is a viewer's choice; grouping is not on offer (ADR 0001).
   const visibleShared = useMemo(
-    () => visibleLists(sharedLists.data ?? [], { filtering, occasionIds: occasionListIds, sortBy }),
-    [sharedLists.data, filtering, occasionListIds, sortBy],
+    () => visibleLists(sharedLists.data ?? [], { filtering, folderIds: folderListIds, sortBy }),
+    [sharedLists.data, filtering, folderListIds, sortBy],
   );
 
   if (ownedLists.isPending || sharedLists.isPending) return (
@@ -105,7 +105,7 @@ export function Lists() {
     </div>
   );
 
-  const sectionsPending = filtering && selectedOccasion.isPending;
+  const sectionsPending = filtering && selectedFolder.isPending;
 
   return (
     <div className="space-y-8">
@@ -131,19 +131,19 @@ export function Lists() {
         {showControls && (
           <>
             <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
-              {hasOccasions && (
+              {hasFolders && (
                 <label className="flex items-center gap-2 text-sm text-gray-600">
-                  Occasion
+                  Folder
                   <select
-                    value={occasionId === null ? ALL_LISTS : String(occasionId)}
+                    value={folderId === null ? ALL_LISTS : String(folderId)}
                     onChange={(e) =>
-                      setOccasionId(e.target.value === ALL_LISTS ? null : Number(e.target.value))
+                      setFolderId(e.target.value === ALL_LISTS ? null : Number(e.target.value))
                     }
                     className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600"
                   >
                     <option value={ALL_LISTS}>All lists</option>
-                    {occasions.data?.map((occasion) => (
-                      <option key={occasion.id} value={occasion.id}>{occasion.name}</option>
+                    {folders.data?.map((folder) => (
+                      <option key={folder.id} value={folder.id}>{folder.name}</option>
                     ))}
                   </select>
                 </label>
@@ -170,12 +170,12 @@ export function Lists() {
               </button>
             </div>
 
-            {/* Always shown in full mode, filter or no filter: with the occasions
+            {/* Always shown in full mode, filter or no filter: with the folders
                 pages unrouted this is the only introduction to the concept, and a
-                viewer with no occasions yet is exactly the one who needs it. */}
+                viewer with no folders yet is exactly the one who needs it. */}
             <p className="mt-2 text-xs text-gray-500">
-              Occasions group lists together — for example, all the lists for Christmas 2026.
-              {!hasOccasions && " Open a list to file it under one."}
+              Folders group lists together — for example, all the lists for Christmas 2026.
+              {!hasFolders && " Open a list to file it under one."}
             </p>
           </>
         )}
@@ -192,7 +192,7 @@ export function Lists() {
             {visibleOwned.length === 0 && (
               <p className="mt-3 text-gray-500">
                 {filtering ? (
-                  `None of your lists are in ${occasionName}.`
+                  `None of your lists are in ${folderName}.`
                 ) : showArchived ? (
                   "No archived lists."
                 ) : (
@@ -234,7 +234,7 @@ export function Lists() {
             {visibleShared.length === 0 && (
               <p className="mt-3 text-gray-500">
                 {filtering ? (
-                  `No lists shared with you are in ${occasionName}.`
+                  `No lists shared with you are in ${folderName}.`
                 ) : showArchived ? (
                   "No archived lists shared with you."
                 ) : showControls ? (

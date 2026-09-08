@@ -59,7 +59,7 @@ src/
     gifts.ts         # Gift CRUD + claim/unclaim
     families.ts      # 13 functions — see "Families" below
     account.ts       # GET/PUT /account — the shared-account flag and its people
-    connections.ts, shares.ts, occasions.ts, invites.ts, users.ts, meta.ts
+    connections.ts, shares.ts, folders.ts, invites.ts, users.ts, meta.ts
   contexts/AuthContext.tsx   # Access token in memory, silent refresh on mount, toggleSimpleMode
   hooks/             # useAuth, useTitle
   components/
@@ -73,14 +73,14 @@ src/
     ListForFields.tsx     # "Who is this list for?" — the shared-account picker,
                           # falling back to RecipientFields on a normal account
     RecipientFields.tsx   # The "this list is for someone else" control
-  pages/             # One per route (see table below), plus Occasions.tsx and
-                     # OccasionDetail.tsx — still unrouted; the Lists page's
-                     # occasion filter and list detail's "Add to an occasion…"
+  pages/             # One per route (see table below), plus Folders.tsx and
+                     # FolderDetail.tsx — still unrouted; the Lists page's
+                     # folder filter and list detail's "Add to a folder…"
                      # are where a user meets the concept now
     list-detail/     # GiftsTab (the page body), SharingSummary (the header's
                      # "Shared with …" line), SharingPanel (the combined people
                      # + families picker behind the header's Change control),
-                     # OccasionPicker (the ⋯ menu's "Add to an occasion…")
+                     # FolderPicker (the ⋯ menu's "Add to a folder…")
   lib/               # attribution.ts, recipient.ts, list-for.ts — who a list is for,
                      # and how that reads on a row
   types/index.ts     # Types mirroring the backend Pydantic schemas
@@ -99,9 +99,9 @@ src/
 | `/reset-password` | `ResetPassword` | Public |
 | `/family-invites/:token` | `AcceptFamilyInvite` | Authenticated, outside `Layout` |
 | `/` | — | Redirects to `/lists`; the app's entry point, not a page |
-| `/lists` | `Lists` | My lists + everything shared with me, under the actionable banner. Header controls: occasion filter, sort, archive (full mode only) |
+| `/lists` | `Lists` | My lists + everything shared with me, under the actionable banner. Header controls: folder filter, sort, archive (full mode only) |
 | `/lists/new` | `CreateList` | Full mode also shows "Share with families" checkboxes |
-| `/lists/:id` | `ListDetail` | Owner view or viewer/claimer view. No tab bar: header, then the gifts. Owner header carries the sharing summary line (+ **Change**) and a `⋯` menu holding Add to an occasion…, Edit, Archive and Delete; a viewer gets the same menu holding the occasion action alone. Simple mode drops that one item, so a viewer has no menu at all |
+| `/lists/:id` | `ListDetail` | Owner view or viewer/claimer view. No tab bar: header, then the gifts. Owner header carries the sharing summary line (+ **Change**) and a `⋯` menu holding Add to a folder…, Edit, Archive and Delete; a viewer gets the same menu holding the folder action alone. Simple mode drops that one item, so a viewer has no menu at all |
 | `/people` | `People` | The People tab: families, then individuals, under the actionable banner |
 | `/people/:id` | `ConnectionProfile` | |
 | `/people/families/:id` | `FamilyDetail` | Members, invites, rename, delete, leave |
@@ -124,13 +124,13 @@ A reduced navigation for users who only need their own lists and their family's.
 `ActionableBanner` is deliberately **not** subtracted in simple mode: with People hidden, the banner
 on `/lists` is the only route to a pending connection request or family invite.
 
-On `/lists`, simple mode hides the header controls — occasion filter, sort, archive — **and nothing
+On `/lists`, simple mode hides the header controls — folder filter, sort, archive — **and nothing
 else**. The rows, the section headings and the New List button are identical in both modes; only the
 "nothing shared with you yet" empty state differs, because full mode's "Add a connection" link points
 at People, which simple mode hides.
 
-On `/lists/:id`, simple mode hides one thing: "Add to an occasion…" in the `⋯` menu. It goes for the
-same reason the filter does — with no filter there is nothing to read an occasion back with — and it
+On `/lists/:id`, simple mode hides one thing: "Add to a folder…" in the `⋯` menu. It goes for the
+same reason the filter does — with no filter there is nothing to read a folder back with — and it
 leaves Edit, Archive and Delete untouched, so a viewer in simple mode gets no `⋯` menu at all.
 
 `Layout.tsx` holds **one** `tabs` array driving both the mobile bottom bar and the desktop nav. Simple
@@ -205,41 +205,43 @@ takes.
   `recipientLabel` in `lib/attribution.ts`. A *viewer* is told nothing about account people: to
   everyone else the account is one identity (project spec §5.1).
 
-## Occasions
+## Folders
 
-An occasion is a user's saved grouping of lists — renamed from "collection" (NEU-1229). It has **no
-top-level route** any more, so the **occasion filter on `/lists` is the primary place a user meets
-the concept**, and it carries the explanation the old page's blurb used to.
+A folder is a user's saved grouping of lists — called a "collection" until NEU-1229 and an
+"occasion" until NEU-1259, which vacated that word for a family's shared occasion (see
+`docs/adr/0002-occasion-and-folder.md`). It has **no top-level route** any more, so the **folder
+filter on `/lists` is the primary place a user meets the concept**, and it carries the explanation
+the old page's blurb used to.
 
-**Membership is an action on the list, not a tab.** `list-detail/OccasionPicker.tsx` is opened by
-"Add to an occasion…" in list detail's `⋯` menu — a checkbox per occasion, ticked where this list is
+**Membership is an action on the list, not a tab.** `list-detail/FolderPicker.tsx` is opened by
+"Add to a folder…" in list detail's `⋯` menu — a checkbox per folder, ticked where this list is
 already a member, plus a field that creates one and files the list under it in a single step. It
-replaces the retired `OccasionsTab` (NEU-1240).
+replaces the tab retired in NEU-1240.
 
 - **Owner or viewer.** Filing someone else's list under "Christmas 2026" is the main use of the
   feature, so the `⋯` menu exists on the viewer header too, holding this one item. It is a viewer's
-  only entry point to occasions, so it must keep working for them.
-- An occasion is private to whoever owns it: the picker always shows the *viewer's* own occasions,
+  only entry point to folders, so it must keep working for them.
+- A folder is private to whoever owns it: the picker always shows the *viewer's* own folders,
   and nothing about the list or its owner travels through it.
-- Membership writes through `/occasions/{id}/items`; the checked state comes from
-  `/occasions/for-list/{list_id}` (`["occasions-for-list", listId]`).
+- Membership writes through `/folders/{id}/items`; the checked state comes from
+  `/folders/for-list/{list_id}` (`["folders-for-list", listId]`).
 - The picker and the sharing panel share the header's one panel slot, so opening either closes the
   other.
-- **Hidden in simple mode**, which has no occasion filter on `/lists` and so no way to read an
-  occasion back: filing a list into one there would leave membership its owner could never see. The
+- **Hidden in simple mode**, which has no folder filter on `/lists` and so no way to read a
+  folder back: filing a list into one there would leave membership its owner could never see. The
   rest of the `⋯` menu is unchanged, so this stays purely subtractive.
 
 - The filter is a `<select>` in the Lists page header, defaulting to "All lists". It narrows **both**
-  sections at once; a list in several occasions is matched by each of them.
-- It renders only when the viewer has at least one occasion — a select whose sole option is
+  sections at once; a list in several folders is matched by each of them.
+- It renders only when the viewer has at least one folder — a select whose sole option is
   "All lists" would name a concept it cannot explain.
-- Membership comes from `getOccasion(id).lists` (`["occasion", id]`), not from a per-list lookup, so
+- Membership comes from `getFolder(id).lists` (`["folder", id]`), not from a per-list lookup, so
   one request answers the whole page.
 
 **Sort is one page-level control, not one per section.** The Lists page used to hold two independent
 sort selects (`ownedSort`, `sharedSort`); NEU-1238 moved sort into the header row shared with the
-occasion filter, and a page-level control that sorts one section is a lie. So the two states
-collapsed into one `sortBy` governing both — the same both-sections-at-once reach the occasion filter
+folder filter, and a page-level control that sorts one section is a lie. So the two states
+collapsed into one `sortBy` governing both — the same both-sections-at-once reach the folder filter
 has. This deliberately diverges from the project spec §4.2 wireframe, which still draws `[sort ▾]`
 against each section heading.
 
