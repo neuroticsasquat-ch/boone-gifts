@@ -344,6 +344,142 @@ describe("FamilyDetail", () => {
     expect(emailInput).toHaveValue("");
   });
 
+  it("simple mode checkbox: unchecked by default → POST body carries simple_mode false", async () => {
+    let capturedBody: unknown;
+    server.use(
+      http.get(`${API}/families/1`, () => HttpResponse.json(sampleFamily)),
+      http.post(`${API}/families/1/invites`, async ({ request }) => {
+        capturedBody = await request.json();
+        return HttpResponse.json({ id: 10 }, { status: 201 });
+      }),
+      http.get(`${API}/families/1/invites`, () => HttpResponse.json([])),
+    );
+
+    renderFamilyDetail(organizerToken);
+
+    await waitFor(() => {
+      expect(screen.getByText("The Boones")).toBeInTheDocument();
+    });
+
+    await userEvent.type(screen.getByPlaceholderText("Email address"), "new@example.com");
+    await userEvent.click(screen.getByRole("button", { name: "Send Invite" }));
+
+    await waitFor(() => {
+      expect(capturedBody).toEqual({
+        email: "new@example.com",
+        role: "member",
+        simple_mode: false,
+      });
+    });
+  });
+
+  it("simple mode checkbox: checked → POST body carries simple_mode true, box resets after send", async () => {
+    let capturedBody: unknown;
+    server.use(
+      http.get(`${API}/families/1`, () => HttpResponse.json(sampleFamily)),
+      http.post(`${API}/families/1/invites`, async ({ request }) => {
+        capturedBody = await request.json();
+        return HttpResponse.json({ id: 10 }, { status: 201 });
+      }),
+      http.get(`${API}/families/1/invites`, () => HttpResponse.json([])),
+    );
+
+    renderFamilyDetail(organizerToken);
+
+    await waitFor(() => {
+      expect(screen.getByText("The Boones")).toBeInTheDocument();
+    });
+
+    const checkbox = screen.getByRole("checkbox", { name: /Start them in simple mode/i });
+    await userEvent.type(screen.getByPlaceholderText("Email address"), "gran@example.com");
+    await userEvent.click(checkbox);
+    await userEvent.click(screen.getByRole("button", { name: "Send Invite" }));
+
+    await waitFor(() => {
+      expect(capturedBody).toEqual({
+        email: "gran@example.com",
+        role: "member",
+        simple_mode: true,
+      });
+    });
+    await waitFor(() => {
+      expect(checkbox).not.toBeChecked();
+    });
+  });
+
+  it("role dropdown: organizer selected → POST body carries role organizer, resets to member after send", async () => {
+    let capturedBody: unknown;
+    server.use(
+      http.get(`${API}/families/1`, () => HttpResponse.json(sampleFamily)),
+      http.post(`${API}/families/1/invites`, async ({ request }) => {
+        capturedBody = await request.json();
+        return HttpResponse.json({ id: 10 }, { status: 201 });
+      }),
+      http.get(`${API}/families/1/invites`, () => HttpResponse.json([])),
+    );
+
+    renderFamilyDetail(organizerToken);
+
+    await waitFor(() => {
+      expect(screen.getByText("The Boones")).toBeInTheDocument();
+    });
+
+    const roleSelect = screen.getByRole("combobox", { name: /Role/i });
+    expect(roleSelect).toHaveValue("member");
+
+    await userEvent.type(screen.getByPlaceholderText("Email address"), "chief@example.com");
+    await userEvent.selectOptions(roleSelect, "organizer");
+    await userEvent.click(screen.getByRole("button", { name: "Send Invite" }));
+
+    await waitFor(() => {
+      expect(capturedBody).toEqual({
+        email: "chief@example.com",
+        role: "organizer",
+        simple_mode: false,
+      });
+    });
+    await waitFor(() => {
+      expect(roleSelect).toHaveValue("member");
+    });
+  });
+
+  it("invite rows show role, and simple mode only when the invite sets it", async () => {
+    const base = {
+      family_id: 1,
+      token: "abc123",
+      invited_by_id: 1,
+      expires_at: "2099-01-01T00:00:00Z",
+      accepted_at: null,
+      declined_at: null,
+      created_at: "2026-06-28T00:00:00Z",
+      status: "pending" as const,
+    };
+
+    server.use(
+      http.get(`${API}/families/1`, () => HttpResponse.json(sampleFamily)),
+      http.get(`${API}/families/1/invites`, () =>
+        HttpResponse.json([
+          { ...base, id: 10, email: "plain@example.com", role: "member", simple_mode: false },
+          { ...base, id: 11, email: "gran@example.com", role: "member", simple_mode: true },
+          { ...base, id: 12, email: "chief@example.com", role: "organizer", simple_mode: false },
+        ])
+      ),
+    );
+
+    renderFamilyDetail(organizerToken);
+
+    await waitFor(() => {
+      expect(screen.getByText("plain@example.com")).toBeInTheDocument();
+    });
+
+    const rowMeta = (email: string) =>
+      screen.getByText(email).parentElement?.querySelector("p:nth-of-type(2)")?.textContent;
+
+    expect(rowMeta("plain@example.com")).toBe("pending · Member");
+    expect(rowMeta("gran@example.com")).toBe("pending · Member · Simple mode");
+    expect(rowMeta("chief@example.com")).toBe("pending · Organizer");
+  });
+
   it("revoke: pending invite shown, organizer clicks Revoke → row disappears", async () => {
     const pendingInvite = {
       id: 10,
