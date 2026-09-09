@@ -25,8 +25,18 @@ export async function unclaimGift(listId: number, giftId: number): Promise<Gift>
   return response.data;
 }
 
-export async function purchaseGift(listId: number, giftId: number): Promise<Gift> {
-  const response = await apiClient.post<Gift>(`/lists/${listId}/gifts/${giftId}/purchase`);
+/** Tick a claimed gift purchased, optionally recording what it cost.
+ *
+ * The two ways of not naming an amount are **not** the same request, and the
+ * backend tells them apart by whether the field is set at all:
+ *
+ * - omit `amountPaid` — "Skip". Leaves whatever amount is already recorded
+ *   alone, which is what makes unticking and re-ticking non-destructive.
+ * - pass `null` — clears the recorded amount deliberately.
+ */
+export async function purchaseGift(listId: number, giftId: number, amountPaid?: string | null): Promise<Gift> {
+  const body = amountPaid === undefined ? undefined : { amount_paid: amountPaid };
+  const response = await apiClient.post<Gift>(`/lists/${listId}/gifts/${giftId}/purchase`, body);
   return response.data;
 }
 

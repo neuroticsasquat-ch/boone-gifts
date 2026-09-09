@@ -56,7 +56,8 @@ src/
     auth.ts          # login, register, refresh, logout, updateProfile, changePassword
     lists.ts         # getLists("owned"|"shared"), createList (occasion_ids),
                      # getShareTargets / shareListWithOccasion / unshareListFromOccasion
-    gifts.ts         # Gift CRUD + claim/unclaim
+    gifts.ts         # Gift CRUD + claim/unclaim + purchase/unpurchase
+                     # (purchase carries what the claimer paid)
     families.ts      # 13 functions — see "Families" below
     account.ts       # GET/PUT /account — the shared-account flag and its people
     occasions.ts     # A family's occasions: list, read, create, rename/archive,
@@ -200,6 +201,49 @@ is the only way to switch that grant off) and names the occasion "— archived".
 - A **409 on `POST /lists`** is the same archived occasion, caught between the create form loading and being submitted. It gets its own message for the same reason: "try again" is a lie when the identical submission will keep failing.
 - **Create form** (`CreateList.tsx`) — a "Share with families" fieldset posting `occasion_ids`, with the same three row shapes. **Pre-checked, narrowed by M3**: a family arrives checked only when it has **exactly one active occasion**, the only shape where ticking needs no further answer. Hidden when the user belongs to no families. The default lives in `tickedFamilyIds` as `null` meaning "untouched", so a late answer still arrives checked without an effect re-seeding over a deliberate uncheck; the selects' values live in a separate `picked` map, because naming an occasion is not the same as saying the list should reach that family. There is no endpoint answering "my families and their occasions" in one call, so the form fans out over `useQueries` — a user's families are few. Submit is blocked while any of those are pending (posting no `occasion_ids` would silently skip the pre-check) and while any ticked family has no occasion chosen.
 - **Revoke dialog** — a 409 from the occasion DELETE means members of that occasion's family hold claims that revoking would orphan. The modal offers **Release those claims** / **Keep them claimed** / **Cancel**, re-issuing with `claims=release` or `claims=keep`. It shows **no counts and no gift or claimer names**: owners are blind to claim state on their own lists.
+
+## Claims and purchases
+
+A claim lives on its own row on the backend (backend ADR 0003), and `GiftRead` flattens it onto the
+gift for the people the list was shared with: `claimed_by_id`, `claimed_at`, `purchased_at` and
+`amount_paid`. **`GiftOwnerView` carries none of them**, so an owner-facing surface has nothing to
+leak — the rule is structural, not serializer discipline, and `list-detail/GiftsTab.tsx` renders the
+purchase controls from the viewer branch alone.
+
+**`amount_paid` is what the *claimer* paid; `price` is the *owner's* asking price.** They are never
+interchangeable. Both arrive as **strings**, because the backend serialises `Decimal` that way
+(Pydantic v2 default), already at the column's two-decimal scale — so both render as-is. Anywhere a
+number is actually needed, coerce with `Number(...)`, as the viewer's price sort already does. There
+is no shared money formatter yet; project spec §14 open question 1 hands that to the budgets ticket.
+
+`PurchaseControl` (in `GiftsTab.tsx`) is the tick and the amount prompt:
+
+- **Ticking reveals the prompt; it does not record the purchase.** **Save** and **Skip** are what
+  commit it, so an amount the user meant to type is never lost to a tick they wandered away from.
+  **Skip is one click** and records the purchase with no amount. Unticking an unanswered prompt
+  abandons it — nothing was recorded, so there is nothing to undo.
+- The field **arrives empty**, seeded only from the claimer's *own* recorded amount when they are
+  editing one. The owner's asking price sits beside it as "listed at $39" and **never inside it** —
+  a budget pre-filled from someone else's wishlist price looks precise and is a guess
+  (project spec §6.3).
+- **Omitting `amount_paid` and sending an explicit `null` are different requests**, and the backend
+  tells them apart by whether the field is set. `purchaseGift(listId, giftId)` omits it, leaving any
+  recorded amount alone; `purchaseGift(listId, giftId, null)` clears it. That distinction is what
+  makes unticking and re-ticking non-destructive, so don't collapse the two.
+- **Unticking leaves the amount** (the server keeps it for re-ticking); **unclaiming discards it**,
+  because the claim row goes with it and there is no explicit reset to write.
+- A purchase with no amount says "no amount recorded" rather than showing nothing: an understated
+  total must read as an understatement (project spec §7).
+- On an **archived list** the control goes read-only rather than disappearing — the tick is disabled
+  but what the claimer already bought still shows, the same way `✓ Yours` survives while the claim
+  and unclaim buttons don't.
+
+**Correcting an amount is untick-then-tick**, and there is deliberately no in-place edit. Post-hoc
+correction belongs to the occasion's shopping tab (project spec §6.2, NEU-1274), which has the
+`ClaimRead` id that `PATCH /claims/{id}` needs and the list-detail payload does not carry. An edit
+built on a second `POST /purchase` would also re-stamp `purchased_at` to today
+(`app/gifts/service.py` sets it unconditionally), silently moving a purchase across an occasion
+boundary.
 
 ## Recipients
 

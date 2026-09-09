@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo, type FormEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { createGift, updateGift, deleteGift, claimGift, unclaimGift } from "../../api/gifts";
+import { createGift, updateGift, deleteGift, claimGift, unclaimGift, purchaseGift, unpurchaseGift } from "../../api/gifts";
 import { fetchUrlMeta } from "../../api/meta";
 import type { GiftListDetailOwner, GiftListDetailViewer, GiftOwnerView, Gift } from "../../types";
 import toast from "react-hot-toast";
@@ -623,6 +623,161 @@ function ViewerGiftRow({
         </div>
       </div>
       {gift.price && <p className="text-xs text-gray-400 mt-0.5">${gift.price}</p>}
+      {/* Shown on an archived list too, read-only: archiving takes the actions
+          away, not the record of what the claimer already bought. */}
+      {isMine && (
+        <PurchaseControl
+          gift={gift}
+          listId={listId}
+          queryClient={queryClient}
+          disabled={isPending || isArchived}
+        />
+      )}
     </li>
+  );
+}
+
+/** The claimer's own purchase state on a gift they have claimed: the tick, what
+ * they paid, and the prompt that asks.
+ *
+ * Ticking **reveals** the prompt rather than recording the purchase — Save and
+ * Skip are what commit it, so an amount the user meant to type is never lost to
+ * a tick they wandered away from. Skip stays one click (project spec §6.3), and
+ * unticking an unanswered prompt abandons it.
+ *
+ * Correcting a recorded amount is untick-then-tick: the server keeps
+ * `amount_paid` through an untick, so re-ticking seeds the prompt with it.
+ * There is deliberately no in-place edit here — post-hoc correction belongs to
+ * the occasion's shopping tab (project spec §6.2, NEU-1274), which has the
+ * claim id this payload does not carry.
+ *
+ * Rendered only for the claimer, and only ever inside the viewer row: the list's
+ * owner sees no claim state at all, and `GiftOwnerView` carries none to render.
+ */
+function PurchaseControl({
+  gift,
+  listId,
+  queryClient,
+  disabled,
+}: {
+  gift: Gift;
+  listId: number;
+  queryClient: ReturnType<typeof useQueryClient>;
+  disabled: boolean;
+}) {
+  const isPurchased = gift.purchased_at !== null;
+  const [prompting, setPrompting] = useState(false);
+  const [amount, setAmount] = useState("");
+
+  const purchaseMutation = useMutation({
+    // `undefined` is Skip — the field goes unset and the server leaves any
+    // amount already recorded alone. An explicit null clears it.
+    mutationFn: (amountPaid: string | null | undefined) => purchaseGift(listId, gift.id, amountPaid),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["list", listId] });
+      setPrompting(false);
+    },
+    onError: () => toast.error("Failed to record the purchase."),
+  });
+
+  const unpurchaseMutation = useMutation({
+    mutationFn: () => unpurchaseGift(listId, gift.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["list", listId] });
+    },
+    onError: () => toast.error("Failed to update the purchase."),
+  });
+
+  const isSaving = purchaseMutation.isPending || unpurchaseMutation.isPending;
+
+  function openPrompt() {
+    // Seeded from what the claimer themselves recorded, never from the owner's
+    // asking price: a budget pre-filled with someone else's number reads as
+    // fact and is a guess.
+    setAmount(gift.amount_paid ?? "");
+    setPrompting(true);
+  }
+
+  function handleToggle() {
+    // Unticking a prompt that has not been answered abandons it. Nothing was
+    // recorded by the tick, so there is nothing to undo on the server.
+    if (prompting) {
+      setPrompting(false);
+    } else if (isPurchased) {
+      unpurchaseMutation.mutate();
+    } else {
+      openPrompt();
+    }
+  }
+
+  function handleSave() {
+    const trimmed = amount.trim();
+    purchaseMutation.mutate(trimmed === "" ? null : trimmed);
+  }
+
+  const amountFieldId = `purchase-amount-${gift.id}`;
+
+  return (
+    <div className="mt-1">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <label className="flex items-center gap-2 text-xs text-gray-600">
+          <input
+            type="checkbox"
+            checked={isPurchased || prompting}
+            onChange={handleToggle}
+            disabled={disabled || isSaving}
+            className="h-4 w-4 rounded border-gray-300 text-blue-600 cursor-pointer disabled:cursor-not-allowed"
+          />
+          Bought
+        </label>
+        {isPurchased &&
+          (gift.amount_paid ? (
+            <span className="text-xs text-gray-600">you paid ${gift.amount_paid}</span>
+          ) : (
+            // An understated total must read as an understatement, never as
+            // fact (project spec §7).
+            <span className="text-xs text-gray-400">no amount recorded</span>
+          ))}
+      </div>
+
+      {prompting && (
+        <div className="mt-1 space-y-1">
+          <label htmlFor={amountFieldId} className="block text-xs text-gray-600">
+            What did you pay?
+          </label>
+          <div className="flex items-center gap-2">
+            <input
+              id={amountFieldId}
+              type="text"
+              inputMode="decimal"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="w-24 rounded border border-gray-300 px-2 py-1 text-sm"
+            />
+            {/* The owner's asking price, as a hint beside the field and never
+                inside it (project spec §6.3). */}
+            {gift.price && <span className="text-xs text-gray-400">listed at ${gift.price}</span>}
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={isSaving}
+              className="rounded bg-blue-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              {purchaseMutation.isPending ? "Saving…" : "Save"}
+            </button>
+            <button
+              type="button"
+              onClick={() => purchaseMutation.mutate(undefined)}
+              disabled={isSaving}
+              className="rounded bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-700 hover:bg-gray-300 disabled:opacity-50"
+            >
+              Skip
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

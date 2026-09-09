@@ -98,9 +98,18 @@ export interface Gift {
   name: string;
   description: string | null;
   url: string | null;
+  /** The *owner's* asking price. Public to every viewer, and never the same
+   * thing as what the claimer paid — see `amount_paid`. */
   price: string | null;
   claimed_by_id: number | null;
   claimed_at: string | null;
+  purchased_at: string | null;
+  /** What the **claimer** paid, and only ever legible to them: the claim these
+   * fields are flattened from is private, and no owner-facing response carries
+   * it (project spec §6.3). A string over the wire like `price`, because the
+   * backend serialises `Decimal` that way. Null is a first-class answer — the
+   * claimer skipped the amount — not a missing value to guess at. */
+  amount_paid: string | null;
   created_at: string;
   updated_at: string;
 }

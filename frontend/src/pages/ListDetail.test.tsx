@@ -946,3 +946,224 @@ describe("ListDetail — the edit picker while the account is still loading", ()
     expect(await screen.findByRole("radio", { name: "Gran" })).toBeChecked();
   });
 });
+
+describe("ListDetail — recording what a purchase cost", () => {
+  // The viewer (user 2) has claimed this gift; $39 is the *owner's* asking
+  // price, which the prompt may hint at but must never fill in.
+  const myClaim = {
+    id: 10,
+    name: "Cast iron skillet",
+    description: null,
+    url: null,
+    price: "39.00",
+    claimed_by_id: 2,
+    claimed_at: "2026-01-02",
+    purchased_at: null,
+    amount_paid: null,
+    created_at: "2026-01-01",
+    updated_at: "2026-01-01",
+  };
+
+  function serveViewerList(gift: object) {
+    server.use(
+      http.get(`${API}/lists/1`, () =>
+        HttpResponse.json({ ...viewerListDetail, gifts: [gift] })
+      ),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => HttpResponse.json([])),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
+    );
+  }
+
+  /** Captures the raw purchase body: "Skip" sends none at all, which is a
+   * different request from one carrying an explicit null, and `request.json()`
+   * cannot tell the two apart. */
+  function capturePurchase(response: object = { ...myClaim, purchased_at: "2026-01-03" }) {
+    const posted = vi.fn();
+    server.use(
+      http.post(`${API}/lists/1/gifts/10/purchase`, async ({ request }) => {
+        posted(await request.text());
+        return HttpResponse.json(response);
+      }),
+    );
+    return posted;
+  }
+
+  async function tickBought() {
+    await userEvent.click(await screen.findByRole("checkbox", { name: "Bought" }));
+  }
+
+  it("opens the amount prompt empty, with the asking price as a hint only", async () => {
+    serveViewerList(myClaim);
+    renderListDetail(viewerToken);
+
+    await tickBought();
+
+    const field = screen.getByRole("textbox", { name: "What did you pay?" });
+    expect(field).toHaveValue("");
+    // The asking price is beside the field, not in it.
+    expect(screen.getByText("listed at $39.00")).toBeInTheDocument();
+  });
+
+  it("does not record the purchase until Save or Skip", async () => {
+    const posted = capturePurchase();
+    serveViewerList(myClaim);
+    renderListDetail(viewerToken);
+
+    await tickBought();
+
+    expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
+    expect(posted).not.toHaveBeenCalled();
+  });
+
+  it("records what was paid on Save", async () => {
+    const posted = capturePurchase();
+    serveViewerList(myClaim);
+    renderListDetail(viewerToken);
+
+    await tickBought();
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "What did you pay?" }),
+      "32.50"
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(posted).toHaveBeenCalled());
+    expect(JSON.parse(posted.mock.calls[0][0])).toEqual({ amount_paid: "32.50" });
+  });
+
+  it("records the purchase with no amount on Skip", async () => {
+    const posted = capturePurchase();
+    serveViewerList(myClaim);
+    renderListDetail(viewerToken);
+
+    await tickBought();
+    await userEvent.click(screen.getByRole("button", { name: "Skip" }));
+
+    await waitFor(() => expect(posted).toHaveBeenCalled());
+    // No body at all: an omitted amount leaves any recorded one alone, which is
+    // what makes unticking and re-ticking non-destructive.
+    expect(posted.mock.calls[0][0]).toBe("");
+  });
+
+  it("shows what the claimer paid once it is recorded", async () => {
+    serveViewerList({ ...myClaim, purchased_at: "2026-01-03", amount_paid: "32.50" });
+    renderListDetail(viewerToken);
+
+    expect(await screen.findByText("you paid $32.50")).toBeInTheDocument();
+    expect(await screen.findByRole("checkbox", { name: "Bought" })).toBeChecked();
+  });
+
+  it("says so when a purchase has no amount recorded", async () => {
+    serveViewerList({ ...myClaim, purchased_at: "2026-01-03" });
+    renderListDetail(viewerToken);
+
+    expect(await screen.findByText("no amount recorded")).toBeInTheDocument();
+  });
+
+  it("abandons an unanswered prompt when the tick is taken back", async () => {
+    const posted = capturePurchase();
+    serveViewerList(myClaim);
+    renderListDetail(viewerToken);
+
+    await tickBought();
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "What did you pay?" }),
+      "32.50"
+    );
+    // Unticking abandons it: nothing was recorded by the tick, so nothing is
+    // undone on the server either.
+    await userEvent.click(screen.getByRole("checkbox", { name: "Bought" }));
+
+    expect(
+      screen.queryByRole("textbox", { name: "What did you pay?" })
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Bought" })).not.toBeChecked();
+    expect(posted).not.toHaveBeenCalled();
+  });
+
+  it("seeds the prompt from the claimer's own retained amount on re-ticking", async () => {
+    // The server keeps `amount_paid` through an untick, so re-ticking should not
+    // make the claimer retype what they paid.
+    serveViewerList({ ...myClaim, amount_paid: "32.50" });
+    renderListDetail(viewerToken);
+
+    await tickBought();
+
+    expect(screen.getByRole("textbox", { name: "What did you pay?" })).toHaveValue("32.50");
+  });
+
+  it("offers no in-place edit of a recorded amount", async () => {
+    // Post-hoc correction is the shopping tab's job (project spec §6.2,
+    // NEU-1274); a second POST here would re-stamp the purchase date.
+    serveViewerList({ ...myClaim, purchased_at: "2026-01-03", amount_paid: "32.50" });
+    renderListDetail(viewerToken);
+
+    expect(await screen.findByText("you paid $32.50")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add amount" })).not.toBeInTheDocument();
+  });
+
+  it("keeps the purchase record readable but read-only on an archived list", async () => {
+    server.use(
+      http.get(`${API}/lists/1`, () =>
+        HttpResponse.json({
+          ...viewerListDetail,
+          is_archived: true,
+          gifts: [{ ...myClaim, purchased_at: "2026-01-03", amount_paid: "32.50" }],
+        })
+      ),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => HttpResponse.json([])),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
+    );
+    renderListDetail(viewerToken);
+
+    // Archiving takes the actions away, not the record.
+    expect(await screen.findByText("you paid $32.50")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Bought" })).toBeDisabled();
+  });
+
+  it("unticks a purchase without discarding the amount", async () => {
+    const deleted = vi.fn();
+    serveViewerList({ ...myClaim, purchased_at: "2026-01-03", amount_paid: "32.50" });
+    server.use(
+      http.delete(`${API}/lists/1/gifts/10/purchase`, () => {
+        deleted();
+        return HttpResponse.json({ ...myClaim, amount_paid: "32.50" });
+      }),
+    );
+    renderListDetail(viewerToken);
+
+    await userEvent.click(await screen.findByRole("checkbox", { name: "Bought" }));
+
+    await waitFor(() => expect(deleted).toHaveBeenCalled());
+  });
+
+  it("offers no purchase control on a gift somebody else claimed", async () => {
+    serveViewerList({ ...myClaim, claimed_by_id: 3 });
+    renderListDetail(viewerToken);
+
+    expect(await screen.findByText("Taken")).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: "Bought" })).not.toBeInTheDocument();
+  });
+
+  it("keeps every trace of the purchase off the owner's copy of the list", async () => {
+    server.use(
+      http.get(`${API}/lists/1`, () =>
+        HttpResponse.json({ ...ownerListDetail, gifts: [{ id: 10, name: "Cast iron skillet", description: null, url: null, price: "39.00", created_at: "2026-01-01", updated_at: "2026-01-01" }] })
+      ),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => HttpResponse.json([])),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
+    );
+    renderListDetail(ownerToken);
+
+    await screen.findByText("Cast iron skillet");
+    expect(screen.queryByRole("checkbox", { name: "Bought" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/you paid/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/no amount recorded/)).not.toBeInTheDocument();
+  });
+});
