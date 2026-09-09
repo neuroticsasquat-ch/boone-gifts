@@ -34,27 +34,36 @@ const connections = [
   },
 ];
 
-/** One family of each shape the control has to render (project spec §5.2). */
+/**
+ * One family of each shape the control has to render (project spec §5.2).
+ *
+ * Every family holds the owner and nobody else, so no connection is covered
+ * here: coverage is what disables a People row, and a test that cares about it
+ * says so by serving its own targets.
+ */
 const shareTargets = [
   {
     id: 7,
     name: "The Boones",
+    member_ids: [1],
     occasions: [{ id: 10, name: "Christmas 2026", is_archived: false, shared: true }],
   },
   {
     id: 8,
     name: "The Smiths",
+    member_ids: [1],
     occasions: [{ id: 20, name: "Easter 2026", is_archived: false, shared: false }],
   },
   {
     id: 9,
     name: "The Joneses",
+    member_ids: [1],
     occasions: [
       { id: 31, name: "Jones Christmas", is_archived: false, shared: false },
       { id: 32, name: "Jones Birthdays", is_archived: false, shared: false },
     ],
   },
-  { id: 11, name: "Work Friends", occasions: [] },
+  { id: 11, name: "Work Friends", member_ids: [1], occasions: [] },
 ];
 
 /** Everything the panel reads, so a test only overrides what it cares about. */
@@ -90,7 +99,9 @@ function renderPanel(onClose = vi.fn()) {
 }
 
 describe("SharingPanel — one panel for people and families", () => {
-  it("puts both groups in a single panel, people first", async () => {
+  it("puts both groups in a single panel, families first", async () => {
+    // The order is deliberate, not incidental: families is the broader stroke,
+    // and it decides what the People rows can even offer (NEU-1284).
     serveSharingState();
 
     renderPanel();
@@ -99,7 +110,7 @@ describe("SharingPanel — one panel for people and families", () => {
     const headings = within(panel)
       .getAllByRole("heading", { level: 3 })
       .map((h) => h.textContent);
-    expect(headings).toEqual(["People", "Families"]);
+    expect(headings).toEqual(["Families", "People"]);
 
     expect(await within(panel).findByRole("checkbox", { name: /share with alice/i })).toBeInTheDocument();
     expect(within(panel).getByRole("checkbox", { name: /share with the boones/i })).toBeInTheDocument();
@@ -199,6 +210,134 @@ describe("SharingPanel — people", () => {
   });
 });
 
+describe("SharingPanel — people an occasion share already reaches", () => {
+  /** The Boones, reaching Bob (user 3) through a live occasion. */
+  const boonesCoveringBob = {
+    id: 7,
+    name: "The Boones",
+    member_ids: [1, 3],
+    occasions: [{ id: 10, name: "Christmas 2026", is_archived: false, shared: true }],
+  };
+
+  it("disables an unshared connection the family already reaches, and names the family", async () => {
+    serveSharingState({ targets: [boonesCoveringBob] });
+
+    renderPanel();
+
+    const box = await screen.findByRole("checkbox", { name: /share with bob/i });
+    expect(box).toBeDisabled();
+    expect(screen.getByText("Already sees this through The Boones")).toBeInTheDocument();
+    // The reason replaces the email: it is why the control is dead, and the
+    // email was only decoration.
+    expect(screen.queryByText("bob@test.com")).not.toBeInTheDocument();
+
+    // A connection no family reaches is untouched.
+    expect(screen.getByRole("checkbox", { name: /share with alice/i })).toBeEnabled();
+    expect(screen.getByText("alice@test.com")).toBeInTheDocument();
+  });
+
+  it("names every family that covers a person", async () => {
+    // Naming only the first would send the owner to untick a family that leaves
+    // the row disabled anyway.
+    serveSharingState({
+      targets: [
+        boonesCoveringBob,
+        {
+          id: 8,
+          name: "The Smiths",
+          member_ids: [1, 3],
+          occasions: [{ id: 20, name: "Easter 2026", is_archived: false, shared: true }],
+        },
+      ],
+    });
+
+    renderPanel();
+
+    expect(
+      await screen.findByText("Already sees this through The Boones and The Smiths"),
+    ).toBeInTheDocument();
+  });
+
+  it("leaves a connection reached only by an archived share operable, and unannotated", async () => {
+    // An archived share still grants sight, but that route is winding down, so
+    // the direct share is the useful thing to offer — and the row says nothing
+    // about a state most owners never reach.
+    serveSharingState({
+      targets: [
+        {
+          id: 7,
+          name: "The Boones",
+          member_ids: [1, 3],
+          occasions: [{ id: 10, name: "Christmas 2025", is_archived: true, shared: true }],
+        },
+      ],
+    });
+
+    renderPanel();
+
+    expect(await screen.findByRole("checkbox", { name: /share with bob/i })).toBeEnabled();
+    expect(screen.getByText("bob@test.com")).toBeInTheDocument();
+    expect(screen.queryByText(/already sees this/i)).not.toBeInTheDocument();
+  });
+
+  it("keeps a direct share operable and revokable while a family covers the same person", async () => {
+    // You can always remove a grant; you just cannot add a redundant one. This
+    // panel is the only revoke surface there is.
+    const revoked = vi.fn();
+    serveSharingState({
+      shares: [{ id: 1, list_id: 1, user_id: 3, created_at: "2026-01-01" }],
+      targets: [boonesCoveringBob],
+    });
+    server.use(
+      http.delete(`${API}/lists/1/shares/3`, () => {
+        revoked();
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+
+    renderPanel();
+
+    const box = await screen.findByRole("checkbox", { name: /share with bob/i });
+    expect(box).toBeChecked();
+    expect(box).toBeEnabled();
+    expect(screen.getByText("bob@test.com")).toBeInTheDocument();
+    expect(screen.queryByText(/already sees this/i)).not.toBeInTheDocument();
+
+    await userEvent.click(box);
+    await waitFor(() => expect(revoked).toHaveBeenCalled());
+  });
+
+  it("re-enables the row when the covering family is unticked, with no reload", async () => {
+    // Both halves read the same share-targets query, so the untick's
+    // invalidation repaints the People row on its own.
+    let shared = true;
+    server.use(
+      http.get(`${API}/connections`, () => HttpResponse.json(connections)),
+      http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/families`, () =>
+        HttpResponse.json([
+          { ...boonesCoveringBob, occasions: [{ ...boonesCoveringBob.occasions[0], shared }] },
+        ])
+      ),
+      http.delete(`${API}/lists/1/occasions/10`, () => {
+        shared = false;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+
+    renderPanel();
+
+    expect(await screen.findByRole("checkbox", { name: /share with bob/i })).toBeDisabled();
+
+    await userEvent.click(screen.getByRole("checkbox", { name: /share with the boones/i }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("checkbox", { name: /share with bob/i })).toBeEnabled()
+    );
+    expect(screen.getByText("bob@test.com")).toBeInTheDocument();
+  });
+});
+
 describe("SharingPanel — families", () => {
   // react-hot-toast keeps its queue at module level, so a toast raised by one
   // test outlives `cleanup()` and shows up in the next one.
@@ -292,6 +431,7 @@ describe("SharingPanel — families", () => {
         {
           id: 9,
           name: "The Joneses",
+          member_ids: [1],
           occasions: [
             { id: 31, name: "Jones Christmas", is_archived: false, shared: true },
             { id: 32, name: "Jones Birthdays", is_archived: false, shared: false },
@@ -356,6 +496,7 @@ describe("SharingPanel — families", () => {
         {
           id: 7,
           name: "The Boones",
+          member_ids: [1],
           occasions: [{ id: 10, name: "Christmas 2025", is_archived: true, shared: true }],
         },
       ],

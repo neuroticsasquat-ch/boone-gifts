@@ -40,9 +40,12 @@ export function SharingPanel({
           Done
         </button>
       </div>
-      {/* People first, then families — the same order the header summary reads in. */}
-      <PeopleGroup listId={listId} queryClient={queryClient} />
+      {/* Families first, then people — the same order the header summary reads
+          in. Families is the broader stroke, and it decides what the People rows
+          can offer at all, so reading it second would be reading the control
+          backwards (project spec §5.2). */}
       <FamiliesGroup listId={listId} queryClient={queryClient} />
+      <PeopleGroup listId={listId} queryClient={queryClient} />
     </section>
   );
 }
@@ -96,9 +99,42 @@ function ShareRow({
 
 // --- People ---
 
+/**
+ * The families whose live occasion share already puts this list in front of a
+ * person — every one of them, because unticking only the first would leave the
+ * row disabled and the owner none the wiser (project spec §5.2).
+ *
+ * "Live" is deliberately narrower than access: a share made before its occasion
+ * was archived still grants sight, but that route is winding down, so a direct
+ * share there is the useful offer rather than a redundant one. A disabled row
+ * therefore means "the live route already covers them", not "they can already
+ * see this".
+ */
+function coveringFamilies(targets: ShareTargetFamily[], userId: number): string[] {
+  return targets
+    .filter(
+      (family) =>
+        family.member_ids.includes(userId) &&
+        family.occasions.some((occasion) => occasion.shared && !occasion.is_archived),
+    )
+    .map((family) => family.name);
+}
+
+function joinNames(names: string[]): string {
+  if (names.length < 2) return names[0] ?? "";
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
 function PeopleGroup({ listId, queryClient }: { listId: number; queryClient: QueryClient }) {
   const shares = useQuery({ queryKey: ["shares", listId], queryFn: () => getShares(listId) });
   const connections = useQuery({ queryKey: ["connections"], queryFn: getConnections });
+  // The same query the families half reads, so coverage costs no second round
+  // trip and its invalidation repaints these rows too — ticking a family
+  // disables the people it covers with no reload (project spec §5.2).
+  const targets = useQuery({
+    queryKey: ["share-targets", listId],
+    queryFn: () => getShareTargets(listId),
+  });
 
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: ["shares", listId] });
@@ -118,7 +154,9 @@ function PeopleGroup({ listId, queryClient }: { listId: number; queryClient: Que
     onError: () => toast.error("Failed to stop sharing with this person."),
   });
 
-  if (shares.isLoading || connections.isLoading) {
+  // Targets gate the rows as well: a row that arrives interactive and turns
+  // disabled a moment later is disabled at precisely the moment an owner clicks.
+  if (shares.isLoading || connections.isLoading || targets.isLoading) {
     return <Group title="People"><Hint>Loading…</Hint></Group>;
   }
   if (shares.error || connections.error) {
@@ -157,19 +195,31 @@ function PeopleGroup({ listId, queryClient }: { listId: number; queryClient: Que
 
   const sharedUserIds = new Set(shareList.map((s) => s.user_id));
   const pending = shareMutation.isPending || unshareMutation.isPending;
+  // A failed targets fetch leaves this empty, which offers a grant that may be
+  // redundant. That is the right way to fail: the disable is a nudge, never a
+  // permission (CONTEXT.md rule 1), and the share it withholds is real.
+  const targetList = targets.data ?? [];
 
   return (
     <Group title="People">
       <ul className="divide-y divide-gray-200 rounded-lg bg-white shadow">
         {rows.map((row) => {
           const shared = sharedUserIds.has(row.userId);
+          // Only an unticked box is dead: you can always remove a grant, you
+          // just cannot add a redundant one — and this panel is the only place
+          // to remove one. Synthesised rows are ticked by definition, so they
+          // are never touched by this.
+          const covering = shared ? [] : coveringFamilies(targetList, row.userId);
+          const covered = covering.length > 0;
           return (
             <ShareRow
               key={row.userId}
               name={row.name}
-              detail={row.detail}
+              // The reason replaces the email rather than stacking below it: the
+              // email is decoration, the reason is why the control is dead.
+              detail={covered ? `Already sees this through ${joinNames(covering)}` : row.detail}
               checked={shared}
-              disabled={pending}
+              disabled={pending || covered}
               onToggle={() =>
                 shared ? unshareMutation.mutate(row.userId) : shareMutation.mutate(row.userId)
               }

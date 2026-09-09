@@ -99,6 +99,9 @@ export interface ShareTargetOccasion {
 export interface ShareTargetFamily {
   id: number;
   name: string;
+  /** Every member of the family, the owner included. Not a new disclosure —
+   *  `GET /families/{id}` already returns these ids to any member. */
+  member_ids: number[];
   occasions: ShareTargetOccasion[];
 }
 

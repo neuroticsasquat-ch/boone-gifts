@@ -109,6 +109,7 @@ describe("ListDetail sharing panel", () => {
           {
             id: 7,
             name: "The Boones",
+            member_ids: [1],
             occasions: [{ id: 10, name: "Christmas 2026", is_archived: false, shared: true }],
           },
         ])
@@ -400,11 +401,13 @@ describe("ListDetail — no tab bar", () => {
           {
             id: 7,
             name: "The Boones",
+            member_ids: [1],
             occasions: [{ id: 10, name: "Christmas 2026", is_archived: false, shared: true }],
           },
           {
             id: 8,
             name: "The Smiths",
+            member_ids: [1],
             occasions: [{ id: 20, name: "Easter 2026", is_archived: false, shared: false }],
           },
         ])
@@ -414,7 +417,7 @@ describe("ListDetail — no tab bar", () => {
     renderListDetail(ownerToken);
 
     expect(
-      await screen.findByText("Shared with Alice, The Boones · Christmas 2026"),
+      await screen.findByText("Shared with The Boones · Christmas 2026, Alice"),
     ).toBeInTheDocument();
   });
 
@@ -428,6 +431,7 @@ describe("ListDetail — no tab bar", () => {
           {
             id: 7,
             name: "The Boones",
+            member_ids: [1],
             occasions: [{ id: 10, name: "Christmas 2026", is_archived: false, shared: false }],
           },
         ])
@@ -486,6 +490,7 @@ describe("ListDetail — no tab bar", () => {
           {
             id: 7,
             name: "The Boones",
+            member_ids: [1],
             occasions: [{ id: 10, name: "Christmas 2026", is_archived: false, shared: true }],
           },
         ])

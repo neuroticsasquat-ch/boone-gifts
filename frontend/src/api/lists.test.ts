@@ -33,14 +33,15 @@ describe("lists API — sharing to an occasion", () => {
     expect(capturedBody).toEqual({ name: "Birthday", occasion_ids: [7, 8] });
   });
 
-  it("getShareTargets returns each family with its occasions", async () => {
+  it("getShareTargets returns each family with its members and occasions", async () => {
     const targets = [
       {
         id: 7,
         name: "The Boones",
+        member_ids: [1, 2],
         occasions: [{ id: 1, name: "Christmas 2026", is_archived: false, shared: true }],
       },
-      { id: 8, name: "The Smiths", occasions: [] },
+      { id: 8, name: "The Smiths", member_ids: [1], occasions: [] },
     ];
     server.use(http.get(`${BASE}/lists/1/families`, () => HttpResponse.json(targets)));
 
