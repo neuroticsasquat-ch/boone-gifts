@@ -36,6 +36,8 @@ const ownerListDetail = {
   updated_at: "2026-01-01",
 };
 
+// A viewer's payload always carries both claim sets; the default is a list
+// shared directly, which is the 0-candidate case — nothing to ask about.
 const viewerListDetail = {
   id: 1,
   name: "My Wishlist",
@@ -44,6 +46,8 @@ const viewerListDetail = {
   owner_name: "Owner",
   is_archived: false,
   gifts: [],
+  claim_candidates: [],
+  claim_options: [],
   created_at: "2026-01-01",
   updated_at: "2026-01-01",
 };
@@ -1165,5 +1169,258 @@ describe("ListDetail — recording what a purchase cost", () => {
     expect(screen.queryByRole("checkbox", { name: "Bought" })).not.toBeInTheDocument();
     expect(screen.queryByText(/you paid/)).not.toBeInTheDocument();
     expect(screen.queryByText(/no amount recorded/)).not.toBeInTheDocument();
+  });
+});
+
+describe("ListDetail — filing a claim under an occasion", () => {
+  // Unclaimed, so the viewer (user 2) can claim it.
+  const unclaimed = {
+    id: 10,
+    name: "Cast iron skillet",
+    description: null,
+    url: null,
+    price: "39.00",
+    claimed_by_id: null,
+    claimed_at: null,
+    purchased_at: null,
+    amount_paid: null,
+    created_at: "2026-01-01",
+    updated_at: "2026-01-01",
+  };
+
+  const booneChristmas = {
+    id: 3,
+    name: "Christmas 2026",
+    is_archived: false,
+    family: { id: 1, name: "Boone Family" },
+  };
+  // Deliberately the same *name* in another family: the picker that shows only
+  // occasion names asks a question the user cannot answer.
+  const smithChristmas = {
+    id: 4,
+    name: "Christmas 2026",
+    is_archived: false,
+    family: { id: 2, name: "Smith Family" },
+  };
+  const archivedChristmas = {
+    id: 2,
+    name: "Christmas 2025",
+    is_archived: true,
+    family: { id: 1, name: "Boone Family" },
+  };
+
+  function serveViewerList(candidates: object[], options: object[] = candidates) {
+    server.use(
+      http.get(`${API}/lists/1`, () =>
+        HttpResponse.json({
+          ...viewerListDetail,
+          gifts: [unclaimed],
+          claim_candidates: candidates,
+          claim_options: options,
+        })
+      ),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => HttpResponse.json([])),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
+    );
+  }
+
+  /** Captures the raw claim body: no occasion at all is a different request
+   * from one naming null, and the server reads them differently. */
+  function captureClaim() {
+    const posted = vi.fn();
+    server.use(
+      http.post(`${API}/lists/1/gifts/10/claim`, async ({ request }) => {
+        posted(await request.text());
+        return HttpResponse.json({ ...unclaimed, claimed_by_id: 2, claimed_at: "2026-01-02" });
+      }),
+    );
+    return posted;
+  }
+
+  async function clickClaim() {
+    await userEvent.click(await screen.findByRole("button", { name: "I'll get this" }));
+  }
+
+  it("claims in one click and asks nothing when there is no occasion to choose", async () => {
+    const posted = captureClaim();
+    serveViewerList([]);
+    renderListDetail(viewerToken);
+
+    await clickClaim();
+
+    await waitFor(() => expect(posted).toHaveBeenCalled());
+    expect(posted.mock.calls[0][0]).toBe("");
+    expect(screen.queryByLabelText("Which occasion is this for?")).not.toBeInTheDocument();
+  });
+
+  it("claims in one click and asks nothing when only one occasion is suggested", async () => {
+    // The overwhelmingly common path. The server files it under the single
+    // candidate itself, so the client sends nothing and stays one click.
+    const posted = captureClaim();
+    serveViewerList([booneChristmas]);
+    renderListDetail(viewerToken);
+
+    await clickClaim();
+
+    await waitFor(() => expect(posted).toHaveBeenCalled());
+    expect(posted.mock.calls[0][0]).toBe("");
+    expect(screen.queryByLabelText("Which occasion is this for?")).not.toBeInTheDocument();
+  });
+
+  it("keys the prompt off the suggested set, not the wider option set", async () => {
+    // The year-three case: two Christmases archived, one active. `claim_options`
+    // holds all three, but only one is suggested, so this must stay a silent
+    // one-click filing. A regression to counting `claim_options` would prompt
+    // on every claim forever, with the answer obvious every time.
+    const posted = captureClaim();
+    serveViewerList(
+      [booneChristmas],
+      [booneChristmas, archivedChristmas, { ...archivedChristmas, id: 1, name: "Christmas 2024" }],
+    );
+    renderListDetail(viewerToken);
+
+    await clickClaim();
+
+    await waitFor(() => expect(posted).toHaveBeenCalled());
+    expect(posted.mock.calls[0][0]).toBe("");
+    expect(screen.queryByLabelText("Which occasion is this for?")).not.toBeInTheDocument();
+  });
+
+  it("asks before claiming when two occasions are suggested, and does not claim yet", async () => {
+    const posted = captureClaim();
+    serveViewerList([booneChristmas, smithChristmas]);
+    renderListDetail(viewerToken);
+
+    await clickClaim();
+
+    expect(await screen.findByLabelText("Which occasion is this for?")).toBeInTheDocument();
+    expect(posted).not.toHaveBeenCalled();
+  });
+
+  it("names the family on every choice, because two can share an occasion name", async () => {
+    serveViewerList([booneChristmas, smithChristmas]);
+    renderListDetail(viewerToken);
+
+    await clickClaim();
+
+    const picker = await screen.findByLabelText("Which occasion is this for?");
+    expect(within(picker).getByRole("option", { name: "Boone Family · Christmas 2026" })).toBeInTheDocument();
+    expect(within(picker).getByRole("option", { name: "Smith Family · Christmas 2026" })).toBeInTheDocument();
+  });
+
+  it("nothing is pre-selected, and saving is refused until an occasion is chosen", async () => {
+    // Picking for the user would record a guess as a fact.
+    serveViewerList([booneChristmas, smithChristmas]);
+    renderListDetail(viewerToken);
+
+    await clickClaim();
+
+    expect(await screen.findByLabelText("Which occasion is this for?")).toHaveValue("");
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  });
+
+  it("sends the chosen occasion with the claim", async () => {
+    const posted = captureClaim();
+    serveViewerList([booneChristmas, smithChristmas]);
+    renderListDetail(viewerToken);
+
+    await clickClaim();
+    await userEvent.selectOptions(
+      await screen.findByLabelText("Which occasion is this for?"),
+      "4",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(posted).toHaveBeenCalled());
+    expect(JSON.parse(posted.mock.calls[0][0])).toEqual({ occasion_id: 4 });
+  });
+
+  it("abandons the claim entirely on Cancel", async () => {
+    const posted = captureClaim();
+    serveViewerList([booneChristmas, smithChristmas]);
+    renderListDetail(viewerToken);
+
+    await clickClaim();
+    await userEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByLabelText("Which occasion is this for?")).not.toBeInTheDocument();
+    expect(posted).not.toHaveBeenCalled();
+  });
+
+  it("marks an archived occasion as archived", async () => {
+    // Every candidate is archived, so `suggested` falls back to all of
+    // `allowed` — the late-January shopper, still choosing between two.
+    serveViewerList([archivedChristmas, { ...smithChristmas, is_archived: true }]);
+    renderListDetail(viewerToken);
+
+    await clickClaim();
+
+    const picker = await screen.findByLabelText("Which occasion is this for?");
+    expect(within(picker).getByRole("option", { name: "Boone Family · Christmas 2025 — archived" })).toBeInTheDocument();
+  });
+
+  it("offers past occasions from the wider option set, and files under one", async () => {
+    // Christmas 2025 is archived, so it is not suggested — but a January claim
+    // for it must still be filable, which is the whole reason `claim_options`
+    // is wider than `claim_candidates`.
+    const posted = captureClaim();
+    serveViewerList(
+      [booneChristmas, smithChristmas],
+      [booneChristmas, smithChristmas, archivedChristmas],
+    );
+    renderListDetail(viewerToken);
+
+    await clickClaim();
+
+    const picker = await screen.findByLabelText("Which occasion is this for?");
+    expect(within(picker).queryByRole("option", { name: /Christmas 2025/ })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Show past occasions" }));
+    await userEvent.selectOptions(picker, "2");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(posted).toHaveBeenCalled());
+    expect(JSON.parse(posted.mock.calls[0][0])).toEqual({ occasion_id: 2 });
+  });
+
+  it("offers no past occasions when the option set holds none", async () => {
+    serveViewerList([booneChristmas, smithChristmas]);
+    renderListDetail(viewerToken);
+
+    await clickClaim();
+
+    await screen.findByLabelText("Which occasion is this for?");
+    expect(screen.queryByRole("button", { name: "Show past occasions" })).not.toBeInTheDocument();
+  });
+
+  it("refetches and explains when a share added meanwhile makes the claim ambiguous", async () => {
+    // The client held one candidate and rightly sent no id; a share landed in
+    // between and made it two. One refetch, one more click.
+    let reads = 0;
+    server.use(
+      http.get(`${API}/lists/1`, () => {
+        reads += 1;
+        return HttpResponse.json({
+          ...viewerListDetail,
+          gifts: [unclaimed],
+          claim_candidates: reads === 1 ? [booneChristmas] : [booneChristmas, smithChristmas],
+          claim_options: reads === 1 ? [booneChristmas] : [booneChristmas, smithChristmas],
+        });
+      }),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => HttpResponse.json([])),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
+      http.post(`${API}/lists/1/gifts/10/claim`, () =>
+        HttpResponse.json({ detail: "ambiguous_occasion" }, { status: 400 })
+      ),
+    );
+    renderListDetail(viewerToken);
+
+    await clickClaim();
+
+    // The refetched candidates now make the row ask, which is the way through.
+    await userEvent.click(await screen.findByRole("button", { name: "I'll get this" }));
+    expect(await screen.findByLabelText("Which occasion is this for?")).toBeInTheDocument();
   });
 });

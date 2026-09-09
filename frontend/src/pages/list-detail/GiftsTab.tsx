@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect, useMemo, type FormEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import * as Sentry from "@sentry/react";
+import { isAxiosError } from "axios";
 import { createGift, updateGift, deleteGift, claimGift, unclaimGift, purchaseGift, unpurchaseGift } from "../../api/gifts";
 import { fetchUrlMeta } from "../../api/meta";
-import type { GiftListDetailOwner, GiftListDetailViewer, GiftOwnerView, Gift } from "../../types";
+import type { ClaimOccasion, GiftListDetailOwner, GiftListDetailViewer, GiftOwnerView, Gift } from "../../types";
 import toast from "react-hot-toast";
 
 interface GiftsTabProps {
@@ -145,7 +147,16 @@ function ViewerGifts({
           </div>
           <ul className="divide-y divide-gray-200 rounded-lg bg-white shadow">
             {filteredGifts.map((gift) => (
-              <ViewerGiftRow key={gift.id} gift={gift} listId={listId} queryClient={queryClient} userId={userId} isArchived={list.is_archived} />
+              <ViewerGiftRow
+                key={gift.id}
+                gift={gift}
+                listId={listId}
+                queryClient={queryClient}
+                userId={userId}
+                isArchived={list.is_archived}
+                candidates={list.claim_candidates}
+                options={list.claim_options}
+              />
             ))}
           </ul>
         </>
@@ -547,19 +558,45 @@ function ViewerGiftRow({
   queryClient,
   userId,
   isArchived,
+  candidates,
+  options,
 }: {
   gift: Gift;
   listId: number;
   queryClient: ReturnType<typeof useQueryClient>;
   userId: number;
   isArchived: boolean;
+  candidates: ClaimOccasion[];
+  options: ClaimOccasion[];
 }) {
+  // The whole prompting rule. Two or more candidates is the *only* shape with a
+  // genuine choice in it; 0 and 1 are the overwhelmingly common path and stay
+  // exactly as fast as they are today — one click, no question asked.
+  const mustAsk = candidates.length >= 2;
+  const [choosing, setChoosing] = useState(false);
+
   const claimMutation = useMutation({
-    mutationFn: () => claimGift(listId, gift.id),
+    mutationFn: (occasionId?: number) => claimGift(listId, gift.id, occasionId),
     onSuccess: () => {
+      setChoosing(false);
       queryClient.invalidateQueries({ queryKey: ["list", listId] });
     },
-    onError: () => toast.error("Failed to claim gift."),
+    onError: (err) => {
+      // 400 `ambiguous_occasion` means this client failed to prompt when it
+      // should have — a bug signal, not a routine branch. The one innocent way
+      // to reach it is a share added while the page sat open, turning one
+      // candidate into two, so refetch and let the user click again.
+      if (isAxiosError(err) && err.response?.status === 400 && err.response.data?.detail === "ambiguous_occasion") {
+        // Reported, not just recovered from. A share added while the page sat
+        // open is the one innocent way here; every other way is this client
+        // having stopped prompting, which nothing else would ever catch.
+        Sentry.captureException(err, { tags: { claim_filing: "ambiguous_occasion" } });
+        queryClient.invalidateQueries({ queryKey: ["list", listId] });
+        toast.error("This list reaches more occasions than it did a moment ago. Try again to choose one.");
+        return;
+      }
+      toast.error("Failed to claim gift.");
+    },
   });
 
   const unclaimMutation = useMutation({
@@ -601,8 +638,8 @@ function ViewerGiftRow({
   } else if (isAvailable && !isArchived) {
     actionButton = (
       <button
-        onClick={() => claimMutation.mutate()}
-        disabled={isPending}
+        onClick={() => (mustAsk ? setChoosing(true) : claimMutation.mutate(undefined))}
+        disabled={isPending || choosing}
         className="rounded bg-green-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
       >
         {claimMutation.isPending ? "Saving…" : "I'll get this"}
@@ -623,6 +660,21 @@ function ViewerGiftRow({
         </div>
       </div>
       {gift.price && <p className="text-xs text-gray-400 mt-0.5">${gift.price}</p>}
+      {/* Gated on `mustAsk` as well as `choosing`: a refetch — including the one
+          the 400 handler fires — can drop the candidates below two while the
+          picker is open, and a picker with nothing left to choose strands the
+          user on a permanently disabled Save. Closing it returns them to a
+          button that now claims in one click, which is the right answer. */}
+      {choosing && mustAsk && (
+        <ClaimOccasionPrompt
+          giftId={gift.id}
+          candidates={candidates}
+          options={options}
+          isSaving={claimMutation.isPending}
+          onCancel={() => setChoosing(false)}
+          onChoose={(occasionId) => claimMutation.mutate(occasionId)}
+        />
+      )}
       {/* Shown on an archived list too, read-only: archiving takes the actions
           away, not the record of what the claimer already bought. */}
       {isMine && (
@@ -634,6 +686,106 @@ function ViewerGiftRow({
         />
       )}
     </li>
+  );
+}
+
+/** How an occasion reads when two families both have one called "Christmas
+ * 2026" — family first, matching the sharing summary line. An archived occasion
+ * says so, the way an archived share target does on the sharing panel. */
+function claimOccasionLabel(occasion: ClaimOccasion): string {
+  const base = `${occasion.family.name} · ${occasion.name}`;
+  return occasion.is_archived ? `${base} — archived` : base;
+}
+
+/** The one question asked before a claim with a genuine choice behind it
+ * commits: which occasion to file it under (project spec §6.2).
+ *
+ * Reached only from `claim_candidates.length >= 2`. The filing is the claimer's
+ * private record of their own spend and nobody else can see it, so this asks
+ * once and never again for that gift — correcting it afterwards belongs to the
+ * occasion's shopping tab (NEU-1274).
+ *
+ * **Nothing is pre-selected.** Picking the first candidate for the user would
+ * be a guess recorded as a fact, and the sharing control already refuses the
+ * identical shape client-side: choosing before committing, never after.
+ *
+ * `claim_options` is the wider `allowed` set, so an occasion that is no longer
+ * suggested — an archived one — is still reachable behind "Show past
+ * occasions". That is what makes the late-January claim filable under the
+ * Christmas it was actually for (NEU-1269 spec §2.2).
+ */
+function ClaimOccasionPrompt({
+  giftId,
+  candidates,
+  options,
+  isSaving,
+  onChoose,
+  onCancel,
+}: {
+  giftId: number;
+  candidates: ClaimOccasion[];
+  options: ClaimOccasion[];
+  isSaving: boolean;
+  onChoose: (occasionId: number) => void;
+  onCancel: () => void;
+}) {
+  const [chosen, setChosen] = useState("");
+  const [showingPast, setShowingPast] = useState(false);
+
+  const past = useMemo(() => {
+    const suggested = new Set(candidates.map((o) => o.id));
+    return options.filter((o) => !suggested.has(o.id));
+  }, [candidates, options]);
+
+  const choosable = showingPast ? [...candidates, ...past] : candidates;
+  const selectId = `claim-occasion-${giftId}`;
+
+  return (
+    <div className="mt-1 space-y-1">
+      <label htmlFor={selectId} className="block text-xs text-gray-600">
+        Which occasion is this for?
+      </label>
+      <select
+        id={selectId}
+        value={chosen}
+        onChange={(e) => setChosen(e.target.value)}
+        className="block w-full max-w-xs rounded border border-gray-300 px-2 py-1 text-sm sm:w-auto"
+      >
+        <option value="">Choose an occasion…</option>
+        {choosable.map((occasion) => (
+          <option key={occasion.id} value={occasion.id}>
+            {claimOccasionLabel(occasion)}
+          </option>
+        ))}
+      </select>
+      {past.length > 0 && !showingPast && (
+        <button
+          type="button"
+          onClick={() => setShowingPast(true)}
+          className="block text-xs text-blue-600 hover:underline"
+        >
+          Show past occasions
+        </button>
+      )}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => onChoose(Number(chosen))}
+          disabled={chosen === "" || isSaving}
+          className="rounded bg-green-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+        >
+          {isSaving ? "Saving…" : "Save"}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={isSaving}
+          className="rounded bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-700 hover:bg-gray-300 disabled:opacity-50"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
   );
 }
 

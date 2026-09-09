@@ -238,6 +238,27 @@ is no shared money formatter yet; project spec §14 open question 1 hands that t
   but what the claimer already bought still shows, the same way `✓ Yours` survives while the claim
   and unclaim buttons don't.
 
+**Filing a claim under an occasion** is asked about only when there is genuinely a choice. The
+viewer payload carries `claim_candidates` (the backend's `suggested` set) and `claim_options` (the
+wider `allowed` set); **`claim_candidates.length >= 2` is the entire prompting rule**. At 0 or 1 the
+row claims on one click and sends no `occasion_id` at all — the server files it — and that path must
+not regress, because it is nearly every claim.
+
+- **Prompt from the payload, never from an error.** A stale `occasion_id` now returns **201 with the
+  filing corrected**, deliberately: claiming is competitive and a revoked share must never cost
+  someone the gift. The only claim-path error left is **400 `ambiguous_occasion`**, which means this
+  client failed to prompt. It is handled — refetch, then ask again, since a share added while the
+  page sat open is the one innocent way to reach it — and **reported to Sentry**, because a client
+  that has silently stopped prompting files every claim under nothing and nothing else would ever
+  catch it. It is a bug signal, not a branch to design around. `PATCH /claims/{id}` **does** 403 on an occasion outside `allowed`; that one is real.
+- `ClaimOccasionPrompt` (in `GiftsTab.tsx`) is the picker. Nothing is pre-selected and Save is
+  disabled until an occasion is chosen — the same refuse-before-committing rule the sharing control
+  applies to the identical question. Every choice reads "Boone Family · Christmas 2026", because two
+  families routinely both have a "Christmas 2026", and an archived one says "— archived".
+- **"Show past occasions"** reveals what is in `claim_options` but not `claim_candidates` — archived
+  occasions, in practice. Without it the correction path exists in the API and no UI can reach it, and
+  a January purchase could never be filed under the Christmas it was actually for.
+
 **Correcting an amount is untick-then-tick**, and there is deliberately no in-place edit. Post-hoc
 correction belongs to the occasion's shopping tab (project spec §6.2, NEU-1274), which has the
 `ClaimRead` id that `PATCH /claims/{id}` needs and the list-detail payload does not carry. An edit

@@ -93,6 +93,18 @@ export interface ShareTargetFamily {
   occasions: ShareTargetOccasion[];
 }
 
+/**
+ * One occasion a claim can be filed under, as the viewer's list-detail payload
+ * carries it. `family` is not decoration: two families routinely both call an
+ * occasion "Christmas 2026", so the name alone does not identify one.
+ */
+export interface ClaimOccasion {
+  id: number;
+  name: string;
+  is_archived: boolean;
+  family: { id: number; name: string };
+}
+
 export interface Gift {
   id: number;
   name: string;
@@ -162,6 +174,16 @@ export interface GiftListDetailViewer {
   account_person_name: string | null;
   is_archived: boolean;
   gifts: Gift[];
+  /** The occasions a claim on this list would be filed under — the backend's
+   * `suggested` set (NEU-1269 spec §2). **Its length is the whole prompting
+   * rule**: 0 or 1 claims silently, 2+ asks once before the claim commits.
+   * Never present on the owner's payload, which carries no claim state at all. */
+  claim_candidates: ClaimOccasion[];
+  /** The wider `allowed` set, which a claim may also be filed under but which
+   * is not suggested — archived occasions, in practice. It rides along so the
+   * picker can offer past occasions without a second request; without it the
+   * correction path exists in the API and no UI can reach it (spec §3.5). */
+  claim_options: ClaimOccasion[];
   created_at: string;
   updated_at: string;
 }
