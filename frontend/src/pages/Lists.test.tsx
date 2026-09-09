@@ -580,3 +580,119 @@ describe("Lists — group by", () => {
     expect(screen.queryByText("Dave's Wishlist")).not.toBeInTheDocument();
   });
 });
+
+// The `• N to buy` badge (project spec §9.1). Not decorative: a claim on a
+// directly-shared list files under no occasion and, unless its list sits in a
+// folder, appears on no shopping tab at all, so this badge is the only route
+// back to it (§9.4).
+describe("Lists — to-buy badge", () => {
+  it("counts what the viewer still has to buy on a shared row", async () => {
+    lists({
+      shared: [
+        sharedList({
+          id: 1, name: "Jane's Wishlist", my_unpurchased_claim_count: 2,
+          shared_via: { kind: "user", id: 2, name: "Jane Boone" },
+        }),
+      ],
+    });
+
+    renderLists();
+
+    expect(await screen.findByText("Jane's Wishlist")).toBeInTheDocument();
+    expect(screen.getByText("• 2 to buy")).toBeInTheDocument();
+  });
+
+  // Zero is the common case — most shared lists are ones the viewer has never
+  // claimed from — and a "0 to buy" on every one of them is noise.
+  it("renders nothing when the viewer has nothing left to buy", async () => {
+    lists({
+      shared: [
+        sharedList({
+          id: 1, name: "Jane's Wishlist", my_unpurchased_claim_count: 0,
+          shared_via: { kind: "user", id: 2, name: "Jane Boone" },
+        }),
+        // A row that carries no count at all draws no badge either.
+        sharedList({
+          id: 2, name: "Carol's Wishlist", owner_name: "Carol Boone",
+          shared_via: { kind: "user", id: 4, name: "Carol Boone" },
+        }),
+      ],
+    });
+
+    renderLists();
+
+    expect(await screen.findByText("Jane's Wishlist")).toBeInTheDocument();
+    expect(screen.getByText("Carol's Wishlist")).toBeInTheDocument();
+    expect(screen.queryByText(/to buy/)).not.toBeInTheDocument();
+  });
+
+  // The badge's whole purpose is the claim that belongs to no group, so it has
+  // to survive the grouping that puts that claim in a "Not in a …" bucket.
+  it("keeps the badge on a row in a Not in a … bucket", async () => {
+    lists({
+      shared: [
+        sharedList({
+          id: 1, name: "Carol's Wishlist", owner_name: "Carol Boone",
+          my_unpurchased_claim_count: 1,
+          shared_via: {
+            kind: "occasion", id: 3, name: "Christmas 2026",
+            family: { id: 1, name: "Boone Family" },
+          },
+        }),
+        sharedList({
+          id: 2, name: "Jane's Wishlist", my_unpurchased_claim_count: 3,
+          shared_via: { kind: "user", id: 2, name: "Jane Boone" },
+        }),
+      ],
+    });
+
+    renderLists();
+
+    await userEvent.selectOptions(await screen.findByLabelText("Group by"), "occasion");
+
+    const bucket = await screen.findByRole("heading", { name: "Not in an occasion" });
+    expect(within(bucket.parentElement as HTMLElement).getByText("• 3 to buy")).toBeInTheDocument();
+    // And the grouped bucket keeps its own.
+    expect(screen.getByText("• 1 to buy")).toBeInTheDocument();
+  });
+
+  // Spec §13 asks for the badge under Group by, and the ticket for "every
+  // grouping" — not just the one. Person and folder key on different things,
+  // and folder additionally waits on a second read before it renders.
+  it("keeps the badge under the person and folder groupings", async () => {
+    lists({
+      shared: [
+        sharedList({
+          id: 1, name: "Jane's Wishlist", my_unpurchased_claim_count: 3,
+          shared_via: { kind: "user", id: 2, name: "Jane Boone" },
+        }),
+      ],
+    });
+    folders([{ id: 5, name: "Christmas 2026", lists: [{ id: 1 }] }]);
+
+    renderLists();
+
+    await userEvent.selectOptions(await screen.findByLabelText("Group by"), "person");
+    expect(await screen.findByRole("heading", { name: "Jane Boone" })).toBeInTheDocument();
+    expect(screen.getByText("• 3 to buy")).toBeInTheDocument();
+
+    await userEvent.selectOptions(screen.getByLabelText("Group by"), "folder");
+    expect(await screen.findByRole("heading", { name: "Christmas 2026" })).toBeInTheDocument();
+    expect(screen.getByText("• 3 to buy")).toBeInTheDocument();
+  });
+
+  // The same class of leak as `claimed_count`, which shipped on owned rows and
+  // went unnoticed for months (NEU-1279). An owner never sees a claim, so no
+  // owned row may render this badge even if the payload carries the field.
+  it("never badges a list the viewer owns", async () => {
+    lists({
+      owned: [ownedList({ id: 9, name: "Tom's Wishlist", my_unpurchased_claim_count: 4 })],
+      shared: [],
+    });
+
+    renderLists();
+
+    expect(await screen.findByText("Tom's Wishlist")).toBeInTheDocument();
+    expect(screen.queryByText(/to buy/)).not.toBeInTheDocument();
+  });
+});

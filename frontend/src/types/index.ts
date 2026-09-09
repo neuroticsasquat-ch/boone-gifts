@@ -66,6 +66,15 @@ export interface GiftList {
   /** Present only on a list in the `shared` scope — null on one the caller owns,
    * absent on a response cached from before the field existed. */
   shared_via?: SharedVia | null;
+  /** How many of the viewer's *own* claims on this list are still unbought —
+   * what the `• N to buy` badge counts (project spec §9.1).
+   *
+   * Optional here because this one interface serves both scopes: the backend
+   * declares it **required** on the viewer schema, so every row in the `shared`
+   * scope carries it, and omits it entirely from the owned schema, because an
+   * owner never sees a claim. Optional is the honest typing of that pair — not
+   * an invitation to treat a missing count as zero. */
+  my_unpurchased_claim_count?: number;
 }
 
 /**
