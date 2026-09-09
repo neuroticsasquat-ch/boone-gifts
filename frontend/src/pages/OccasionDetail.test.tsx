@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { server } from "../test/mocks/server";
 import { AuthProvider } from "../contexts/AuthContext";
+import { NumericId } from "../components/NumericId";
 import { OccasionDetail } from "./OccasionDetail";
 
 const API = "https://boone-gifts-api.localhost";
@@ -106,7 +107,14 @@ function renderOccasion({
       <AuthProvider>
         <MemoryRouter initialEntries={["/occasions/3"]}>
           <Routes>
-            <Route path="/occasions/:id" element={<OccasionDetail />} />
+            <Route
+              path="/occasions/:id"
+              element={
+                <NumericId back="/people">
+                  <OccasionDetail />
+                </NumericId>
+              }
+            />
             <Route path="/people/families/:id" element={<div>Family Page</div>} />
           </Routes>
           <Toaster />

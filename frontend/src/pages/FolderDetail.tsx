@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { useParams, useNavigate, Link } from "react-router";
+import { useNavigate, Link } from "react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getFolder,
@@ -13,6 +13,7 @@ import type { FolderDetail as FolderDetailType } from "../types";
 import { useTitle } from "../hooks/useTitle";
 import toast from "react-hot-toast";
 import { Spinner } from "../components/Spinner";
+import { useNumericId } from "../components/NumericId";
 import { ListAttributionLine } from "../components/ListAttribution";
 import { MyShopping } from "../components/MyShopping";
 import { TabBar } from "../components/TabBar";
@@ -32,8 +33,7 @@ const TABS = [
 type TabKey = (typeof TABS)[number]["key"];
 
 export function FolderDetail() {
-  const { id } = useParams();
-  const folderId = Number(id);
+  const folderId = useNumericId();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<TabKey>(TABS[0].key);
@@ -41,7 +41,6 @@ export function FolderDetail() {
   const { data: folder, isLoading, error, refetch } = useQuery({
     queryKey: ["folder", folderId],
     queryFn: () => getFolder(folderId),
-    enabled: !!id,
   });
 
   useTitle(folder?.name ?? "Folder");

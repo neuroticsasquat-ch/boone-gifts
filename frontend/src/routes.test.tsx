@@ -1,10 +1,10 @@
 import { render, screen } from "@testing-library/react";
-import { describe, it, expect } from "vitest";
-import { createMemoryRouter, RouterProvider } from "react-router";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { createMemoryRouter, RouterProvider, type RouteObject } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { server } from "./test/mocks/server";
-import { AuthProvider } from "./contexts/AuthContext";
+import { AuthProvider, AuthContext, type AuthContextType } from "./contexts/AuthContext";
 import { routes } from "./routes";
 
 const API = "https://boone-gifts-api.localhost";
@@ -82,5 +82,114 @@ describe("routes", () => {
     renderAt("/lists/archive");
 
     expect(await screen.findByRole("heading", { name: "Archive" })).toBeInTheDocument();
+  });
+});
+
+/**
+ * The standing guard that every numeric `:id` route is wrapped in `<NumericId>`
+ * (`docs/adr/0006-route-ids-are-validated-at-the-route.md`). It walks the
+ * `routes` array rather than naming the six, so **adding a seventh `:id` route
+ * without a wrapper fails here** — that is its whole job, in the spirit of the
+ * standing retirement guard under `src/test/`, which greps the tree for the
+ * same reason. (Named only by description: that guard fails on any file
+ * carrying the phrase it retired, this one included.)
+ */
+function join(prefix: string, path: string): string {
+  if (path.startsWith("/")) return path;
+  return `${prefix}/${path}`.replace(/\/{2,}/g, "/");
+}
+
+/** Every routable path in the tree, as the full address a browser would carry. */
+function fullPaths(children: RouteObject[], prefix = ""): string[] {
+  return children.flatMap((route) => {
+    if (route.path === undefined) {
+      return route.children ? fullPaths(route.children, prefix) : [];
+    }
+    const here = join(prefix, route.path);
+    return [here, ...(route.children ? fullPaths(route.children, here) : [])];
+  });
+}
+
+const ID_PATHS = fullPaths(routes).filter((path) => path.includes(":id"));
+
+/**
+ * The nav shell fetches its three badge counts on every render and sits above
+ * every one of these routes, so those are the only requests a wrapped route may
+ * produce. Anything else means a page mounted and asked the backend about an
+ * address that was never valid.
+ */
+const NAV_REQUESTS = ["/connections/requests", "/lists/unseen-count", "/families/invites"];
+
+/** Supplied directly rather than through `AuthProvider`, so the session costs
+ *  no `/auth/refresh` and the request count below stays about the page. */
+const AUTHENTICATED: AuthContextType = {
+  user: { id: 1, email: "user@test.com", name: "Tom Boone", role: "member" },
+  isLoading: false,
+  login: async () => {},
+  logout: async () => {},
+  register: async () => {},
+  changePassword: async () => {},
+  updateProfile: async () => {},
+};
+
+let requested: string[] = [];
+
+function record({ request }: { request: Request }) {
+  requested.push(new URL(request.url).pathname);
+}
+
+describe("every numeric :id route validates its id", () => {
+  beforeEach(() => {
+    requested = [];
+    server.events.on("request:start", record);
+  });
+
+  afterEach(() => {
+    server.events.removeListener("request:start", record);
+  });
+
+  function renderBadAddress(path: string) {
+    const router = createMemoryRouter(routes, { initialEntries: [path] });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    return render(
+      <QueryClientProvider client={queryClient}>
+        <AuthContext.Provider value={AUTHENTICATED}>
+          <RouterProvider router={router} />
+        </AuthContext.Provider>
+      </QueryClientProvider>
+    );
+  }
+
+  it("finds the :id routes to check", () => {
+    expect(ID_PATHS.length).toBeGreaterThan(0);
+  });
+
+  it.each(ID_PATHS)("%s rejects a non-numeric id", async (path) => {
+    renderBadAddress(path.replaceAll(":id", "abc"));
+
+    expect(await screen.findByText("This page's address isn't valid.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+  });
+
+  it.each(ID_PATHS)("%s asks the backend nothing about a non-numeric id", async (path) => {
+    renderBadAddress(path.replaceAll(":id", "abc"));
+    await screen.findByText("This page's address isn't valid.");
+
+    expect(requested.filter((pathname) => !NAV_REQUESTS.includes(pathname))).toEqual([]);
+  });
+
+  // The two that mattered beyond tidiness: `Number.isFinite(Number(id))`
+  // accepted both, so the URL bar said one thing and the page loaded another.
+  // Asserted on the real route, not just on the rule, because loading family 16
+  // from `/people/families/0x10` is what the viewer would actually have seen.
+  it.each([
+    ["/people/families/0x10", "family 16"],
+    ["/people/families/1e3", "family 1000"],
+  ])("%s says the address is wrong rather than loading %s", async (address) => {
+    renderBadAddress(address);
+
+    expect(await screen.findByText("This page's address isn't valid.")).toBeInTheDocument();
+    expect(requested.filter((pathname) => !NAV_REQUESTS.includes(pathname))).toEqual([]);
   });
 });

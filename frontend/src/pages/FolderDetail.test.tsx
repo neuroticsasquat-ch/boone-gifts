@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { server } from "../test/mocks/server";
+import { NumericId } from "../components/NumericId";
 import { FolderDetail } from "./FolderDetail";
 
 const API = "https://boone-gifts-api.localhost";
@@ -29,7 +30,14 @@ function renderFolderDetail(id = "1") {
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[`/folders/${id}`]}>
         <Routes>
-          <Route path="/folders/:id" element={<FolderDetail />} />
+          <Route
+            path="/folders/:id"
+            element={
+              <NumericId back="/lists">
+                <FolderDetail />
+              </NumericId>
+            }
+          />
           <Route path="/lists" element={<div>Lists</div>} />
         </Routes>
       </MemoryRouter>

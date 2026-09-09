@@ -1,9 +1,10 @@
-import { Link, useParams } from "react-router";
+import { Link } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { getFamily } from "../api/families";
 import { getFamilyOccasions } from "../api/occasions";
 import { useTitle } from "../hooks/useTitle";
 import { Spinner } from "../components/Spinner";
+import { useNumericId } from "../components/NumericId";
 import { ArchiveIcon } from "../components/Icons";
 
 /**
@@ -25,13 +26,11 @@ import { ArchiveIcon } from "../components/Icons";
  * the sibling archive page's per-section error arms exist to prevent.
  */
 export function FamilyArchive() {
-  const { id } = useParams();
-  const familyId = Number(id);
+  const familyId = useNumericId();
 
   const family = useQuery({
     queryKey: ["family", familyId],
     queryFn: () => getFamily(familyId),
-    enabled: Number.isFinite(familyId),
   });
 
   // Shares the family page's key and its `archived` shape, so archiving or
@@ -40,7 +39,6 @@ export function FamilyArchive() {
   const occasions = useQuery({
     queryKey: ["occasions", familyId, { archived: true }],
     queryFn: () => getFamilyOccasions(familyId, true),
-    enabled: Number.isFinite(familyId),
   });
 
   useTitle(family.data ? `${family.data.name} archive` : "Archive");

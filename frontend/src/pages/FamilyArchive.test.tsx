@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { server } from "../test/mocks/server";
 import { AuthProvider } from "../contexts/AuthContext";
+import { NumericId } from "../components/NumericId";
 import { FamilyArchive } from "./FamilyArchive";
 
 const API = "https://boone-gifts-api.localhost";
@@ -65,7 +66,14 @@ function renderArchive() {
       <AuthProvider>
         <MemoryRouter initialEntries={["/people/families/1/archive"]}>
           <Routes>
-            <Route path="/people/families/:id/archive" element={<FamilyArchive />} />
+            <Route
+              path="/people/families/:id/archive"
+              element={
+                <NumericId back="/people">
+                  <FamilyArchive />
+                </NumericId>
+              }
+            />
           </Routes>
         </MemoryRouter>
       </AuthProvider>

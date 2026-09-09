@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { server } from "../test/mocks/server";
 import { AuthProvider } from "../contexts/AuthContext";
+import { NumericId } from "../components/NumericId";
 import { ListDetail } from "./ListDetail";
 
 const API = "https://boone-gifts-api.localhost";
@@ -68,7 +69,14 @@ function renderListDetail(token: string) {
       <AuthProvider>
         <MemoryRouter initialEntries={["/lists/1"]}>
           <Routes>
-            <Route path="/lists/:id" element={<ListDetail />} />
+            <Route
+              path="/lists/:id"
+              element={
+                <NumericId back="/lists">
+                  <ListDetail />
+                </NumericId>
+              }
+            />
           </Routes>
         </MemoryRouter>
       </AuthProvider>

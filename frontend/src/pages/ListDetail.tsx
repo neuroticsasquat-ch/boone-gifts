@@ -1,5 +1,5 @@
 import { useState, useEffect, type FormEvent } from "react";
-import { useParams, useNavigate, Link } from "react-router";
+import { useNavigate, Link } from "react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getList, updateList, deleteList } from "../api/lists";
 import { getConnections } from "../api/connections";
@@ -10,6 +10,7 @@ import type { GiftListDetailOwner, GiftListDetailViewer } from "../types";
 import { isAxiosError } from "axios";
 import toast from "react-hot-toast";
 import { Spinner } from "../components/Spinner";
+import { useNumericId } from "../components/NumericId";
 import { HeaderMenu } from "../components/HeaderMenu";
 import { GiftsTab } from "./list-detail/GiftsTab";
 import { SharingPanel } from "./list-detail/SharingPanel";
@@ -29,8 +30,7 @@ function isOwnerView(list: GiftListDetailOwner | GiftListDetailViewer, userId: n
 }
 
 export function ListDetail() {
-  const { id } = useParams();
-  const listId = Number(id);
+  const listId = useNumericId();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -46,7 +46,6 @@ export function ListDetail() {
   const { data: list, isLoading, error, refetch } = useQuery({
     queryKey: ["list", listId],
     queryFn: () => getList(listId),
-    enabled: !!id,
   });
 
   useTitle(list?.name ?? "List");

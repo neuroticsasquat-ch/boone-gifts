@@ -61,7 +61,6 @@ export function OccasionsSection({ familyId, familyName, isOrganizer }: Occasion
   const occasions = useQuery({
     queryKey: ["occasions", familyId, { archived: false }],
     queryFn: () => getFamilyOccasions(familyId, false),
-    enabled: Number.isFinite(familyId),
   });
 
   // Prefix match, so both the active and the archived lists are refetched.

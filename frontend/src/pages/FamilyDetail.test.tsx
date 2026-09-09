@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { server } from "../test/mocks/server";
 import { AuthProvider } from "../contexts/AuthContext";
+import { NumericId } from "../components/NumericId";
 import { FamilyDetail } from "./FamilyDetail";
 
 const API = "https://boone-gifts-api.localhost";
@@ -49,7 +50,14 @@ function renderFamilyDetail(token: string, id = "1") {
       <AuthProvider>
         <MemoryRouter initialEntries={[`/people/families/${id}`]}>
           <Routes>
-            <Route path="/people/families/:id" element={<FamilyDetail />} />
+            <Route
+              path="/people/families/:id"
+              element={
+                <NumericId back="/people">
+                  <FamilyDetail />
+                </NumericId>
+              }
+            />
             <Route path="/people" element={<div>People Page</div>} />
           </Routes>
         </MemoryRouter>

@@ -1,6 +1,7 @@
 import type { RouteObject } from "react-router";
 import { Navigate } from "react-router";
 import { Layout } from "./components/Layout";
+import { NumericId } from "./components/NumericId";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AdminRoute } from "./components/AdminRoute";
 import { Login } from "./pages/Login";
@@ -57,18 +58,18 @@ export const routes: RouteObject[] = [
           // (NEU-1278). A static segment outranks `lists/:id`, the same way
           // `lists/new` already does.
           { path: "lists/archive", element: <ListsArchive /> },
-          { path: "lists/:id", element: <ListDetail /> },
+          { path: "lists/:id", element: <NumericId back="/lists"><ListDetail /></NumericId> },
           { path: "people", element: <People /> },
-          { path: "people/families/:id", element: <FamilyDetail /> },
+          { path: "people/families/:id", element: <NumericId back="/people"><FamilyDetail /></NumericId> },
           // The same for a family's archived occasions, reached from the
           // occasions section on the family page.
-          { path: "people/families/:id/archive", element: <FamilyArchive /> },
-          { path: "people/:id", element: <ConnectionProfile /> },
-          { path: "occasions/:id", element: <OccasionDetail /> },
+          { path: "people/families/:id/archive", element: <NumericId back="/people"><FamilyArchive /></NumericId> },
+          { path: "people/:id", element: <NumericId back="/people"><ConnectionProfile /></NumericId> },
+          { path: "occasions/:id", element: <NumericId back="/people"><OccasionDetail /></NumericId> },
           // A folder page, but no folder *index*: the folder filter on /lists is
           // where a user meets the concept, and NEU-1277's Group by is what
           // links here. `Folders.tsx` stays unrouted.
-          { path: "folders/:id", element: <FolderDetail /> },
+          { path: "folders/:id", element: <NumericId back="/lists"><FolderDetail /></NumericId> },
           { path: "account", element: <Account /> },
           {
             path: "admin",

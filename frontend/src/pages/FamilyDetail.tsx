@@ -1,17 +1,17 @@
 import { useState, type FormEvent } from "react";
-import { Link, useParams, useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getFamily, renameFamily, deleteFamily, removeMember, updateMemberRole, createInvite, getInvites, revokeInvite } from "../api/families";
 import { useAuth } from "../hooks/useAuth";
 import { useTitle } from "../hooks/useTitle";
 import { Spinner } from "../components/Spinner";
+import { useNumericId } from "../components/NumericId";
 import { OccasionsSection } from "./family-detail/OccasionsSection";
 import toast from "react-hot-toast";
 import { isAxiosError } from "axios";
 
 export function FamilyDetail() {
-  const { id } = useParams();
-  const familyId = Number(id);
+  const familyId = useNumericId();
   const navigate = useNavigate();
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -27,7 +27,6 @@ export function FamilyDetail() {
   const family = useQuery({
     queryKey: ["family", familyId],
     queryFn: () => getFamily(familyId),
-    enabled: Number.isFinite(familyId),
   });
 
   useTitle(family.data?.name ?? "Family");
@@ -43,7 +42,7 @@ export function FamilyDetail() {
   const invites = useQuery({
     queryKey: ["family-invites", familyId],
     queryFn: () => getInvites(familyId),
-    enabled: isOrganizer && Number.isFinite(familyId),
+    enabled: isOrganizer,
   });
 
   const sendInviteMutation = useMutation({

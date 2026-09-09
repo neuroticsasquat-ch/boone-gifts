@@ -64,3 +64,12 @@ behaviour).
    disabled with the reason, never hidden; a family with several is not shared to until one is
    chosen. Archiving an occasion blocks new shares and nothing else — it never withdraws one, so an
    existing grant stays visible and revokable.
+
+7. **A wrong address is not a missing thing, and neither is a slow one.** An `:id` in a route is a
+   positive integer or it is not an address at all — the page it names is never asked for, never
+   loaded, and never spun on. The viewer is told plainly that the address is wrong and given one way
+   back, with no retry offered, because retrying a malformed address cannot help. This is enforced at
+   the route rather than in the pages, so a page that renders has a real id by construction (see
+   [`docs/adr/0006-route-ids-are-validated-at-the-route.md`](docs/adr/0006-route-ids-are-validated-at-the-route.md)).
+   Distinct from a *reachability* failure: a valid id the viewer may not see stays the backend's
+   answer, and keeps its own arm.

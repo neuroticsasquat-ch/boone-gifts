@@ -1,11 +1,12 @@
 import { useState, type FormEvent } from "react";
-import { Link, useParams } from "react-router";
+import { Link } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 import toast from "react-hot-toast";
 import { getOccasion, getOccasionLists, updateOccasion } from "../api/occasions";
 import { getFamily } from "../api/families";
 import { useAuth } from "../hooks/useAuth";
+import { useNumericId } from "../components/NumericId";
 import { useTitle } from "../hooks/useTitle";
 import { Spinner } from "../components/Spinner";
 import { HeaderMenu } from "../components/HeaderMenu";
@@ -38,13 +39,11 @@ const ORGANIZER_ONLY = "Only an organizer can rename or archive an occasion.";
  * its page stays a page — archiving only takes it out of the default views.
  */
 export function OccasionDetail() {
-  const { id } = useParams();
-  const occasionId = Number(id);
+  const occasionId = useNumericId();
 
   const occasion = useQuery({
     queryKey: ["occasion", occasionId],
     queryFn: () => getOccasion(occasionId),
-    enabled: Number.isFinite(occasionId),
   });
 
   useTitle(occasion.data?.name ?? "Occasion");
