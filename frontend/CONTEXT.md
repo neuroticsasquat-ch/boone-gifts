@@ -32,7 +32,11 @@ behaviour).
 ## Rules the UI must respect
 
 1. **The backend is always the gate.** Hidden or read-only controls are a courtesy, never a
-   permission. Anything the UI hides is also refused server-side.
+   permission. Anything the UI hides is also refused server-side — *unless the control is disabled
+   because the grant would be redundant rather than forbidden*. The one such case is a person the
+   sharing panel disables because a family occasion already reaches them (rule 6): the API still
+   accepts that direct share, because a direct share is the grant that survives the person leaving
+   the family or the occasion share being revoked.
 
 2. **Owners are blind to claims, and no user sees another's.** No screen, count, badge, or error
    message may reveal claim state on a list the viewer owns — including the revoke-a-share dialog,
@@ -64,6 +68,12 @@ behaviour).
    disabled with the reason, never hidden; a family with several is not shared to until one is
    chosen. Archiving an occasion blocks new shares and nothing else — it never withdraws one, so an
    existing grant stays visible and revokable.
+   The same "listed, disabled, reason given" shape covers a **person an active occasion share
+   already reaches**: their box is dead because ticking it would change nothing, and the row names
+   every family that covers them. It applies only to an *unticked* box — a direct share already
+   made stays revokable, because this panel is the only place to revoke one. Archived shares are
+   outside the rule: they still grant sight, but the row stays live, since a direct share is what
+   the owner would want as that occasion winds down.
 
 7. **A wrong address is not a missing thing, and neither is a slow one.** An `:id` in a route is a
    positive integer or it is not an address at all — the page it names is never asked for, never

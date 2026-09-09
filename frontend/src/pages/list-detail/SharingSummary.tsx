@@ -4,8 +4,8 @@ import { getConnections } from "../../api/connections";
 import { getShareTargets } from "../../api/lists";
 
 /**
- * The one line on list detail that says who can see this list — the people and
- * the occasions it actually reaches, in that order, replacing the "Shared with"
+ * The one line on list detail that says who can see this list — the occasions
+ * and the people it actually reaches, in that order, replacing the "Shared with"
  * and "Families" tabs as the place an owner reads their sharing state.
  *
  * Owner-only, and always editable: it names who the list actually reaches and
@@ -27,14 +27,15 @@ export function SharingSummary({
 
   const isLoading = shares.isLoading || connections.isLoading || targets.isLoading;
   const namesByUserId = new Map((connections.data ?? []).map((c) => [c.user.id, c.user.name]));
-  // People first, then occasions — "Shared with Jane, Boone Family · Christmas
-  // 2026". A share points at an occasion, so naming the family alone would say
-  // more than the list actually reaches (project spec §8).
+  // Occasions first, then people — "Shared with Boone Family · Christmas 2026,
+  // Jane", the same order the sharing panel reads in (project spec §5.2). A
+  // share points at an occasion, so naming the family alone would say more than
+  // the list actually reaches (project spec §8).
   const names = [
-    ...(shares.data ?? []).map((s) => namesByUserId.get(s.user_id) ?? `User ${s.user_id}`),
     ...(targets.data ?? []).flatMap((family) =>
       family.occasions.filter((o) => o.shared).map((o) => `${family.name} · ${o.name}`),
     ),
+    ...(shares.data ?? []).map((s) => namesByUserId.get(s.user_id) ?? `User ${s.user_id}`),
   ];
 
   // A failed fetch also leaves `names` empty, and "nobody can see this" is far
