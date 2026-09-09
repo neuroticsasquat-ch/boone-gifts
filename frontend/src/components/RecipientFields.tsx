@@ -5,8 +5,7 @@ import type { RecipientValue } from "../lib/recipient";
  * a disclosure checkbox over the recipient's details (NEU-1216 §2.7).
  *
  * Progressive disclosure: unchecked, the surrounding form is exactly what it was
- * before this feature existed — which is what keeps simple mode's create form to
- * two fields. Checked, it reveals `RecipientDetails`.
+ * before this feature existed. Checked, it reveals `RecipientDetails`.
  *
  * On a *shared* account this control is not used: the picker in `ListForFields`
  * asks the same question of the whole account, and "Someone else" is one of its

@@ -1,5 +1,59 @@
 # Release notes
 
+## 0.5.0 — 2026-09-09
+
+### Budgets
+
+- Show and edit your own budget on every shopping tab ([NEU-1276](https://linear.app/neuroticsasquatch/issue/NEU-1276)) ([#195](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/195))
+
+### Claims
+
+- Record what a claimed gift cost when you tick it bought ([NEU-1270](https://linear.app/neuroticsasquatch/issue/NEU-1270)) ([#191](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/191))
+- Ask which occasion a claim is for only when it's a real choice ([NEU-1271](https://linear.app/neuroticsasquatch/issue/NEU-1271)) ([#192](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/192))
+- Give each occasion and folder a My shopping tab ([NEU-1274](https://linear.app/neuroticsasquatch/issue/NEU-1274)) ([#194](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/194))
+
+### Folders
+
+- Rename occasions to folders ([NEU-1259](https://linear.app/neuroticsasquatch/issue/NEU-1259)) ([#185](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/185))
+
+### General
+
+- Drop the query cache when the viewer changes ([NEU-1281](https://linear.app/neuroticsasquatch/issue/NEU-1281)) ([#196](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/196))
+- Drop the query cache before paint, not after (NEU-1281 follow-up) ([#197](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/197))
+
+### Gifts
+
+- Format every money value through one shared helper ([NEU-1272](https://linear.app/neuroticsasquatch/issue/NEU-1272)) ([#193](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/193))
+
+### Hooks
+
+- Clear component timers on unmount ([NEU-1282](https://linear.app/neuroticsasquatch/issue/NEU-1282))
+
+### Lists
+
+- Pre-check family sharing and name the unshared list ([NEU-1262](https://linear.app/neuroticsasquatch/issue/NEU-1262)) ([#187](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/187))
+- Group Shared with me by occasion, person or folder ([NEU-1277](https://linear.app/neuroticsasquatch/issue/NEU-1277)) ([#198](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/198))
+- Give archived lists, folders and occasions one way in ([NEU-1278](https://linear.app/neuroticsasquatch/issue/NEU-1278)) ([#199](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/199))
+- Report a failed family read on the archive view (NEU-1278 follow-up) ([#200](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/200))
+- Show what the viewer still has to buy on a shared row ([NEU-1280](https://linear.app/neuroticsasquatch/issue/NEU-1280)) ([#203](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/203))
+
+### Navigation
+
+- Retire simple mode ([NEU-1261](https://linear.app/neuroticsasquatch/issue/NEU-1261)) ([#186](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/186))
+
+### Occasions
+
+- Give the family page its occasions and their controls ([NEU-1264](https://linear.app/neuroticsasquatch/issue/NEU-1264)) ([#188](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/188))
+- Give the occasion its page and the lists shared to it ([NEU-1267](https://linear.app/neuroticsasquatch/issue/NEU-1267)) ([#190](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/190))
+
+### Routes
+
+- Validate numeric route ids at the route ([NEU-1283](https://linear.app/neuroticsasquatch/issue/NEU-1283)) ([#202](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/202))
+
+### Sharing
+
+- Choose the occasion a family sees a list through ([NEU-1266](https://linear.app/neuroticsasquatch/issue/NEU-1266)) ([#189](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/189))
+
 ## 0.4.0 — 2026-09-08
 
 ### Account

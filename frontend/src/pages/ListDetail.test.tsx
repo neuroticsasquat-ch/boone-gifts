@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { server } from "../test/mocks/server";
 import { AuthProvider } from "../contexts/AuthContext";
+import { NumericId } from "../components/NumericId";
 import { ListDetail } from "./ListDetail";
 
 const API = "https://boone-gifts-api.localhost";
@@ -24,13 +25,6 @@ const viewerToken = [
   "fake-signature",
 ].join(".");
 
-// JWT with payload: { sub: "1", email: "owner@test.com", role: "member", simple_mode: true, exp: 9999999999 }
-const simpleModeOwnerToken = [
-  btoa(JSON.stringify({ alg: "HS256", typ: "JWT" })),
-  btoa(JSON.stringify({ sub: "1", email: "owner@test.com", role: "member", simple_mode: true, exp: 9999999999 })),
-  "fake-signature",
-].join(".");
-
 const ownerListDetail = {
   id: 1,
   name: "My Wishlist",
@@ -43,6 +37,8 @@ const ownerListDetail = {
   updated_at: "2026-01-01",
 };
 
+// A viewer's payload always carries both claim sets; the default is a list
+// shared directly, which is the 0-candidate case — nothing to ask about.
 const viewerListDetail = {
   id: 1,
   name: "My Wishlist",
@@ -51,6 +47,8 @@ const viewerListDetail = {
   owner_name: "Owner",
   is_archived: false,
   gifts: [],
+  claim_candidates: [],
+  claim_options: [],
   created_at: "2026-01-01",
   updated_at: "2026-01-01",
 };
@@ -71,7 +69,14 @@ function renderListDetail(token: string) {
       <AuthProvider>
         <MemoryRouter initialEntries={["/lists/1"]}>
           <Routes>
-            <Route path="/lists/:id" element={<ListDetail />} />
+            <Route
+              path="/lists/:id"
+              element={
+                <NumericId back="/lists">
+                  <ListDetail />
+                </NumericId>
+              }
+            />
           </Routes>
         </MemoryRouter>
       </AuthProvider>
@@ -100,10 +105,16 @@ describe("ListDetail sharing panel", () => {
       ),
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/families`, () =>
-        HttpResponse.json([{ id: 7, name: "The Boones", shared: true }])
+        HttpResponse.json([
+          {
+            id: 7,
+            name: "The Boones",
+            occasions: [{ id: 10, name: "Christmas 2026", is_archived: false, shared: true }],
+          },
+        ])
       ),
-      http.get(`${API}/occasions`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => HttpResponse.json([])),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
     );
 
     renderListDetail(ownerToken);
@@ -119,8 +130,8 @@ describe("ListDetail sharing panel", () => {
     server.use(
       http.get(`${API}/lists/1`, () => HttpResponse.json(viewerListDetail)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => HttpResponse.json([])),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
     );
 
     renderListDetail(viewerToken);
@@ -148,8 +159,8 @@ describe("AddGiftForm URL Auto-Populate", () => {
       http.get(`${API}/connections`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => HttpResponse.json([])),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
       http.get(`${API}/meta`, () =>
         HttpResponse.json({
           title: "Cool Gadget",
@@ -179,8 +190,8 @@ describe("AddGiftForm URL Auto-Populate", () => {
       http.get(`${API}/connections`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => HttpResponse.json([])),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
       http.get(`${API}/meta`, () =>
         HttpResponse.json({
           title: "From Meta",
@@ -215,8 +226,8 @@ describe("AddGiftForm URL Auto-Populate", () => {
       http.get(`${API}/connections`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => HttpResponse.json([])),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
       http.get(`${API}/meta`, () => HttpResponse.error()),
     );
 
@@ -256,8 +267,8 @@ describe("Gift list item responsive layout", () => {
       http.get(`${API}/connections`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => HttpResponse.json([])),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
     );
 
     renderListDetail(ownerToken);
@@ -271,8 +282,8 @@ describe("Gift list item responsive layout", () => {
     server.use(
       http.get(`${API}/lists/1`, () => HttpResponse.json(viewerListWithGift)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => HttpResponse.json([])),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
     );
 
     renderListDetail(viewerToken);
@@ -288,8 +299,8 @@ describe("Gift list item responsive layout", () => {
       http.get(`${API}/connections`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => HttpResponse.json([])),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
     );
 
     renderListDetail(ownerToken);
@@ -305,8 +316,8 @@ describe("Gift list item responsive layout", () => {
       http.get(`${API}/connections`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => HttpResponse.json([])),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
     );
 
     renderListDetail(ownerToken);
@@ -320,14 +331,38 @@ describe("Gift list item responsive layout", () => {
     server.use(
       http.get(`${API}/lists/1`, () => HttpResponse.json(viewerListWithGift)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => HttpResponse.json([])),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
     );
 
     renderListDetail(viewerToken);
 
     const prices = await screen.findAllByText("$15.00");
     expect(prices.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("pads a price that arrives with fewer than two decimals", async () => {
+    // The fixtures above all carry two decimals already, so they pass with or
+    // without the shared formatter. This one does not: `19.5` reaching a row
+    // that hardcodes a `$` reads `$19.5`, which is the whole reason
+    // `formatMoney` exists (NEU-1272, project spec §14 open question 1).
+    server.use(
+      http.get(`${API}/lists/1`, () =>
+        HttpResponse.json({
+          ...viewerListDetail,
+          gifts: [{ id: 10, name: "Short Price Gift", description: null, url: null, price: "19.5", claimed_by_id: null }],
+        }),
+      ),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => HttpResponse.json([])),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
+    );
+
+    renderListDetail(viewerToken);
+
+    // The positive assertion is the whole guard: without the formatter the row
+    // renders "$19.5", which does not match this exact-text query.
+    expect(await screen.findAllByText("$19.50")).not.toHaveLength(0);
   });
 });
 
@@ -344,7 +379,7 @@ describe("ListDetail — no tab bar", () => {
 
     await screen.findByText("My Wishlist");
     expect(screen.getByText("Add a gift")).toBeInTheDocument();
-    for (const tab of [/^gifts$/i, /^occasions$/i, /^shared with$/i, /^families$/i]) {
+    for (const tab of [/^gifts$/i, /^folders$/i, /^shared with$/i, /^families$/i]) {
       expect(screen.queryByRole("button", { name: tab })).not.toBeInTheDocument();
     }
   });
@@ -362,15 +397,25 @@ describe("ListDetail — no tab bar", () => {
       ),
       http.get(`${API}/lists/1/families`, () =>
         HttpResponse.json([
-          { id: 7, name: "The Boones", shared: true },
-          { id: 8, name: "The Smiths", shared: false },
+          {
+            id: 7,
+            name: "The Boones",
+            occasions: [{ id: 10, name: "Christmas 2026", is_archived: false, shared: true }],
+          },
+          {
+            id: 8,
+            name: "The Smiths",
+            occasions: [{ id: 20, name: "Easter 2026", is_archived: false, shared: false }],
+          },
         ])
       ),
     );
 
     renderListDetail(ownerToken);
 
-    expect(await screen.findByText("Shared with Alice, The Boones")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Shared with Alice, The Boones · Christmas 2026"),
+    ).toBeInTheDocument();
   });
 
   it("says so when a list is shared with nobody", async () => {
@@ -379,27 +424,56 @@ describe("ListDetail — no tab bar", () => {
       http.get(`${API}/connections`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/families`, () =>
-        HttpResponse.json([{ id: 7, name: "The Boones", shared: false }])
+        HttpResponse.json([
+          {
+            id: 7,
+            name: "The Boones",
+            occasions: [{ id: 10, name: "Christmas 2026", is_archived: false, shared: false }],
+          },
+        ])
       ),
     );
 
     renderListDetail(ownerToken);
 
-    expect(await screen.findByText("Not shared with anyone yet")).toBeInTheDocument();
+    // The whole mitigation for a list now being able to reach nobody, so the
+    // wording is fixed and it says nothing about claims.
+    expect(
+      await screen.findByText("This list isn't shared with anyone."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Change" })).toBeInTheDocument();
   });
 
-  it("shows simple mode a read-only summary with no Change control", async () => {
-    // The backend auto-grants a simple-mode user's lists to their families, so
-    // there is nothing here for them to change.
+  it("does not claim a list is unshared when the sharing state failed to load", async () => {
     server.use(
       http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/shares`, () => new HttpResponse(null, { status: 500 })),
+      http.get(`${API}/lists/1/families`, () => new HttpResponse(null, { status: 500 })),
     );
 
-    renderListDetail(simpleModeOwnerToken);
+    renderListDetail(ownerToken);
 
-    expect(await screen.findByText("Shared with your families")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Change" })).not.toBeInTheDocument();
+    // An empty answer and no answer at all are different things, and only one of
+    // them is the state this notice exists to report.
+    expect(await screen.findByText(/couldn't load who this list/i)).toBeInTheDocument();
+    expect(
+      screen.queryByText("This list isn't shared with anyone."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps the unshared notice off a viewer's copy of the list", async () => {
+    server.use(
+      http.get(`${API}/lists/1`, () => HttpResponse.json(viewerListDetail)),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+    );
+
+    renderListDetail(viewerToken);
+
+    await screen.findByText("My Wishlist");
+    expect(
+      screen.queryByText("This list isn't shared with anyone."),
+    ).not.toBeInTheDocument();
   });
 
   it("opens the family controls from Change", async () => {
@@ -408,7 +482,13 @@ describe("ListDetail — no tab bar", () => {
       http.get(`${API}/connections`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/families`, () =>
-        HttpResponse.json([{ id: 7, name: "The Boones", shared: true }])
+        HttpResponse.json([
+          {
+            id: 7,
+            name: "The Boones",
+            occasions: [{ id: 10, name: "Christmas 2026", is_archived: false, shared: true }],
+          },
+        ])
       ),
     );
 
@@ -491,7 +571,7 @@ describe("ListDetail — header actions menu", () => {
     await waitFor(() => expect(deleted).toBe(true));
   });
 
-  it("gives a viewer the menu, holding the occasion action alone", async () => {
+  it("gives a viewer the menu, holding the folder action alone", async () => {
     server.use(
       http.get(`${API}/lists/1`, () => HttpResponse.json(viewerListDetail)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
@@ -502,15 +582,15 @@ describe("ListDetail — header actions menu", () => {
     await screen.findByText("My Wishlist");
     await userEvent.click(screen.getByRole("button", { name: "List actions" }));
 
-    expect(screen.getByRole("button", { name: "Add to an occasion…" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add to a folder…" })).toBeInTheDocument();
     for (const owned of ["Edit", "Archive", "Delete"]) {
       expect(screen.queryByRole("button", { name: owned })).not.toBeInTheDocument();
     }
   });
 });
 
-describe("ListDetail — add to an occasion", () => {
-  const occasions = [
+describe("ListDetail — add to a folder", () => {
+  const folders = [
     {
       id: 3,
       name: "Christmas 2026",
@@ -522,18 +602,18 @@ describe("ListDetail — add to an occasion", () => {
     },
   ];
 
-  function serveOccasions() {
+  function serveFolders() {
     server.use(
-      http.get(`${API}/occasions`, () => HttpResponse.json(occasions)),
-      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => HttpResponse.json(folders)),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
     );
   }
 
   async function openFromMenu() {
     await screen.findByText("My Wishlist");
     await userEvent.click(screen.getByRole("button", { name: "List actions" }));
-    await userEvent.click(screen.getByRole("button", { name: "Add to an occasion…" }));
-    return screen.getByRole("region", { name: "Add to an occasion" });
+    await userEvent.click(screen.getByRole("button", { name: "Add to a folder…" }));
+    return screen.getByRole("region", { name: "Add to a folder" });
   }
 
   it("opens the picker from the owner's menu", async () => {
@@ -543,7 +623,7 @@ describe("ListDetail — add to an occasion", () => {
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
     );
-    serveOccasions();
+    serveFolders();
 
     renderListDetail(ownerToken);
 
@@ -558,31 +638,12 @@ describe("ListDetail — add to an occasion", () => {
       http.get(`${API}/lists/1`, () => HttpResponse.json(viewerListDetail)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
     );
-    serveOccasions();
+    serveFolders();
 
     renderListDetail(viewerToken);
 
     const panel = await openFromMenu();
     expect(await within(panel).findByRole("checkbox", { name: /christmas 2026/i })).toBeInTheDocument();
-  });
-
-  // Simple mode has no occasion filter on /lists, so it cannot read an occasion
-  // back — offering to file a list into one would strand the membership.
-  it("hides the action in simple mode, leaving the rest of the menu", async () => {
-    server.use(
-      http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
-      http.get(`${API}/connections`, () => HttpResponse.json([])),
-    );
-    serveOccasions();
-
-    renderListDetail(simpleModeOwnerToken);
-
-    await screen.findByText("My Wishlist");
-    await userEvent.click(screen.getByRole("button", { name: "List actions" }));
-
-    expect(screen.queryByRole("button", { name: "Add to an occasion…" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
   });
 
   it("shows the sharing panel and the picker one at a time", async () => {
@@ -592,7 +653,7 @@ describe("ListDetail — add to an occasion", () => {
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
     );
-    serveOccasions();
+    serveFolders();
 
     renderListDetail(ownerToken);
 
@@ -919,5 +980,479 @@ describe("ListDetail — the edit picker while the account is still loading", ()
 
     releaseAccount!();
     expect(await screen.findByRole("radio", { name: "Gran" })).toBeChecked();
+  });
+});
+
+describe("ListDetail — recording what a purchase cost", () => {
+  // The viewer (user 2) has claimed this gift; $39 is the *owner's* asking
+  // price, which the prompt may hint at but must never fill in.
+  const myClaim = {
+    id: 10,
+    name: "Cast iron skillet",
+    description: null,
+    url: null,
+    price: "39.00",
+    claimed_by_id: 2,
+    claimed_at: "2026-01-02",
+    purchased_at: null,
+    amount_paid: null,
+    created_at: "2026-01-01",
+    updated_at: "2026-01-01",
+  };
+
+  function serveViewerList(gift: object) {
+    server.use(
+      http.get(`${API}/lists/1`, () =>
+        HttpResponse.json({ ...viewerListDetail, gifts: [gift] })
+      ),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => HttpResponse.json([])),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
+    );
+  }
+
+  /** Captures the raw purchase body: "Skip" sends none at all, which is a
+   * different request from one carrying an explicit null, and `request.json()`
+   * cannot tell the two apart. */
+  function capturePurchase(response: object = { ...myClaim, purchased_at: "2026-01-03" }) {
+    const posted = vi.fn();
+    server.use(
+      http.post(`${API}/lists/1/gifts/10/purchase`, async ({ request }) => {
+        posted(await request.text());
+        return HttpResponse.json(response);
+      }),
+    );
+    return posted;
+  }
+
+  async function tickBought() {
+    await userEvent.click(await screen.findByRole("checkbox", { name: "Bought" }));
+  }
+
+  it("opens the amount prompt empty, with the asking price as a hint only", async () => {
+    serveViewerList(myClaim);
+    renderListDetail(viewerToken);
+
+    await tickBought();
+
+    const field = screen.getByRole("textbox", { name: "What did you pay?" });
+    expect(field).toHaveValue("");
+    // The asking price is beside the field, not in it.
+    expect(screen.getByText("listed at $39.00")).toBeInTheDocument();
+  });
+
+  it("does not record the purchase until Save or Skip", async () => {
+    const posted = capturePurchase();
+    serveViewerList(myClaim);
+    renderListDetail(viewerToken);
+
+    await tickBought();
+
+    expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
+    expect(posted).not.toHaveBeenCalled();
+  });
+
+  it("records what was paid on Save", async () => {
+    const posted = capturePurchase();
+    serveViewerList(myClaim);
+    renderListDetail(viewerToken);
+
+    await tickBought();
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "What did you pay?" }),
+      "32.50"
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(posted).toHaveBeenCalled());
+    expect(JSON.parse(posted.mock.calls[0][0])).toEqual({ amount_paid: "32.50" });
+  });
+
+  it("records the purchase with no amount on Skip", async () => {
+    const posted = capturePurchase();
+    serveViewerList(myClaim);
+    renderListDetail(viewerToken);
+
+    await tickBought();
+    await userEvent.click(screen.getByRole("button", { name: "Skip" }));
+
+    await waitFor(() => expect(posted).toHaveBeenCalled());
+    // No body at all: an omitted amount leaves any recorded one alone, which is
+    // what makes unticking and re-ticking non-destructive.
+    expect(posted.mock.calls[0][0]).toBe("");
+  });
+
+  it("shows what the claimer paid once it is recorded", async () => {
+    serveViewerList({ ...myClaim, purchased_at: "2026-01-03", amount_paid: "32.50" });
+    renderListDetail(viewerToken);
+
+    expect(await screen.findByText("you paid $32.50")).toBeInTheDocument();
+    expect(await screen.findByRole("checkbox", { name: "Bought" })).toBeChecked();
+  });
+
+  it("says so when a purchase has no amount recorded", async () => {
+    serveViewerList({ ...myClaim, purchased_at: "2026-01-03" });
+    renderListDetail(viewerToken);
+
+    expect(await screen.findByText("no amount recorded")).toBeInTheDocument();
+  });
+
+  it("abandons an unanswered prompt when the tick is taken back", async () => {
+    const posted = capturePurchase();
+    serveViewerList(myClaim);
+    renderListDetail(viewerToken);
+
+    await tickBought();
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "What did you pay?" }),
+      "32.50"
+    );
+    // Unticking abandons it: nothing was recorded by the tick, so nothing is
+    // undone on the server either.
+    await userEvent.click(screen.getByRole("checkbox", { name: "Bought" }));
+
+    expect(
+      screen.queryByRole("textbox", { name: "What did you pay?" })
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Bought" })).not.toBeChecked();
+    expect(posted).not.toHaveBeenCalled();
+  });
+
+  it("seeds the prompt from the claimer's own retained amount on re-ticking", async () => {
+    // The server keeps `amount_paid` through an untick, so re-ticking should not
+    // make the claimer retype what they paid.
+    serveViewerList({ ...myClaim, amount_paid: "32.50" });
+    renderListDetail(viewerToken);
+
+    await tickBought();
+
+    expect(screen.getByRole("textbox", { name: "What did you pay?" })).toHaveValue("32.50");
+  });
+
+  it("offers no in-place edit of a recorded amount", async () => {
+    // Post-hoc correction is the shopping tab's job (project spec §6.2,
+    // NEU-1274); a second POST here would re-stamp the purchase date.
+    serveViewerList({ ...myClaim, purchased_at: "2026-01-03", amount_paid: "32.50" });
+    renderListDetail(viewerToken);
+
+    expect(await screen.findByText("you paid $32.50")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add amount" })).not.toBeInTheDocument();
+  });
+
+  it("keeps the purchase record readable but read-only on an archived list", async () => {
+    server.use(
+      http.get(`${API}/lists/1`, () =>
+        HttpResponse.json({
+          ...viewerListDetail,
+          is_archived: true,
+          gifts: [{ ...myClaim, purchased_at: "2026-01-03", amount_paid: "32.50" }],
+        })
+      ),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => HttpResponse.json([])),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
+    );
+    renderListDetail(viewerToken);
+
+    // Archiving takes the actions away, not the record.
+    expect(await screen.findByText("you paid $32.50")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Bought" })).toBeDisabled();
+  });
+
+  it("unticks a purchase without discarding the amount", async () => {
+    const deleted = vi.fn();
+    serveViewerList({ ...myClaim, purchased_at: "2026-01-03", amount_paid: "32.50" });
+    server.use(
+      http.delete(`${API}/lists/1/gifts/10/purchase`, () => {
+        deleted();
+        return HttpResponse.json({ ...myClaim, amount_paid: "32.50" });
+      }),
+    );
+    renderListDetail(viewerToken);
+
+    await userEvent.click(await screen.findByRole("checkbox", { name: "Bought" }));
+
+    await waitFor(() => expect(deleted).toHaveBeenCalled());
+  });
+
+  it("offers no purchase control on a gift somebody else claimed", async () => {
+    serveViewerList({ ...myClaim, claimed_by_id: 3 });
+    renderListDetail(viewerToken);
+
+    expect(await screen.findByText("Taken")).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: "Bought" })).not.toBeInTheDocument();
+  });
+
+  it("keeps every trace of the purchase off the owner's copy of the list", async () => {
+    server.use(
+      http.get(`${API}/lists/1`, () =>
+        HttpResponse.json({ ...ownerListDetail, gifts: [{ id: 10, name: "Cast iron skillet", description: null, url: null, price: "39.00", created_at: "2026-01-01", updated_at: "2026-01-01" }] })
+      ),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => HttpResponse.json([])),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
+    );
+    renderListDetail(ownerToken);
+
+    await screen.findByText("Cast iron skillet");
+    expect(screen.queryByRole("checkbox", { name: "Bought" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/you paid/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/no amount recorded/)).not.toBeInTheDocument();
+  });
+});
+
+describe("ListDetail — filing a claim under an occasion", () => {
+  // Unclaimed, so the viewer (user 2) can claim it.
+  const unclaimed = {
+    id: 10,
+    name: "Cast iron skillet",
+    description: null,
+    url: null,
+    price: "39.00",
+    claimed_by_id: null,
+    claimed_at: null,
+    purchased_at: null,
+    amount_paid: null,
+    created_at: "2026-01-01",
+    updated_at: "2026-01-01",
+  };
+
+  const booneChristmas = {
+    id: 3,
+    name: "Christmas 2026",
+    is_archived: false,
+    family: { id: 1, name: "Boone Family" },
+  };
+  // Deliberately the same *name* in another family: the picker that shows only
+  // occasion names asks a question the user cannot answer.
+  const smithChristmas = {
+    id: 4,
+    name: "Christmas 2026",
+    is_archived: false,
+    family: { id: 2, name: "Smith Family" },
+  };
+  const archivedChristmas = {
+    id: 2,
+    name: "Christmas 2025",
+    is_archived: true,
+    family: { id: 1, name: "Boone Family" },
+  };
+
+  function serveViewerList(candidates: object[], options: object[] = candidates) {
+    server.use(
+      http.get(`${API}/lists/1`, () =>
+        HttpResponse.json({
+          ...viewerListDetail,
+          gifts: [unclaimed],
+          claim_candidates: candidates,
+          claim_options: options,
+        })
+      ),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => HttpResponse.json([])),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
+    );
+  }
+
+  /** Captures the raw claim body: no occasion at all is a different request
+   * from one naming null, and the server reads them differently. */
+  function captureClaim() {
+    const posted = vi.fn();
+    server.use(
+      http.post(`${API}/lists/1/gifts/10/claim`, async ({ request }) => {
+        posted(await request.text());
+        return HttpResponse.json({ ...unclaimed, claimed_by_id: 2, claimed_at: "2026-01-02" });
+      }),
+    );
+    return posted;
+  }
+
+  async function clickClaim() {
+    await userEvent.click(await screen.findByRole("button", { name: "I'll get this" }));
+  }
+
+  it("claims in one click and asks nothing when there is no occasion to choose", async () => {
+    const posted = captureClaim();
+    serveViewerList([]);
+    renderListDetail(viewerToken);
+
+    await clickClaim();
+
+    await waitFor(() => expect(posted).toHaveBeenCalled());
+    expect(posted.mock.calls[0][0]).toBe("");
+    expect(screen.queryByLabelText("Which occasion is this for?")).not.toBeInTheDocument();
+  });
+
+  it("claims in one click and asks nothing when only one occasion is suggested", async () => {
+    // The overwhelmingly common path. The server files it under the single
+    // candidate itself, so the client sends nothing and stays one click.
+    const posted = captureClaim();
+    serveViewerList([booneChristmas]);
+    renderListDetail(viewerToken);
+
+    await clickClaim();
+
+    await waitFor(() => expect(posted).toHaveBeenCalled());
+    expect(posted.mock.calls[0][0]).toBe("");
+    expect(screen.queryByLabelText("Which occasion is this for?")).not.toBeInTheDocument();
+  });
+
+  it("keys the prompt off the suggested set, not the wider option set", async () => {
+    // The year-three case: two Christmases archived, one active. `claim_options`
+    // holds all three, but only one is suggested, so this must stay a silent
+    // one-click filing. A regression to counting `claim_options` would prompt
+    // on every claim forever, with the answer obvious every time.
+    const posted = captureClaim();
+    serveViewerList(
+      [booneChristmas],
+      [booneChristmas, archivedChristmas, { ...archivedChristmas, id: 1, name: "Christmas 2024" }],
+    );
+    renderListDetail(viewerToken);
+
+    await clickClaim();
+
+    await waitFor(() => expect(posted).toHaveBeenCalled());
+    expect(posted.mock.calls[0][0]).toBe("");
+    expect(screen.queryByLabelText("Which occasion is this for?")).not.toBeInTheDocument();
+  });
+
+  it("asks before claiming when two occasions are suggested, and does not claim yet", async () => {
+    const posted = captureClaim();
+    serveViewerList([booneChristmas, smithChristmas]);
+    renderListDetail(viewerToken);
+
+    await clickClaim();
+
+    expect(await screen.findByLabelText("Which occasion is this for?")).toBeInTheDocument();
+    expect(posted).not.toHaveBeenCalled();
+  });
+
+  it("names the family on every choice, because two can share an occasion name", async () => {
+    serveViewerList([booneChristmas, smithChristmas]);
+    renderListDetail(viewerToken);
+
+    await clickClaim();
+
+    const picker = await screen.findByLabelText("Which occasion is this for?");
+    expect(within(picker).getByRole("option", { name: "Boone Family · Christmas 2026" })).toBeInTheDocument();
+    expect(within(picker).getByRole("option", { name: "Smith Family · Christmas 2026" })).toBeInTheDocument();
+  });
+
+  it("nothing is pre-selected, and saving is refused until an occasion is chosen", async () => {
+    // Picking for the user would record a guess as a fact.
+    serveViewerList([booneChristmas, smithChristmas]);
+    renderListDetail(viewerToken);
+
+    await clickClaim();
+
+    expect(await screen.findByLabelText("Which occasion is this for?")).toHaveValue("");
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  });
+
+  it("sends the chosen occasion with the claim", async () => {
+    const posted = captureClaim();
+    serveViewerList([booneChristmas, smithChristmas]);
+    renderListDetail(viewerToken);
+
+    await clickClaim();
+    await userEvent.selectOptions(
+      await screen.findByLabelText("Which occasion is this for?"),
+      "4",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(posted).toHaveBeenCalled());
+    expect(JSON.parse(posted.mock.calls[0][0])).toEqual({ occasion_id: 4 });
+  });
+
+  it("abandons the claim entirely on Cancel", async () => {
+    const posted = captureClaim();
+    serveViewerList([booneChristmas, smithChristmas]);
+    renderListDetail(viewerToken);
+
+    await clickClaim();
+    await userEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByLabelText("Which occasion is this for?")).not.toBeInTheDocument();
+    expect(posted).not.toHaveBeenCalled();
+  });
+
+  it("marks an archived occasion as archived", async () => {
+    // Every candidate is archived, so `suggested` falls back to all of
+    // `allowed` — the late-January shopper, still choosing between two.
+    serveViewerList([archivedChristmas, { ...smithChristmas, is_archived: true }]);
+    renderListDetail(viewerToken);
+
+    await clickClaim();
+
+    const picker = await screen.findByLabelText("Which occasion is this for?");
+    expect(within(picker).getByRole("option", { name: "Boone Family · Christmas 2025 — archived" })).toBeInTheDocument();
+  });
+
+  it("offers past occasions from the wider option set, and files under one", async () => {
+    // Christmas 2025 is archived, so it is not suggested — but a January claim
+    // for it must still be filable, which is the whole reason `claim_options`
+    // is wider than `claim_candidates`.
+    const posted = captureClaim();
+    serveViewerList(
+      [booneChristmas, smithChristmas],
+      [booneChristmas, smithChristmas, archivedChristmas],
+    );
+    renderListDetail(viewerToken);
+
+    await clickClaim();
+
+    const picker = await screen.findByLabelText("Which occasion is this for?");
+    expect(within(picker).queryByRole("option", { name: /Christmas 2025/ })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Show past occasions" }));
+    await userEvent.selectOptions(picker, "2");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(posted).toHaveBeenCalled());
+    expect(JSON.parse(posted.mock.calls[0][0])).toEqual({ occasion_id: 2 });
+  });
+
+  it("offers no past occasions when the option set holds none", async () => {
+    serveViewerList([booneChristmas, smithChristmas]);
+    renderListDetail(viewerToken);
+
+    await clickClaim();
+
+    await screen.findByLabelText("Which occasion is this for?");
+    expect(screen.queryByRole("button", { name: "Show past occasions" })).not.toBeInTheDocument();
+  });
+
+  it("refetches and explains when a share added meanwhile makes the claim ambiguous", async () => {
+    // The client held one candidate and rightly sent no id; a share landed in
+    // between and made it two. One refetch, one more click.
+    let reads = 0;
+    server.use(
+      http.get(`${API}/lists/1`, () => {
+        reads += 1;
+        return HttpResponse.json({
+          ...viewerListDetail,
+          gifts: [unclaimed],
+          claim_candidates: reads === 1 ? [booneChristmas] : [booneChristmas, smithChristmas],
+          claim_options: reads === 1 ? [booneChristmas] : [booneChristmas, smithChristmas],
+        });
+      }),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => HttpResponse.json([])),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
+      http.post(`${API}/lists/1/gifts/10/claim`, () =>
+        HttpResponse.json({ detail: "ambiguous_occasion" }, { status: 400 })
+      ),
+    );
+    renderListDetail(viewerToken);
+
+    await clickClaim();
+
+    // The refetched candidates now make the row ask, which is the way through.
+    await userEvent.click(await screen.findByRole("button", { name: "I'll get this" }));
+    expect(await screen.findByLabelText("Which occasion is this for?")).toBeInTheDocument();
   });
 });

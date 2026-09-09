@@ -1,19 +1,18 @@
-import { Link, useParams } from "react-router";
+import { Link } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { getConnections, getConnectionLists } from "../api/connections";
 import { useTitle } from "../hooks/useTitle";
 import { Spinner } from "../components/Spinner";
+import { useNumericId } from "../components/NumericId";
 import { HandshakeIcon } from "../components/Icons";
 
 export function ConnectionProfile() {
-  const { id } = useParams();
-  const connectionId = Number(id);
+  const connectionId = useNumericId();
 
   const connections = useQuery({ queryKey: ["connections"], queryFn: getConnections });
   const lists = useQuery({
     queryKey: ["connection-lists", connectionId],
     queryFn: () => getConnectionLists(connectionId),
-    enabled: !!id,
   });
 
   const connection = connections.data?.find((c) => c.id === connectionId);

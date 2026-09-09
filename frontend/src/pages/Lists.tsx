@@ -1,20 +1,20 @@
 import { useState, useMemo } from "react";
 import { Link } from "react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { getLists } from "../api/lists";
-import { getOccasion, getOccasions } from "../api/occasions";
-import { useAuth } from "../hooks/useAuth";
+import { getFolder, getFolders } from "../api/folders";
 import { useTitle } from "../hooks/useTitle";
 import { Spinner } from "../components/Spinner";
 import { ClipboardIcon, HandshakeIcon } from "../components/Icons";
 import type { GiftList } from "../types";
+import { groupLists, type FolderMembership, type GroupBy } from "../lib/list-grouping";
 import { ListAttributionLine, RecipientLine } from "../components/ListAttribution";
 import { ActionableBanner } from "../components/ActionableBanner";
 
 type SortBy = "updated" | "name" | "created";
 
-/** The filter's "no occasion chosen" value. `<select>` values are strings, so the
- *  occasion ids alongside it are stringified too. */
+/** The filter's "no folder chosen" value. `<select>` values are strings, so the
+ *  folder ids alongside it are stringified too. */
 const ALL_LISTS = "all";
 
 function sortLists(lists: GiftList[], sortBy: SortBy) {
@@ -25,78 +25,159 @@ function sortLists(lists: GiftList[], sortBy: SortBy) {
   });
 }
 
-/** A section's rows: narrowed to the selected occasion, then sorted. `occasionIds`
- *  is null while the occasion's membership is still loading, which shows nothing
+/** A section's rows: narrowed to the selected folder, then sorted. `folderIds`
+ *  is null while the folder's membership is still loading, which shows nothing
  *  rather than briefly showing everything. */
 function visibleLists(
   lists: GiftList[],
-  { filtering, occasionIds, sortBy }: { filtering: boolean; occasionIds: Set<number> | null; sortBy: SortBy },
+  { filtering, folderIds, sortBy }: { filtering: boolean; folderIds: Set<number> | null; sortBy: SortBy },
 ) {
   if (!filtering) return sortLists(lists, sortBy);
-  return sortLists(occasionIds ? lists.filter((list) => occasionIds.has(list.id)) : [], sortBy);
+  return sortLists(folderIds ? lists.filter((list) => folderIds.has(list.id)) : [], sortBy);
+}
+
+/** `• N to buy` — how many of the viewer's own claims on this list they have
+ *  yet to buy. Nothing at zero, and nothing when the field is absent: most
+ *  shared lists are ones the viewer has never claimed from, and a "0 to buy" on
+ *  every one of them would be noise.
+ *
+ *  Not decorative. A claim on a directly-shared list belongs to no occasion and,
+ *  unless the viewer files that list in a folder, to no folder either — so it
+ *  appears on no shopping tab at all, and this badge is its only route back
+ *  (project spec §9.4). */
+function ToBuyBadge({ count }: { count: number | undefined }) {
+  // Zero and absent both render nothing, for different reasons. Zero is the
+  // common case and a "0 to buy" on every unclaimed list is noise. Absent is
+  // the contract saying this row has no such count — an owned row, or a scope
+  // that carries none — and there is simply no number to draw. The backend
+  // makes the field required on viewer rows so that "absent" can never quietly
+  // stand for "nothing left to buy" there; the equivalent loud failure is not
+  // available to a row renderer, since throwing would cost the viewer the whole
+  // Lists page rather than one badge.
+  if (!count) return null;
+  return <span className="shrink-0 text-sm font-medium text-blue-600">{`• ${count} to buy`}</span>;
+}
+
+/** The rows of one shared section — the whole section when it is flat, one
+ *  bucket of it when the viewer has grouped it. Every shared row on the page
+ *  comes through here, which is what puts the badge under every grouping,
+ *  "Not in a …" buckets included, and keeps it off the owned rows: those are
+ *  rendered separately and never reach this component. */
+function SharedRows({ lists }: { lists: GiftList[] }) {
+  return (
+    <ul className="mt-3 divide-y divide-gray-200 rounded-lg bg-white shadow">
+      {lists.map((list) => (
+        <li key={list.id}>
+          <Link to={`/lists/${list.id}`} className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-gray-50">
+            {/* `min-w-0` against the badge's `shrink-0`: on a narrow viewport the
+                attribution line wraps within what is left rather than squeezing
+                the badge, so the two never crowd each other. */}
+            <div className="min-w-0">
+              <p className="font-medium text-gray-900">{list.name}</p>
+              <ListAttributionLine list={list} />
+              <p className="text-xs text-gray-400">
+                {list.claimed_count} of {list.gift_count} claimed
+              </p>
+            </div>
+            <ToBuyBadge count={list.my_unpurchased_claim_count} />
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 export function Lists() {
   useTitle("Lists");
-  const { user, isLoading: authLoading } = useAuth();
-  // Simple mode is purely subtractive: it hides the occasion filter, sort and
-  // archive, and nothing else on this page (project spec §6.1). Withheld until
-  // the session resolves, so a simple-mode viewer never sees them flash by while
-  // the silent refresh is still in flight.
-  const showControls = !authLoading && !user?.simple_mode;
-
-  const [showArchived, setShowArchived] = useState(false);
   const [sortBy, setSortBy] = useState<SortBy>("updated");
-  const [occasionId, setOccasionId] = useState<number | null>(null);
+  const [folderId, setFolderId] = useState<number | null>(null);
+  // Off by default, so the shipped flat page is what a viewer who asks for
+  // nothing still gets (project spec §9.1).
+  const [groupBy, setGroupBy] = useState<GroupBy>("none");
 
+  // Active only, always. Nothing archived appears in a default view — the
+  // archive is `/lists/archive` and nothing else (NEU-1278, project spec §9.5).
   const ownedLists = useQuery({
-    queryKey: ["lists", "owned", { archived: showArchived }],
-    queryFn: () => getLists("owned", showArchived || undefined),
+    queryKey: ["lists", "owned", { archived: false }],
+    queryFn: () => getLists("owned"),
   });
   const sharedLists = useQuery({
-    queryKey: ["lists", "shared", { archived: showArchived }],
-    queryFn: () => getLists("shared", showArchived || undefined),
+    queryKey: ["lists", "shared", { archived: false }],
+    queryFn: () => getLists("shared"),
   });
 
-  // The occasions pages lost their route (NEU-1231), so this filter is now the
+  // The folders pages lost their route (NEU-1231), so this filter is now the
   // primary place a user meets the concept — hence the explanatory caption below.
-  const occasions = useQuery({
-    queryKey: ["occasions", { archived: false }],
-    queryFn: () => getOccasions(),
-    enabled: showControls,
+  const folders = useQuery({
+    queryKey: ["folders", { archived: false }],
+    queryFn: () => getFolders(),
   });
-  const selectedOccasion = useQuery({
-    queryKey: ["occasion", occasionId],
-    queryFn: () => getOccasion(occasionId as number),
-    enabled: occasionId !== null,
+  const selectedFolder = useQuery({
+    queryKey: ["folder", folderId],
+    queryFn: () => getFolder(folderId as number),
+    enabled: folderId !== null,
   });
 
-  // Membership is the occasion's own list of lists, so a list in several
-  // occasions is matched by each of them.
-  const occasionListIds = useMemo(() => {
-    if (!selectedOccasion.data) return null;
-    return new Set(selectedOccasion.data.lists.map((list) => list.id));
-  }, [selectedOccasion.data]);
+  // Grouping by folder needs every folder's membership, not just the selected
+  // one's, so it fans out over the same per-folder read the filter already uses
+  // — same cache entries, no grouped endpoint (NEU-1277). A user's folders are
+  // few, and nothing is fetched until the viewer asks for this grouping.
+  const groupingByFolder = groupBy === "folder";
+  const folderQueries = useQueries({
+    queries: (folders.data ?? []).map((folder) => ({
+      queryKey: ["folder", folder.id],
+      queryFn: () => getFolder(folder.id),
+      enabled: groupingByFolder,
+    })),
+  });
+
+  // Membership is the folder's own list of lists, so a list in several
+  // folders is matched by each of them.
+  const folderListIds = useMemo(() => {
+    if (!selectedFolder.data) return null;
+    return new Set(selectedFolder.data.lists.map((list) => list.id));
+  }, [selectedFolder.data]);
 
   // A select whose only option is "All lists" would name a concept it cannot
   // explain, so the filter itself waits until there is something to filter by.
-  const hasOccasions = (occasions.data?.length ?? 0) > 0;
-  const filtering = occasionId !== null;
-  const occasionName = selectedOccasion.data?.name
-    ?? occasions.data?.find((occasion) => occasion.id === occasionId)?.name
-    ?? "this occasion";
+  const hasFolders = (folders.data?.length ?? 0) > 0;
+  const filtering = folderId !== null;
+  const folderName = selectedFolder.data?.name
+    ?? folders.data?.find((folder) => folder.id === folderId)?.name
+    ?? "this folder";
 
   const visibleOwned = useMemo(
-    () => visibleLists(ownedLists.data ?? [], { filtering, occasionIds: occasionListIds, sortBy }),
-    [ownedLists.data, filtering, occasionListIds, sortBy],
+    () => visibleLists(ownedLists.data ?? [], { filtering, folderIds: folderListIds, sortBy }),
+    [ownedLists.data, filtering, folderListIds, sortBy],
   );
   // "Most recent" is the order the server already returns, so the section renders
   // the server's merge of the direct and family grants until the viewer says
-  // otherwise. Sorting is a viewer's choice; grouping is not on offer (ADR 0001).
+  // otherwise. Sorting reorders that; grouping subdivides it, and only when the
+  // viewer switches it on (ADR 0005).
   const visibleShared = useMemo(
-    () => visibleLists(sharedLists.data ?? [], { filtering, occasionIds: occasionListIds, sortBy }),
-    [sharedLists.data, filtering, occasionListIds, sortBy],
+    () => visibleLists(sharedLists.data ?? [], { filtering, folderIds: folderListIds, sortBy }),
+    [sharedLists.data, filtering, folderListIds, sortBy],
   );
+
+  // `useQueries` hands back a fresh array on every render, so there is nothing
+  // stable to memoize these on — and bucketing a page of lists is cheap.
+  const folderMemberships: FolderMembership[] = folderQueries.flatMap((query) =>
+    query.data ? [{ id: query.data.id, name: query.data.name, listIds: new Set(query.data.lists.map((list) => list.id)) }] : []
+  );
+  // A membership read that *failed* is not an empty one: filing its lists under
+  // "Not in a folder" would answer a question this page cannot currently answer,
+  // so the grouping is abandoned and said so instead. The rows stay — the one
+  // thing that must never happen is a list going missing.
+  const folderGroupingFailed = groupingByFolder
+    && (folders.isError || folderQueries.some((query) => query.isError));
+  const sharedGroups = groupBy === "none" || folderGroupingFailed
+    ? null
+    : groupLists(visibleShared, groupBy, folderMemberships);
+  // Grouping by folder against half-loaded membership would file lists under
+  // "Not in a folder" and then move them, so the section waits instead.
+  const groupsPending = groupingByFolder
+    && !folderGroupingFailed
+    && (folders.isPending || folderQueries.some((query) => query.isPending));
 
   if (ownedLists.isPending || sharedLists.isPending) return (
     <div className="space-y-8">
@@ -105,12 +186,11 @@ export function Lists() {
     </div>
   );
 
-  const sectionsPending = filtering && selectedOccasion.isPending;
+  const sectionsPending = filtering && selectedFolder.isPending;
 
   return (
     <div className="space-y-8">
-      {/* Anything awaiting a decision, above the lists. Rendered in both modes:
-          in simple mode this is the only route to these items. */}
+      {/* Anything awaiting a decision, above the lists. */}
       <ActionableBanner />
 
       <header>
@@ -118,67 +198,70 @@ export function Lists() {
           <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900">
             <ClipboardIcon className="h-6 w-6" /> Lists
           </h1>
-          {!showArchived && (
-            <Link
-              to="/lists/new"
-              className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-            >
-              New List
-            </Link>
-          )}
+          <Link
+            to="/lists/new"
+            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            New List
+          </Link>
         </div>
 
-        {showControls && (
-          <>
-            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
-              {hasOccasions && (
-                <label className="flex items-center gap-2 text-sm text-gray-600">
-                  Occasion
-                  <select
-                    value={occasionId === null ? ALL_LISTS : String(occasionId)}
-                    onChange={(e) =>
-                      setOccasionId(e.target.value === ALL_LISTS ? null : Number(e.target.value))
-                    }
-                    className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600"
-                  >
-                    <option value={ALL_LISTS}>All lists</option>
-                    {occasions.data?.map((occasion) => (
-                      <option key={occasion.id} value={occasion.id}>{occasion.name}</option>
-                    ))}
-                  </select>
-                </label>
-              )}
-
-              <label className="flex items-center gap-2 text-sm text-gray-600">
-                Sort
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as SortBy)}
-                  className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600"
-                >
-                  <option value="updated">Most recent</option>
-                  <option value="name">Name A–Z</option>
-                  <option value="created">Oldest first</option>
-                </select>
-              </label>
-
-              <button
-                onClick={() => setShowArchived(!showArchived)}
-                className="text-sm text-blue-600 hover:underline"
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+          {hasFolders && (
+            <label className="flex items-center gap-2 text-sm text-gray-600">
+              Folder
+              <select
+                value={folderId === null ? ALL_LISTS : String(folderId)}
+                onChange={(e) =>
+                  setFolderId(e.target.value === ALL_LISTS ? null : Number(e.target.value))
+                }
+                className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600"
               >
-                {showArchived ? "View active lists" : "View archived lists"}
-              </button>
-            </div>
+                <option value={ALL_LISTS}>All lists</option>
+                {folders.data?.map((folder) => (
+                  <option key={folder.id} value={folder.id}>{folder.name}</option>
+                ))}
+              </select>
+            </label>
+          )}
 
-            {/* Always shown in full mode, filter or no filter: with the occasions
-                pages unrouted this is the only introduction to the concept, and a
-                viewer with no occasions yet is exactly the one who needs it. */}
-            <p className="mt-2 text-xs text-gray-500">
-              Occasions group lists together — for example, all the lists for Christmas 2026.
-              {!hasOccasions && " Open a list to file it under one."}
-            </p>
-          </>
-        )}
+          <label className="flex items-center gap-2 text-sm text-gray-600">
+            Sort
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortBy)}
+              className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600"
+            >
+              <option value="updated">Most recent</option>
+              <option value="name">Name A–Z</option>
+              <option value="created">Oldest first</option>
+            </select>
+          </label>
+
+          {/* Subdivides Shared with me alone: My Lists is the viewer's own and
+              has no source to group by. Never gated — every viewer gets it. */}
+          <label className="flex items-center gap-2 text-sm text-gray-600">
+            Group by
+            <select
+              value={groupBy}
+              onChange={(e) => setGroupBy(e.target.value as GroupBy)}
+              className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600"
+            >
+              <option value="none">None</option>
+              <option value="occasion">Occasion</option>
+              <option value="person">Person</option>
+              <option value="folder">Folder</option>
+            </select>
+          </label>
+        </div>
+
+        {/* Always shown, filter or no filter: with the folders pages unrouted
+            this is the only introduction to the concept, and a viewer with no
+            folders yet is exactly the one who needs it. */}
+        <p className="mt-2 text-xs text-gray-500">
+          Folders group lists together — for example, all the lists for Christmas 2026.
+          {!hasFolders && " Open a list to file it under one."}
+        </p>
       </header>
 
       {sectionsPending ? <Spinner /> : (
@@ -192,9 +275,7 @@ export function Lists() {
             {visibleOwned.length === 0 && (
               <p className="mt-3 text-gray-500">
                 {filtering ? (
-                  `None of your lists are in ${occasionName}.`
-                ) : showArchived ? (
-                  "No archived lists."
+                  `None of your lists are in ${folderName}.`
                 ) : (
                   <>
                     You haven't created any lists yet.{" "}
@@ -207,7 +288,7 @@ export function Lists() {
             {visibleOwned.length > 0 && (
               <ul className="mt-3 divide-y divide-gray-200 rounded-lg bg-white shadow">
                 {visibleOwned.map((list) => (
-                  <li key={list.id} className={showArchived ? "opacity-60" : undefined}>
+                  <li key={list.id}>
                     <Link to={`/lists/${list.id}`} className="block px-4 py-3 hover:bg-gray-50">
                       <p className="font-medium text-gray-900">{list.name}</p>
                       <RecipientLine list={list} />
@@ -221,11 +302,11 @@ export function Lists() {
             )}
           </section>
 
-          {/* Shared with Me — one flat section for every list shared with the viewer,
+          {/* Shared with Me — one section for every list shared with the viewer,
               whatever path it took. The backend has already merged the direct and
               family grants and ordered them (NEU-1227). The source shows as a label
-              on the row and nothing more: no per-family heading, no grouping, no
-              link to the family. */}
+              on the row; it becomes a heading only when the viewer asks for one
+              through Group by, and even then it is not a destination (ADR 0005). */}
           <section>
             <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
               <HandshakeIcon className="h-5 w-5" /> Shared with Me
@@ -234,41 +315,57 @@ export function Lists() {
             {visibleShared.length === 0 && (
               <p className="mt-3 text-gray-500">
                 {filtering ? (
-                  `No lists shared with you are in ${occasionName}.`
-                ) : showArchived ? (
-                  "No archived lists shared with you."
-                ) : showControls ? (
+                  `No lists shared with you are in ${folderName}.`
+                ) : (
                   <>
                     No one has shared a list with you yet.{" "}
                     <Link to="/people" className="text-blue-600 hover:underline">Add a connection</Link> to get started.
                   </>
-                ) : (
-                  // Simple mode hides People, so there is nothing to point at.
-                  "No one has shared a list with you yet."
                 )}
               </p>
             )}
 
-            {visibleShared.length > 0 && (
-              <ul className="mt-3 divide-y divide-gray-200 rounded-lg bg-white shadow">
-                {visibleShared.map((list) => (
-                  <li key={list.id} className={showArchived ? "opacity-60" : undefined}>
-                    <Link to={`/lists/${list.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50">
-                      <div>
-                        <p className="font-medium text-gray-900">{list.name}</p>
-                        <ListAttributionLine list={list} />
-                        <p className="text-xs text-gray-400">
-                          {list.claimed_count} of {list.gift_count} claimed
-                        </p>
-                      </div>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
+            {visibleShared.length > 0 && groupsPending && <Spinner />}
+
+            {visibleShared.length > 0 && !groupsPending && (
+              sharedGroups ? (
+                <div className="mt-3 space-y-6">
+                  {sharedGroups.map((group) => (
+                    <section key={group.key}>
+                      <h3 className="text-sm font-semibold text-gray-700">
+                        {group.href ? (
+                          <Link to={group.href} className="text-blue-600 hover:underline">{group.heading}</Link>
+                        ) : group.heading}
+                      </h3>
+                      <SharedRows lists={group.lists} />
+                    </section>
+                  ))}
+                </div>
+              ) : (
+                <>
+                  {folderGroupingFailed && (
+                    <p className="mt-3 text-sm text-red-600">
+                      Your folders couldn't be loaded, so these lists aren't grouped by folder.
+                    </p>
+                  )}
+                  <SharedRows lists={visibleShared} />
+                </>
+              )
             )}
           </section>
         </>
       )}
+
+      {/* The one way in to archived lists and folders, where project spec §9.1
+          draws it — at the foot of the page, apart from the header row, because
+          it is a destination rather than a control that reshapes what is above
+          it. It replaces the "View archived lists" toggle: nothing archived is
+          reachable from the dashboard itself any more (NEU-1278). */}
+      <p className="text-right">
+        <Link to="/lists/archive" className="text-sm text-blue-600 hover:underline">
+          View archive
+        </Link>
+      </p>
     </div>
   );
 }

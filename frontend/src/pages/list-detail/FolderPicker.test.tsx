@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { server } from "../../test/mocks/server";
 import { AuthProvider } from "../../contexts/AuthContext";
-import { OccasionPicker } from "./OccasionPicker";
+import { FolderPicker } from "./FolderPicker";
 
 const API = "https://boone-gifts-api.localhost";
 
@@ -16,7 +16,7 @@ const viewerToken = [
   "fake-signature",
 ].join(".");
 
-const occasion = (id: number, name: string) => ({
+const folder = (id: number, name: string) => ({
   id,
   name,
   description: null,
@@ -27,13 +27,13 @@ const occasion = (id: number, name: string) => ({
 });
 
 /** Everything the picker reads, so a test only overrides what it cares about. */
-function serveOccasions({
-  occasions = [occasion(1, "Christmas 2026"), occasion(2, "Birthdays")],
+function serveFolders({
+  folders = [folder(1, "Christmas 2026"), folder(2, "Birthdays")],
   memberOf = [] as number[],
 } = {}) {
   server.use(
-    http.get(`${API}/occasions`, () => HttpResponse.json(occasions)),
-    http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json(memberOf)),
+    http.get(`${API}/folders`, () => HttpResponse.json(folders)),
+    http.get(`${API}/folders/for-list/1`, () => HttpResponse.json(memberOf)),
   );
 }
 
@@ -48,7 +48,7 @@ function renderPicker(onClose = vi.fn()) {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <MemoryRouter>
-          <OccasionPicker listId={1} queryClient={queryClient} onClose={onClose} />
+          <FolderPicker listId={1} queryClient={queryClient} onClose={onClose} />
         </MemoryRouter>
       </AuthProvider>
     </QueryClientProvider>
@@ -56,22 +56,22 @@ function renderPicker(onClose = vi.fn()) {
   return { onClose };
 }
 
-describe("OccasionPicker", () => {
-  it("lists the viewer's occasions with current membership checked", async () => {
-    serveOccasions({ memberOf: [2] });
+describe("FolderPicker", () => {
+  it("lists the viewer's folders with current membership checked", async () => {
+    serveFolders({ memberOf: [2] });
 
     renderPicker();
 
-    const panel = await screen.findByRole("region", { name: "Add to an occasion" });
+    const panel = await screen.findByRole("region", { name: "Add to a folder" });
     expect(await within(panel).findByRole("checkbox", { name: /christmas 2026/i })).not.toBeChecked();
     expect(within(panel).getByRole("checkbox", { name: /birthdays/i })).toBeChecked();
   });
 
-  it("adds the list to an occasion when its box is ticked", async () => {
-    serveOccasions();
+  it("adds the list to a folder when its box is ticked", async () => {
+    serveFolders();
     let added: unknown = null;
     server.use(
-      http.post(`${API}/occasions/1/items`, async ({ request }) => {
+      http.post(`${API}/folders/1/items`, async ({ request }) => {
         added = await request.json();
         return new HttpResponse(null, { status: 201 });
       }),
@@ -84,11 +84,11 @@ describe("OccasionPicker", () => {
     await waitFor(() => expect(added).toEqual({ list_id: 1 }));
   });
 
-  it("removes the list from an occasion when its box is unticked", async () => {
-    serveOccasions({ memberOf: [1] });
+  it("removes the list from a folder when its box is unticked", async () => {
+    serveFolders({ memberOf: [1] });
     let removed = false;
     server.use(
-      http.delete(`${API}/occasions/1/items/1`, () => {
+      http.delete(`${API}/folders/1/items/1`, () => {
         removed = true;
         return new HttpResponse(null, { status: 204 });
       }),
@@ -101,16 +101,16 @@ describe("OccasionPicker", () => {
     await waitFor(() => expect(removed).toBe(true));
   });
 
-  it("creates an occasion inline and files the list under it", async () => {
-    serveOccasions({ occasions: [] });
+  it("creates a folder inline and files the list under it", async () => {
+    serveFolders({ folders: [] });
     let created: unknown = null;
     let added: unknown = null;
     server.use(
-      http.post(`${API}/occasions`, async ({ request }) => {
+      http.post(`${API}/folders`, async ({ request }) => {
         created = await request.json();
-        return HttpResponse.json(occasion(9, "Wedding"));
+        return HttpResponse.json(folder(9, "Wedding"));
       }),
-      http.post(`${API}/occasions/9/items`, async ({ request }) => {
+      http.post(`${API}/folders/9/items`, async ({ request }) => {
         added = await request.json();
         return new HttpResponse(null, { status: 201 });
       }),
@@ -118,47 +118,47 @@ describe("OccasionPicker", () => {
 
     renderPicker();
 
-    await userEvent.type(await screen.findByLabelText("New occasion name"), "Wedding");
+    await userEvent.type(await screen.findByLabelText("New folder name"), "Wedding");
     await userEvent.click(screen.getByRole("button", { name: "Create & add" }));
 
     await waitFor(() => expect(created).toEqual({ name: "Wedding" }));
     await waitFor(() => expect(added).toEqual({ list_id: 1 }));
   });
 
-  // The occasion is real once the first call returns, so a failed add must not
+  // The folder is real once the first call returns, so a failed add must not
   // be reported as a failure to create — the row still has to show up.
-  it("surfaces the new occasion when creating it works but adding does not", async () => {
-    let occasions = [] as ReturnType<typeof occasion>[];
+  it("surfaces the new folder when creating it works but adding does not", async () => {
+    let folders = [] as ReturnType<typeof folder>[];
     server.use(
-      http.get(`${API}/occasions`, () => HttpResponse.json(occasions)),
-      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
-      http.post(`${API}/occasions`, () => {
-        occasions = [occasion(9, "Wedding")];
-        return HttpResponse.json(occasions[0]);
+      http.get(`${API}/folders`, () => HttpResponse.json(folders)),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
+      http.post(`${API}/folders`, () => {
+        folders = [folder(9, "Wedding")];
+        return HttpResponse.json(folders[0]);
       }),
-      http.post(`${API}/occasions/9/items`, () => new HttpResponse(null, { status: 500 })),
+      http.post(`${API}/folders/9/items`, () => new HttpResponse(null, { status: 500 })),
     );
 
     renderPicker();
 
-    await userEvent.type(await screen.findByLabelText("New occasion name"), "Wedding");
+    await userEvent.type(await screen.findByLabelText("New folder name"), "Wedding");
     await userEvent.click(screen.getByRole("button", { name: "Create & add" }));
 
     const box = await screen.findByRole("checkbox", { name: /wedding/i });
     expect(box).not.toBeChecked();
   });
 
-  it("offers the create field when the viewer has no occasions yet", async () => {
-    serveOccasions({ occasions: [] });
+  it("offers the create field when the viewer has no folders yet", async () => {
+    serveFolders({ folders: [] });
 
     renderPicker();
 
-    expect(await screen.findByText(/don't have any occasions yet/i)).toBeInTheDocument();
-    expect(screen.getByLabelText("New occasion name")).toBeInTheDocument();
+    expect(await screen.findByText(/don't have any folders yet/i)).toBeInTheDocument();
+    expect(screen.getByLabelText("New folder name")).toBeInTheDocument();
   });
 
   it("closes on Done", async () => {
-    serveOccasions();
+    serveFolders();
 
     const { onClose } = renderPicker();
 
@@ -167,14 +167,14 @@ describe("OccasionPicker", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it("reports a failure to load the occasions", async () => {
+  it("reports a failure to load the folders", async () => {
     server.use(
-      http.get(`${API}/occasions`, () => new HttpResponse(null, { status: 500 })),
-      http.get(`${API}/occasions/for-list/1`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => new HttpResponse(null, { status: 500 })),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
     );
 
     renderPicker();
 
-    expect(await screen.findByText("Failed to load your occasions.")).toBeInTheDocument();
+    expect(await screen.findByText("Failed to load your folders.")).toBeInTheDocument();
   });
 });

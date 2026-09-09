@@ -1,457 +1,295 @@
 import { useState, type FormEvent } from "react";
-import { useParams, useNavigate, Link } from "react-router";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  getOccasion,
-  updateOccasion,
-  deleteOccasion,
-  addOccasionItem,
-  removeOccasionItem,
-  getShoppingList,
-} from "../api/occasions";
-import { purchaseGift, unpurchaseGift } from "../api/gifts";
-import { getLists } from "../api/lists";
-import type { OccasionDetail as OccasionDetailType, ShoppingListItem } from "../types";
-import { useTitle } from "../hooks/useTitle";
+import { Link } from "react-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { isAxiosError } from "axios";
 import toast from "react-hot-toast";
+import { getOccasion, getOccasionLists, updateOccasion } from "../api/occasions";
+import { getFamily } from "../api/families";
+import { useAuth } from "../hooks/useAuth";
+import { useNumericId } from "../components/NumericId";
+import { useTitle } from "../hooks/useTitle";
 import { Spinner } from "../components/Spinner";
-import { ListAttributionLine } from "../components/ListAttribution";
+import { HeaderMenu } from "../components/HeaderMenu";
+import { ListAttributionLine, RecipientLine } from "../components/ListAttribution";
+import { MyShopping } from "../components/MyShopping";
+import { TabBar } from "../components/TabBar";
+import type { Occasion } from "../types";
 
+/**
+ * The tabs the occasion page carries (project spec §9.2). The bar is driven by
+ * this array and the body by the active key, which is what made **My shopping**
+ * an entry here plus its panel rather than a reshaping of the page.
+ */
+const TABS = [
+  { key: "lists", label: "Lists" },
+  { key: "shopping", label: "My shopping" },
+] as const;
+
+type TabKey = (typeof TABS)[number]["key"];
+
+const ORGANIZER_ONLY = "Only an organizer can rename or archive an occasion.";
+
+/**
+ * A family occasion — "Boone Family · Christmas 2026" — and the lists shared to
+ * it (project spec §9.2). The route the nav project retired, reintroduced with
+ * the family meaning of the word (`docs/adr/0002-occasion-and-folder.md`).
+ *
+ * An **archived** occasion renders exactly like an active one. Archiving blocks
+ * new shares and nothing else (project spec §5.4): its lists stay viewable and
+ * its page stays a page — archiving only takes it out of the default views.
+ */
 export function OccasionDetail() {
-  const { id } = useParams();
-  const occasionId = Number(id);
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const [showShoppingList, setShowShoppingList] = useState(false);
+  const occasionId = useNumericId();
 
-  const { data: occasion, isLoading, error, refetch } = useQuery({
+  const occasion = useQuery({
     queryKey: ["occasion", occasionId],
     queryFn: () => getOccasion(occasionId),
-    enabled: !!id,
   });
 
-  useTitle(occasion?.name ?? "Occasion");
+  useTitle(occasion.data?.name ?? "Occasion");
 
-  if (isLoading) return <Spinner />;
-  if (error || !occasion) return (
-    <div className="text-center py-12">
-      <p className="text-red-600">Failed to load occasion.</p>
-      <button onClick={() => refetch()} className="mt-2 text-sm text-blue-600 hover:underline">Try again</button>
-    </div>
-  );
+  if (occasion.isPending) return <Spinner />;
+  if (occasion.isError) {
+    // 403 and 404 are the same answer to the viewer — the backend will not say
+    // which, and neither will this. "Try again" is only offered where trying
+    // again could work, because on those two it never will.
+    const status = isAxiosError(occasion.error) ? occasion.error.response?.status : undefined;
+    const unreachable = status === 403 || status === 404;
+    return (
+      <div className="py-12 text-center">
+        <p className="text-red-600">
+          {unreachable
+            ? "This occasion doesn't exist, or it belongs to a family you're not in."
+            : "Failed to load occasion."}
+        </p>
+        {unreachable ? (
+          <Link to="/people" className="mt-2 inline-block text-sm text-blue-600 hover:underline">
+            Back to People
+          </Link>
+        ) : (
+          <button
+            onClick={() => occasion.refetch()}
+            className="mt-2 text-sm text-blue-600 hover:underline"
+          >
+            Try again
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  return <OccasionPage occasion={occasion.data} />;
+}
+
+function OccasionPage({ occasion }: { occasion: Occasion }) {
+  const { user } = useAuth();
+  const [tab, setTab] = useState<TabKey>(TABS[0].key);
+
+  // The family behind the occasion: its name for the header and the back link,
+  // and its members for the organizer gate. Keyed as the family page keys it,
+  // so arriving from there costs no request.
+  const family = useQuery({
+    queryKey: ["family", occasion.family_id],
+    queryFn: () => getFamily(occasion.family_id),
+  });
+
+  const isOrganizer =
+    family.data?.members.find((m) => m.user_id === user?.id)?.role === "organizer";
 
   return (
     <div className="space-y-6">
-      <Link to="/occasions" className="text-sm text-blue-600 hover:underline">&larr; Back to occasions</Link>
-      <OccasionHeader
-        occasion={occasion}
-        occasionId={occasionId}
-        queryClient={queryClient}
-        navigate={navigate}
-      />
-      <div className="flex gap-3">
-        <button
-          onClick={() => setShowShoppingList(false)}
-          className={`rounded px-4 py-2 text-sm font-medium transition-colors ${!showShoppingList ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
-        >
-          Lists
-        </button>
-        <button
-          onClick={() => setShowShoppingList(true)}
-          className={`rounded px-4 py-2 text-sm font-medium transition-colors ${showShoppingList ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
-        >
-          My Shopping List
-        </button>
-      </div>
-      {showShoppingList ? (
-        <ShoppingList occasionId={occasionId} />
+      <Link
+        to={`/people/families/${occasion.family_id}`}
+        className="text-sm text-blue-600 hover:underline"
+      >
+        &larr; {family.data?.name ?? "Back to family"}
+      </Link>
+
+      <OccasionHeader occasion={occasion} isOrganizer={isOrganizer} />
+
+      <TabBar tabs={TABS} active={tab} onSelect={setTab} label="Occasion sections" />
+
+      {tab === "lists" ? (
+        <ListsTab occasionId={occasion.id} />
       ) : (
-        <>
-          <OccasionLists
-            occasion={occasion}
-            occasionId={occasionId}
-            queryClient={queryClient}
-          />
-          <AddListForm occasionId={occasionId} occasion={occasion} queryClient={queryClient} />
-        </>
+        <MyShopping scope={{ kind: "occasion", id: occasion.id }} />
       )}
     </div>
   );
 }
 
-function OccasionHeader({
-  occasion,
-  occasionId,
-  queryClient,
-  navigate,
-}: {
-  occasion: OccasionDetailType;
-  occasionId: number;
-  queryClient: ReturnType<typeof useQueryClient>;
-  navigate: ReturnType<typeof useNavigate>;
-}) {
-  const [editing, setEditing] = useState(false);
+/**
+ * The occasion's name, whether it is archived, and the organizer's controls.
+ *
+ * Rename and archive are **organizer-only**, gated the same way the family
+ * page's member controls are — and enforced by the backend regardless, which is
+ * why a 403 still has a message to show.
+ */
+function OccasionHeader({ occasion, isOrganizer }: { occasion: Occasion; isOrganizer: boolean }) {
+  const queryClient = useQueryClient();
+  const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState(occasion.name);
-  const [description, setDescription] = useState(occasion.description ?? "");
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  const updateMutation = useMutation({
-    mutationFn: (data: { name?: string; description?: string }) => updateOccasion(occasionId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["occasion", occasionId] });
-      queryClient.invalidateQueries({ queryKey: ["occasions"] });
-      setEditing(false);
-    },
-    onError: () => toast.error("Failed to update occasion."),
-  });
+  // The page's own copy, and the family page's list it was reached from —
+  // prefix match on the latter, so the active and archived lists both refetch.
+  // `share-targets` goes too: a rename changes a label list detail's sharing
+  // summary prints ("Boone Family · Christmas 2026"), and archiving changes
+  // whether that occasion can still be shared to at all.
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["occasion", occasion.id] });
+    queryClient.invalidateQueries({ queryKey: ["occasions", occasion.family_id] });
+    queryClient.invalidateQueries({ queryKey: ["share-targets"] });
+  };
 
-  const archiveMutation = useMutation({
-    mutationFn: () => updateOccasion(occasionId, { is_archived: !occasion.is_archived }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["occasion", occasionId] });
-      queryClient.invalidateQueries({ queryKey: ["occasions"] });
-    },
-    onError: () => toast.error("Failed to update occasion."),
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: () => deleteOccasion(occasionId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["occasions"] });
-      navigate("/occasions", { replace: true });
-    },
-    onError: () => toast.error("Failed to delete occasion."),
-  });
-
-  function handleSave(e: FormEvent) {
-    e.preventDefault();
-    updateMutation.mutate({ name, description: description || undefined });
-  }
-
-  function handleDelete() {
-    if (window.confirm("Delete this occasion? This cannot be undone.")) {
-      deleteMutation.mutate();
+  function handleError(err: unknown, fallback: string) {
+    if (isAxiosError(err) && err.response?.status === 403) {
+      setActionError(ORGANIZER_ONLY);
+    } else {
+      toast.error(fallback);
     }
   }
 
+  const renameMutation = useMutation({
+    mutationFn: (newName: string) => updateOccasion(occasion.id, { name: newName }),
+    onSuccess: () => {
+      invalidate();
+      setRenaming(false);
+      setActionError(null);
+    },
+    onError: (err) => handleError(err, "Failed to rename the occasion."),
+  });
+
+  const setArchivedMutation = useMutation({
+    mutationFn: (isArchived: boolean) => updateOccasion(occasion.id, { is_archived: isArchived }),
+    onSuccess: (_data, isArchived) => {
+      invalidate();
+      setActionError(null);
+      toast.success(isArchived ? "Occasion archived." : "Occasion unarchived.");
+    },
+    onError: (err) => handleError(err, "Failed to archive the occasion."),
+  });
+
+  function handleRename(e: FormEvent) {
+    e.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    renameMutation.mutate(trimmed);
+  }
+
+  // Archiving takes the occasion out of every default view, so it is confirmed
+  // — the same as the archive item in list detail's `⋯` menu. Unarchiving puts
+  // it back and asks nothing.
   function handleArchiveToggle() {
     if (occasion.is_archived) {
-      archiveMutation.mutate();
-    } else if (window.confirm("Archive this occasion?")) {
-      archiveMutation.mutate();
+      setArchivedMutation.mutate(false);
+    } else if (window.confirm("Archive this occasion? Lists already shared to it stay shared.")) {
+      setArchivedMutation.mutate(true);
     }
-  }
-
-  if (editing) {
-    return (
-      <form onSubmit={handleSave} className="rounded-lg bg-white p-6 shadow space-y-4">
-
-        <label className="block">
-          <span className="text-sm font-medium text-gray-700">Name</span>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="mt-1 block w-full rounded border border-gray-300 px-3 py-2"
-            required
-          />
-        </label>
-        <label className="block">
-          <span className="text-sm font-medium text-gray-700">Description</span>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={2}
-            className="mt-1 block w-full rounded border border-gray-300 px-3 py-2"
-          />
-        </label>
-        <div className="flex gap-2">
-          <button
-            type="submit"
-            disabled={updateMutation.isPending}
-            className="rounded bg-blue-600 px-3 py-1 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            {updateMutation.isPending ? "Saving…" : "Save"}
-          </button>
-          <button
-            type="button"
-            onClick={() => setEditing(false)}
-            className="rounded bg-gray-200 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-300"
-          >
-            Cancel
-          </button>
-        </div>
-      </form>
-    );
   }
 
   return (
     <div className="rounded-lg bg-white p-6 shadow">
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-gray-900">{occasion.name}</h1>
-            {occasion.is_archived && (
-              <span className="inline-block rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600">Archived</span>
-            )}
-          </div>
-          {occasion.description && <p className="mt-2 text-gray-600">{occasion.description}</p>}
-        </div>
-        <div className="flex gap-2 shrink-0">
+      {renaming ? (
+        <form onSubmit={handleRename} className="flex items-center gap-2">
+          <label className="sr-only" htmlFor="occasion-name">
+            Occasion name
+          </label>
+          <input
+            id="occasion-name"
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm"
+          />
           <button
-            onClick={handleArchiveToggle}
-            disabled={archiveMutation.isPending}
-            className={`rounded px-3 py-1 text-sm font-medium text-white disabled:opacity-50 ${occasion.is_archived ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700"}`}
+            type="submit"
+            disabled={renameMutation.isPending}
+            className="rounded bg-blue-600 px-3 py-1 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            {archiveMutation.isPending ? "…" : occasion.is_archived ? "Unarchive" : "Archive"}
+            Save
           </button>
           <button
-            onClick={() => setEditing(true)}
+            type="button"
+            onClick={() => {
+              setRenaming(false);
+              setName(occasion.name);
+            }}
             className="rounded bg-gray-200 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-300"
           >
-            Edit
+            Cancel
           </button>
-          <button
-            onClick={handleDelete}
-            disabled={deleteMutation.isPending}
-            className="rounded bg-red-600 px-3 py-1 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
-          >
-            {deleteMutation.isPending ? "Deleting…" : "Delete"}
-          </button>
+        </form>
+      ) : (
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <h1 className="text-2xl font-bold text-gray-900">{occasion.name}</h1>
+            {occasion.is_archived && (
+              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                Archived
+              </span>
+            )}
+          </div>
+          {isOrganizer && (
+            <HeaderMenu
+              ariaLabel="Occasion actions"
+              pending={renameMutation.isPending || setArchivedMutation.isPending}
+              items={[
+                {
+                  label: "Rename",
+                  onClick: () => {
+                    setName(occasion.name);
+                    setRenaming(true);
+                  },
+                },
+                {
+                  label: occasion.is_archived ? "Unarchive" : "Archive",
+                  onClick: handleArchiveToggle,
+                },
+              ]}
+            />
+          )}
         </div>
-      </div>
+      )}
+
+      {actionError && <p className="mt-3 text-sm text-red-600">{actionError}</p>}
     </div>
   );
 }
 
-function OccasionLists({
-  occasion,
-  occasionId,
-  queryClient,
-}: {
-  occasion: OccasionDetailType;
-  occasionId: number;
-  queryClient: ReturnType<typeof useQueryClient>;
-}) {
-  const removeMutation = useMutation({
-    mutationFn: (listId: number) => removeOccasionItem(occasionId, listId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["occasion", occasionId] });
-      queryClient.invalidateQueries({ queryKey: ["occasions"] });
-    },
-    onError: () => toast.error("Failed to remove list."),
+/** Every list shared to this occasion that the viewer can see. */
+function ListsTab({ occasionId }: { occasionId: number }) {
+  const { user } = useAuth();
+
+  const lists = useQuery({
+    queryKey: ["occasion-lists", occasionId],
+    queryFn: () => getOccasionLists(occasionId),
   });
 
-  if (occasion.lists.length === 0) {
-    return <p className="text-gray-500">No lists in this occasion.</p>;
+  if (lists.isPending) return <Spinner />;
+  if (lists.isError) return <p className="text-sm text-red-600">Couldn&apos;t load lists.</p>;
+  if (lists.data.length === 0) {
+    return <p className="text-gray-500">No lists are shared to this occasion yet.</p>;
   }
 
   return (
     <ul className="divide-y divide-gray-200 rounded-lg bg-white shadow">
-      {occasion.lists.map((list) => (
-        <li key={list.id} className="flex items-center justify-between px-4 py-3">
-          <Link to={`/lists/${list.id}`} className="min-w-0 flex-1 hover:opacity-75">
+      {lists.data.map((list) => (
+        <li key={list.id}>
+          <Link to={`/lists/${list.id}`} className="block px-4 py-3 hover:bg-gray-50">
             <p className="font-medium text-gray-900">{list.name}</p>
-            <ListAttributionLine list={list} />
+            {/* The viewer's own list reads as their own row does elsewhere —
+                "from Tom" on your own list would be nonsense. Every other list
+                reached this page through this occasion, so the row names the
+                person it came from rather than repeating the family overhead. */}
+            {list.owner_id === user?.id ? (
+              <RecipientLine list={list} />
+            ) : (
+              <ListAttributionLine list={list} />
+            )}
           </Link>
-          <button
-            onClick={() => removeMutation.mutate(list.id)}
-            disabled={removeMutation.isPending}
-            className="ml-4 shrink-0 rounded bg-red-600 px-3 py-1 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
-          >
-            Remove
-          </button>
         </li>
       ))}
     </ul>
-  );
-}
-
-function AddListForm({
-  occasionId,
-  occasion,
-  queryClient,
-}: {
-  occasionId: number;
-  occasion: OccasionDetailType;
-  queryClient: ReturnType<typeof useQueryClient>;
-}) {
-  const [selectedListId, setSelectedListId] = useState("");
-
-  const allLists = useQuery({ queryKey: ["lists"], queryFn: () => getLists() });
-
-  const addMutation = useMutation({
-    mutationFn: (listId: number) => addOccasionItem(occasionId, listId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["occasion", occasionId] });
-      queryClient.invalidateQueries({ queryKey: ["occasions"] });
-      setSelectedListId("");
-    },
-    onError: () => toast.error("Failed to add list."),
-  });
-
-  const existingListIds = new Set(occasion.lists.map((l) => l.id));
-  const availableLists = (allLists.data ?? []).filter((l) => !existingListIds.has(l.id));
-
-  if (availableLists.length === 0) return null;
-
-  function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    if (selectedListId) {
-      addMutation.mutate(Number(selectedListId));
-    }
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="rounded-lg bg-white p-4 shadow">
-      <h2 className="text-sm font-semibold text-gray-700 mb-3">Add a List</h2>
-
-      <div className="flex gap-2">
-        <select
-          value={selectedListId}
-          onChange={(e) => setSelectedListId(e.target.value)}
-          className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm"
-          required
-        >
-          <option value="">Select a list…</option>
-          {availableLists.map((list) => (
-            <option key={list.id} value={list.id}>
-              {list.name}
-            </option>
-          ))}
-        </select>
-        <button
-          type="submit"
-          disabled={addMutation.isPending || !selectedListId}
-          className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-        >
-          {addMutation.isPending ? "Adding…" : "Add"}
-        </button>
-      </div>
-    </form>
-  );
-}
-
-function ShoppingList({ occasionId }: { occasionId: number }) {
-  const queryClient = useQueryClient();
-
-  const { data: items = [], isLoading, error } = useQuery({
-    queryKey: ["shoppingList", occasionId],
-    queryFn: () => getShoppingList(occasionId),
-  });
-
-  const purchaseMutation = useMutation({
-    mutationFn: ({ listId, giftId }: { listId: number; giftId: number }) =>
-      purchaseGift(listId, giftId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["shoppingList", occasionId] });
-      toast.success("Marked as purchased!");
-    },
-    onError: () => toast.error("Failed to mark as purchased."),
-  });
-
-  const unpurchaseMutation = useMutation({
-    mutationFn: ({ listId, giftId }: { listId: number; giftId: number }) =>
-      unpurchaseGift(listId, giftId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["shoppingList", occasionId] });
-      toast.success("Marked as not purchased.");
-    },
-    onError: () => toast.error("Failed to update purchase status."),
-  });
-
-  function handleToggle(item: ShoppingListItem) {
-    if (item.purchased_at) {
-      unpurchaseMutation.mutate({ listId: item.list_id, giftId: item.id });
-    } else {
-      purchaseMutation.mutate({ listId: item.list_id, giftId: item.id });
-    }
-  }
-
-  if (isLoading) return <Spinner />;
-  if (error) return <p className="text-red-600">Failed to load shopping list.</p>;
-
-  if (items.length === 0) {
-    return (
-      <div className="rounded-lg bg-white p-6 shadow text-center">
-        <p className="text-gray-500">No claimed gifts in this occasion.</p>
-        <p className="text-sm text-gray-400 mt-1">Claim gifts from shared lists to see them here.</p>
-      </div>
-    );
-  }
-
-  const purchasedCount = items.filter((i) => i.purchased_at !== null).length;
-
-  // Group items by list_name
-  const grouped = items.reduce<Record<string, ShoppingListItem[]>>((acc, item) => {
-    if (!acc[item.list_name]) acc[item.list_name] = [];
-    acc[item.list_name].push(item);
-    return acc;
-  }, {});
-
-  const isMutating = purchaseMutation.isPending || unpurchaseMutation.isPending;
-
-  return (
-    <div className="space-y-4">
-      <div className="rounded-lg bg-white px-4 py-3 shadow">
-        <p className="text-sm font-medium text-gray-700">
-          {purchasedCount} of {items.length} purchased
-        </p>
-        {purchasedCount === items.length && items.length > 0 && (
-          <p className="text-sm text-green-600 mt-0.5">All done!</p>
-        )}
-      </div>
-      {Object.entries(grouped).map(([listName, listItems]) => (
-        <div key={listName} className="rounded-lg bg-white shadow overflow-hidden">
-          <div className="px-4 py-2 bg-gray-50 border-b border-gray-200">
-            <h3 className="text-sm font-semibold text-gray-700">{listName}</h3>
-          </div>
-          <ul className="divide-y divide-gray-100">
-            {listItems.map((item) => {
-              const isPurchased = item.purchased_at !== null;
-              return (
-                <li key={item.id} className={`flex items-start gap-3 px-4 py-3 ${isPurchased ? "bg-gray-50" : ""}`}>
-                  <input
-                    type="checkbox"
-                    checked={isPurchased}
-                    onChange={() => handleToggle(item)}
-                    disabled={isMutating}
-                    className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 cursor-pointer disabled:cursor-not-allowed"
-                    aria-label={`Mark "${item.name}" as ${isPurchased ? "not purchased" : "purchased"}`}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-baseline gap-2 flex-wrap">
-                      {item.url ? (
-                        <a
-                          href={item.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={`font-medium text-blue-600 hover:underline ${isPurchased ? "line-through text-gray-400" : ""}`}
-                        >
-                          {item.name}
-                        </a>
-                      ) : (
-                        <span className={`font-medium ${isPurchased ? "line-through text-gray-400" : "text-gray-900"}`}>
-                          {item.name}
-                        </span>
-                      )}
-                      {item.price && (
-                        <span className={`text-sm ${isPurchased ? "text-gray-400" : "text-gray-500"}`}>
-                          ${item.price}
-                        </span>
-                      )}
-                    </div>
-                    {item.description && (
-                      <p className={`text-sm mt-0.5 ${isPurchased ? "text-gray-400" : "text-gray-500"}`}>
-                        {item.description}
-                      </p>
-                    )}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      ))}
-    </div>
   );
 }

@@ -1,52 +1,52 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getOccasions, createOccasion, deleteOccasion } from "../api/occasions";
+import { getFolders, createFolder, deleteFolder } from "../api/folders";
 import { useTitle } from "../hooks/useTitle";
 import toast from "react-hot-toast";
 import { Spinner } from "../components/Spinner";
 import { FolderOpenIcon } from "../components/Icons";
 
-export function Occasions() {
-  useTitle("Occasions");
+export function Folders() {
+  useTitle("Folders");
   const queryClient = useQueryClient();
   const [showArchived, setShowArchived] = useState(false);
 
-  const occasions = useQuery({
-    queryKey: ["occasions", { archived: showArchived }],
-    queryFn: () => getOccasions(showArchived || undefined),
+  const folders = useQuery({
+    queryKey: ["folders", { archived: showArchived }],
+    queryFn: () => getFolders(showArchived || undefined),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: deleteOccasion,
+    mutationFn: deleteFolder,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["occasions"] });
+      queryClient.invalidateQueries({ queryKey: ["folders"] });
     },
-    onError: () => toast.error("Failed to delete occasion."),
+    onError: () => toast.error("Failed to delete folder."),
   });
 
   function handleDelete(id: number) {
-    if (window.confirm("Delete this occasion?")) {
+    if (window.confirm("Delete this folder?")) {
       deleteMutation.mutate(id);
     }
   }
 
-  if (occasions.isPending) return (
+  if (folders.isPending) return (
     <div className="space-y-8">
-      <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900"><FolderOpenIcon className="h-6 w-6" /> Occasions</h1>
+      <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900"><FolderOpenIcon className="h-6 w-6" /> Folders</h1>
       <Spinner />
     </div>
   );
 
   return (
     <div className="space-y-8">
-      <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900"><FolderOpenIcon className="h-6 w-6" /> Occasions</h1>
+      <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900"><FolderOpenIcon className="h-6 w-6" /> Folders</h1>
 
       <p className="text-sm text-gray-500">
-        Occasions let you group gift lists together for easy access — for example, all the lists for Christmas 2026.
+        Folders let you group gift lists together for easy access — for example, all the lists for Christmas 2026.
       </p>
 
-      {!showArchived && <CreateOccasionForm queryClient={queryClient} />}
+      {!showArchived && <CreateFolderForm queryClient={queryClient} />}
 
       <section>
         <div className="mb-3">
@@ -54,29 +54,29 @@ export function Occasions() {
             onClick={() => setShowArchived(!showArchived)}
             className="text-sm text-blue-600 hover:underline"
           >
-            {showArchived ? "View active occasions" : "View archived occasions"}
+            {showArchived ? "View active folders" : "View archived folders"}
           </button>
         </div>
 
-        {occasions.data && occasions.data.length === 0 && !showArchived && (
-          <p className="text-gray-500">No occasions yet.</p>
+        {folders.data && folders.data.length === 0 && !showArchived && (
+          <p className="text-gray-500">No folders yet.</p>
         )}
-        {occasions.data && occasions.data.length === 0 && showArchived && (
-          <p className="text-gray-500">No archived occasions.</p>
+        {folders.data && folders.data.length === 0 && showArchived && (
+          <p className="text-gray-500">No archived folders.</p>
         )}
-        {occasions.data && occasions.data.length > 0 && (
+        {folders.data && folders.data.length > 0 && (
           <ul className="divide-y divide-gray-200 rounded-lg bg-white shadow">
-            {occasions.data.map((occ) => (
-              <li key={occ.id} className={`flex items-center justify-between px-4 py-3${showArchived ? " opacity-60" : ""}`}>
-                <Link to={`/occasions/${occ.id}`} className="min-w-0 flex-1 hover:opacity-75">
-                  <p className="font-medium text-gray-900">{occ.name}</p>
-                  {occ.description && (
-                    <p className="text-sm text-gray-500 truncate">{occ.description}</p>
+            {folders.data.map((folder) => (
+              <li key={folder.id} className={`flex items-center justify-between px-4 py-3${showArchived ? " opacity-60" : ""}`}>
+                <Link to={`/folders/${folder.id}`} className="min-w-0 flex-1 hover:opacity-75">
+                  <p className="font-medium text-gray-900">{folder.name}</p>
+                  {folder.description && (
+                    <p className="text-sm text-gray-500 truncate">{folder.description}</p>
                   )}
                 </Link>
                 {!showArchived && (
                   <button
-                    onClick={() => handleDelete(occ.id)}
+                    onClick={() => handleDelete(folder.id)}
                     disabled={deleteMutation.isPending}
                     className="ml-4 shrink-0 rounded bg-red-600 px-3 py-1 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
                   >
@@ -92,7 +92,7 @@ export function Occasions() {
   );
 }
 
-function CreateOccasionForm({
+function CreateFolderForm({
   queryClient,
 }: {
   queryClient: ReturnType<typeof useQueryClient>;
@@ -101,13 +101,13 @@ function CreateOccasionForm({
   const [description, setDescription] = useState("");
 
   const mutation = useMutation({
-    mutationFn: (data: { name: string; description?: string }) => createOccasion(data),
+    mutationFn: (data: { name: string; description?: string }) => createFolder(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["occasions"] });
+      queryClient.invalidateQueries({ queryKey: ["folders"] });
       setName("");
       setDescription("");
     },
-    onError: () => toast.error("Failed to create occasion."),
+    onError: () => toast.error("Failed to create folder."),
   });
 
   function handleSubmit(e: FormEvent) {
@@ -117,12 +117,12 @@ function CreateOccasionForm({
 
   return (
     <form onSubmit={handleSubmit} className="rounded-lg bg-white p-4 shadow">
-      <h2 className="text-sm font-semibold text-gray-700 mb-3">Create an Occasion</h2>
+      <h2 className="text-sm font-semibold text-gray-700 mb-3">Create a Folder</h2>
 
       <div className="flex flex-col gap-2 sm:flex-row">
         <input
           type="text"
-          placeholder="Occasion name"
+          placeholder="Folder name"
           value={name}
           onChange={(e) => setName(e.target.value)}
           className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm"

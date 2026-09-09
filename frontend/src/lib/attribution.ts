@@ -29,8 +29,10 @@ export type ListAttribution =
   /** No recipient: the person the list came from — the sharing user when the
    *  list carries one, else its owner. "from {subject}" */
   | { kind: "owner"; subject: string; keeper: null }
-  /** Reached the viewer through a family they belong to. The family is a source,
-   *  not a person, so it reads as a bare label: "{subject}" */
+  /** Reached the viewer through an occasion of a family they belong to. The row
+   *  names the **family**, not the occasion: the occasion is how the share was
+   *  made, the family is who the viewer recognises (project spec §9.1). A group
+   *  is a source, not a person, so it reads as a bare label: "{subject}" */
   | { kind: "family"; subject: string; keeper: null }
   /** A recipient with no account, whose list someone else keeps.
    *  "for {subject} · kept by {keeper}" */
@@ -52,8 +54,11 @@ export function attributionFor(list: ListLike): ListAttribution {
   if (recipient !== null) {
     return { kind: "absent", subject: recipient, keeper: list.owner_name };
   }
-  if (list.shared_via?.kind === "family") {
-    return { kind: "family", subject: list.shared_via.name, keeper: null };
+  // A share points at an occasion (project spec §5.1), and it is the family
+  // behind that occasion the row is labelled with — the occasion arm always
+  // carries one.
+  if (list.shared_via?.kind === "occasion") {
+    return { kind: "family", subject: list.shared_via.family.name, keeper: null };
   }
   // A direct share names the account that shared it, which *is* this list's owner
   // — `shared_via` is simply the authoritative statement of it. The owner's own

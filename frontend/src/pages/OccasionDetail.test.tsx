@@ -1,271 +1,299 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router";
+import { Toaster } from "react-hot-toast";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { server } from "../test/mocks/server";
+import { AuthProvider } from "../contexts/AuthContext";
+import { NumericId } from "../components/NumericId";
 import { OccasionDetail } from "./OccasionDetail";
 
 const API = "https://boone-gifts-api.localhost";
 
-const sampleOccasion = {
-  id: 1,
-  name: "Christmas 2026",
-  description: "Holiday gifts",
-  owner_id: 1,
-  lists: [
-    { id: 10, name: "My Wishlist", description: null, owner_id: 1, owner_name: "Me", created_at: "2026-01-01", updated_at: "2026-01-01" },
+function tokenFor(userId: number) {
+  return [
+    btoa(JSON.stringify({ alg: "HS256", typ: "JWT" })),
+    btoa(
+      JSON.stringify({
+        sub: String(userId),
+        email: `user${userId}@test.com`,
+        role: "member",
+        exp: 9999999999,
+      })
+    ),
+    "fake-signature",
+  ].join(".");
+}
+
+// User 1 is the family's organizer; user 2 is a plain member.
+const family = {
+  id: 7,
+  name: "Boone Family",
+  created_by_id: 1,
+  members: [
+    { user_id: 1, name: "Alice", role: "organizer" },
+    { user_id: 2, name: "Bob", role: "member" },
   ],
-  created_at: "2026-01-01",
-  updated_at: "2026-01-01",
 };
 
-function renderOccasionDetail(id = "1") {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
+const occasion = {
+  id: 3,
+  family_id: 7,
+  name: "Christmas 2026",
+  is_archived: false,
+  created_by_id: 1,
+  created_at: "2026-09-01T00:00:00Z",
+  updated_at: "2026-09-01T00:00:00Z",
+};
+
+function list(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: 10,
+    name: "Jane's Wishlist",
+    description: null,
+    owner_id: 2,
+    owner_name: "Jane",
+    recipient_name: null,
+    account_person_id: null,
+    account_person_name: null,
+    is_archived: false,
+    gift_count: 2,
+    claimed_count: 0,
+    created_at: "2026-09-01T00:00:00Z",
+    updated_at: "2026-09-01T00:00:00Z",
+    ...overrides,
+  };
+}
+
+/** No budget set, and counts that say nothing — these tests are about the tab,
+ *  not the budget line, which has its own file. */
+const noBudget = {
+  amount: null,
+  spent: "0.00",
+  remaining: null,
+  bought_count: 0,
+  total_count: 0,
+  unpriced_count: 0,
+};
+
+function renderOccasion({
+  userId = 1,
+  occasionResponse = HttpResponse.json(occasion),
+  lists = [list()],
+  shopping = [],
+}: {
+  userId?: number;
+  occasionResponse?: Response;
+  lists?: ReturnType<typeof list>[];
+  shopping?: Record<string, unknown>[];
+} = {}) {
+  server.use(
+    http.post(`${API}/auth/refresh`, () =>
+      HttpResponse.json({ access_token: tokenFor(userId), token_type: "bearer" })
+    ),
+    http.get(`${API}/occasions/3`, () => occasionResponse.clone()),
+    http.get(`${API}/occasions/3/lists`, () => HttpResponse.json(lists)),
+    http.get(`${API}/occasions/3/shopping`, () =>
+      HttpResponse.json({ budget: noBudget, items: shopping })
+    ),
+    http.get(`${API}/families/7`, () => HttpResponse.json(family))
+  );
+
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={[`/occasions/${id}`]}>
-        <Routes>
-          <Route path="/occasions/:id" element={<OccasionDetail />} />
-          <Route path="/occasions" element={<div>Occasions List</div>} />
-        </Routes>
-      </MemoryRouter>
+      <AuthProvider>
+        <MemoryRouter initialEntries={["/occasions/3"]}>
+          <Routes>
+            <Route
+              path="/occasions/:id"
+              element={
+                <NumericId back="/people">
+                  <OccasionDetail />
+                </NumericId>
+              }
+            />
+            <Route path="/people/families/:id" element={<div>Family Page</div>} />
+          </Routes>
+          <Toaster />
+        </MemoryRouter>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }
 
+afterEach(() => vi.restoreAllMocks());
+
 describe("OccasionDetail", () => {
-  it("renders occasion header and lists", async () => {
-    server.use(
-      http.get(`${API}/occasions/1`, () => HttpResponse.json(sampleOccasion)),
-      http.get(`${API}/lists`, () => HttpResponse.json([])),
-    );
+  it("heads the page with the occasion, its family, and a link back to it", async () => {
+    renderOccasion();
 
-    renderOccasionDetail();
-
-    await waitFor(() => {
-      expect(screen.getByText("Christmas 2026")).toBeInTheDocument();
-    });
-    expect(screen.getByText("Holiday gifts")).toBeInTheDocument();
-    expect(screen.getByText("My Wishlist")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Christmas 2026" })).toBeInTheDocument();
+    const back = await screen.findByRole("link", { name: /Boone Family/ });
+    expect(back).toHaveAttribute("href", "/people/families/7");
   });
 
-  it("edits occasion name and description", async () => {
-    server.use(
-      http.get(`${API}/occasions/1`, () => HttpResponse.json(sampleOccasion)),
-      http.get(`${API}/lists`, () => HttpResponse.json([])),
-      http.put(`${API}/occasions/1`, () =>
-        HttpResponse.json({ ...sampleOccasion, name: "Updated", description: "New desc" })
-      ),
-    );
-
-    renderOccasionDetail();
-
-    await waitFor(() => {
-      expect(screen.getByText("Christmas 2026")).toBeInTheDocument();
+  it("lists every list shared to the occasion, naming who each came from", async () => {
+    renderOccasion({
+      lists: [list(), list({ id: 11, name: "My Wishlist", owner_id: 1, owner_name: "Alice" })],
     });
 
-    await userEvent.click(screen.getByText("Edit"));
-
-    const nameInput = screen.getByDisplayValue("Christmas 2026");
-    await userEvent.clear(nameInput);
-    await userEvent.type(nameInput, "Updated");
-    await userEvent.click(screen.getByText("Save"));
+    const jane = await screen.findByRole("link", { name: /Jane's Wishlist/ });
+    expect(jane).toHaveAttribute("href", "/lists/10");
+    expect(jane).toHaveTextContent("from Jane");
+    // The viewer's own list is not attributed back to the viewer.
+    expect(await screen.findByRole("link", { name: /My Wishlist/ })).not.toHaveTextContent("from");
   });
 
-  it("removes a list from occasion", async () => {
-    server.use(
-      http.get(`${API}/occasions/1`, () => HttpResponse.json(sampleOccasion)),
-      http.get(`${API}/lists`, () => HttpResponse.json([])),
-      http.delete(`${API}/occasions/1/items/10`, () =>
-        new HttpResponse(null, { status: 204 })
-      ),
-    );
+  it("says so plainly when nothing is shared to the occasion", async () => {
+    renderOccasion({ lists: [] });
 
-    renderOccasionDetail();
-
-    await waitFor(() => {
-      expect(screen.getByText("My Wishlist")).toBeInTheDocument();
-    });
-
-    await userEvent.click(screen.getByText("Remove"));
+    expect(await screen.findByText("No lists are shared to this occasion yet.")).toBeInTheDocument();
   });
 
-  it("adds a list to occasion", async () => {
-    const emptyOccasion = { ...sampleOccasion, lists: [] };
+  it("ships the tab bar with Lists and My shopping, Lists first", async () => {
+    renderOccasion();
 
-    server.use(
-      http.get(`${API}/occasions/1`, () => HttpResponse.json(emptyOccasion)),
-      http.get(`${API}/lists`, () =>
-        HttpResponse.json([
-          { id: 20, name: "Birthday List", description: null, owner_id: 1, owner_name: "Me", created_at: "2026-01-01", updated_at: "2026-01-01" },
-        ])
-      ),
-      http.post(`${API}/occasions/1/items`, () =>
-        new HttpResponse(null, { status: 201 })
-      ),
-    );
-
-    renderOccasionDetail();
-
-    await waitFor(() => {
-      expect(screen.getByText("Add")).toBeInTheDocument();
-    });
-
-    await userEvent.selectOptions(screen.getByRole("combobox"), "20");
-    await userEvent.click(screen.getByText("Add"));
+    const tabs = await screen.findAllByRole("tab");
+    expect(tabs.map((tab) => tab.textContent)).toEqual(["Lists", "My shopping"]);
+    expect(tabs[0]).toHaveAttribute("aria-selected", "true");
   });
 
-  it("shows empty state for lists", async () => {
-    const emptyOccasion = { ...sampleOccasion, lists: [] };
-
-    server.use(
-      http.get(`${API}/occasions/1`, () => HttpResponse.json(emptyOccasion)),
-      http.get(`${API}/lists`, () => HttpResponse.json([])),
-    );
-
-    renderOccasionDetail();
-
-    await waitFor(() => {
-      expect(screen.getByText("No lists in this occasion.")).toBeInTheDocument();
+  // The tab's own behaviour is `components/MyShopping.test.tsx`; what belongs
+  // here is that the occasion page scopes it to *this occasion*.
+  it("scopes My shopping to the claims filed under this occasion", async () => {
+    renderOccasion({
+      shopping: [
+        {
+          claim_id: 100,
+          gift_id: 20,
+          name: "Running shoes",
+          description: null,
+          url: null,
+          price: "85.00",
+          list_id: 10,
+          list_name: "Jane's Wishlist",
+          purchased_at: "2026-09-01T00:00:00Z",
+          amount_paid: "85.00",
+        },
+      ],
     });
+
+    await userEvent.click(await screen.findByRole("tab", { name: "My shopping" }));
+
+    expect(await screen.findByText("Running shoes")).toBeInTheDocument();
+    expect(screen.getByText("you paid $85.00")).toBeInTheDocument();
   });
 
-  it("switches to shopping list view and shows empty state", async () => {
-    server.use(
-      http.get(`${API}/occasions/1`, () => HttpResponse.json(sampleOccasion)),
-      http.get(`${API}/lists`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions/1/shopping-list`, () => HttpResponse.json([])),
-    );
-
-    renderOccasionDetail();
-
-    await waitFor(() => {
-      expect(screen.getByText("Christmas 2026")).toBeInTheDocument();
+  // Archiving takes an occasion out of the default views and does nothing else
+  // — the claims filed under it are still the claimer's to finish shopping for.
+  it("serves My shopping on an archived occasion too", async () => {
+    renderOccasion({
+      occasionResponse: HttpResponse.json({ ...occasion, is_archived: true }),
+      shopping: [
+        {
+          claim_id: 101,
+          gift_id: 21,
+          name: "Puzzle",
+          description: null,
+          url: null,
+          price: "18.00",
+          list_id: 11,
+          list_name: "Gran's List",
+          purchased_at: null,
+          amount_paid: null,
+        },
+      ],
     });
 
-    await userEvent.click(screen.getByText("My Shopping List"));
+    await userEvent.click(await screen.findByRole("tab", { name: "My shopping" }));
 
-    await waitFor(() => {
-      expect(screen.getByText("No claimed gifts in this occasion.")).toBeInTheDocument();
-    });
+    expect(await screen.findByText("Puzzle")).toBeInTheDocument();
   });
 
-  it("shows shopping list items grouped by list and summary count", async () => {
-    const shoppingItems = [
-      {
-        id: 1,
-        name: "Lego Set",
-        description: "Great fun",
-        url: "https://lego.com",
-        price: "49.99",
-        list_id: 10,
-        list_name: "My Wishlist",
-        purchased_at: null,
-      },
-      {
-        id: 2,
-        name: "Book",
-        description: null,
-        url: null,
-        price: "14.99",
-        list_id: 10,
-        list_name: "My Wishlist",
-        purchased_at: "2026-01-10T00:00:00",
-      },
-    ];
-
+  it("renames the occasion from the organizer's menu", async () => {
+    const renamed = vi.fn();
+    renderOccasion();
     server.use(
-      http.get(`${API}/occasions/1`, () => HttpResponse.json(sampleOccasion)),
-      http.get(`${API}/lists`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions/1/shopping-list`, () => HttpResponse.json(shoppingItems)),
+      http.put(`${API}/occasions/3`, async ({ request }) => {
+        renamed(await request.json());
+        return HttpResponse.json({ ...occasion, name: "Christmas 2027" });
+      })
     );
 
-    renderOccasionDetail();
+    await userEvent.click(await screen.findByRole("button", { name: "Occasion actions" }));
+    await userEvent.click(screen.getByRole("button", { name: "Rename" }));
+    const field = screen.getByLabelText("Occasion name");
+    await userEvent.clear(field);
+    await userEvent.type(field, "Christmas 2027");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
 
-    await waitFor(() => {
-      expect(screen.getByText("Christmas 2026")).toBeInTheDocument();
-    });
-
-    await userEvent.click(screen.getByText("My Shopping List"));
-
-    await waitFor(() => {
-      expect(screen.getByText("1 of 2 purchased")).toBeInTheDocument();
-    });
-    expect(screen.getByText("My Wishlist")).toBeInTheDocument();
-    expect(screen.getByText("Lego Set")).toBeInTheDocument();
-    expect(screen.getByText("Book")).toBeInTheDocument();
+    await waitFor(() => expect(renamed).toHaveBeenCalledWith({ name: "Christmas 2027" }));
   });
 
-  it("toggles purchase status on checkbox click", async () => {
-    const shoppingItems = [
-      {
-        id: 1,
-        name: "Lego Set",
-        description: null,
-        url: null,
-        price: null,
-        list_id: 10,
-        list_name: "My Wishlist",
-        purchased_at: null,
-      },
-    ];
-
+  it("archives the occasion once the organizer confirms", async () => {
+    const archived = vi.fn();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    renderOccasion();
     server.use(
-      http.get(`${API}/occasions/1`, () => HttpResponse.json(sampleOccasion)),
-      http.get(`${API}/lists`, () => HttpResponse.json([])),
-      http.get(`${API}/occasions/1/shopping-list`, () => HttpResponse.json(shoppingItems)),
-      http.post(`${API}/lists/10/gifts/1/purchase`, () =>
-        HttpResponse.json({ ...shoppingItems[0], purchased_at: "2026-01-10T00:00:00" })
-      ),
+      http.put(`${API}/occasions/3`, async ({ request }) => {
+        archived(await request.json());
+        return HttpResponse.json({ ...occasion, is_archived: true });
+      })
     );
 
-    renderOccasionDetail();
+    await userEvent.click(await screen.findByRole("button", { name: "Occasion actions" }));
+    await userEvent.click(screen.getByRole("button", { name: "Archive" }));
 
-    await waitFor(() => {
-      expect(screen.getByText("Christmas 2026")).toBeInTheDocument();
-    });
-
-    await userEvent.click(screen.getByText("My Shopping List"));
-
-    await waitFor(() => {
-      expect(screen.getByLabelText(/Mark "Lego Set" as purchased/)).toBeInTheDocument();
-    });
-
-    await userEvent.click(screen.getByLabelText(/Mark "Lego Set" as purchased/));
-
-    await waitFor(() => {
-      expect(screen.queryByText("Failed to mark as purchased.")).not.toBeInTheDocument();
-    });
+    await waitFor(() => expect(archived).toHaveBeenCalledWith({ is_archived: true }));
   });
 
-  it("attributes occasion lists the same way every other list view does", async () => {
-    // This changes the wording from "by X" to "from X"/"for X", accepted for
-    // consistency with the rest of the app.
+  it("does not archive when the organizer cancels the confirm", async () => {
+    const archived = vi.fn();
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    renderOccasion();
     server.use(
-      http.get(`${API}/occasions/1`, () =>
-        HttpResponse.json({
-          ...sampleOccasion,
-          lists: [
-            { id: 30, name: "Beth's List", description: null, owner_id: 3, owner_name: "Tom",
-              recipient_name: "Beth",
-              created_at: "2026-01-01", updated_at: "2026-01-01" },
-            { id: 31, name: "Plain List", description: null, owner_id: 4, owner_name: "Alice",
-              recipient_name: null,
-              created_at: "2026-01-01", updated_at: "2026-01-01" },
-          ],
-        })
-      ),
+      http.put(`${API}/occasions/3`, async ({ request }) => {
+        archived(await request.json());
+        return HttpResponse.json(occasion);
+      })
     );
 
-    renderOccasionDetail();
+    await userEvent.click(await screen.findByRole("button", { name: "Occasion actions" }));
+    await userEvent.click(screen.getByRole("button", { name: "Archive" }));
 
-    await waitFor(() => {
-      expect(screen.getByText("for Beth · kept by Tom")).toBeInTheDocument();
+    expect(archived).not.toHaveBeenCalled();
+  });
+
+  it("gives a plain member no rename or archive menu", async () => {
+    renderOccasion({ userId: 2 });
+
+    expect(await screen.findByRole("heading", { name: "Christmas 2026" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Occasion actions" })).not.toBeInTheDocument();
+  });
+
+  it("renders an archived occasion normally, offering Unarchive", async () => {
+    renderOccasion({ occasionResponse: HttpResponse.json({ ...occasion, is_archived: true }) });
+
+    expect(await screen.findByRole("heading", { name: "Christmas 2026" })).toBeInTheDocument();
+    expect(screen.getByText("Archived")).toBeInTheDocument();
+    // Its lists are still listed: archiving is not unsharing.
+    expect(await screen.findByRole("link", { name: /Jane's Wishlist/ })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Occasion actions" }));
+    expect(screen.getByRole("button", { name: "Unarchive" })).toBeInTheDocument();
+  });
+
+  it("does not offer a retry on an occasion the viewer can never reach", async () => {
+    renderOccasion({
+      occasionResponse: HttpResponse.json({ detail: "Forbidden" }, { status: 403 }),
     });
-    expect(screen.getByText("from Alice")).toBeInTheDocument();
+
+    expect(
+      await screen.findByText("This occasion doesn't exist, or it belongs to a family you're not in.")
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
   });
 });

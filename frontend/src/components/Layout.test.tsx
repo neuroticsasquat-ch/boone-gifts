@@ -16,12 +16,6 @@ const token = [
   "fake-signature",
 ].join(".");
 
-const simpleModeToken = [
-  btoa(JSON.stringify({ alg: "HS256", typ: "JWT" })),
-  btoa(JSON.stringify({ sub: "1", email: "user@test.com", role: "member", simple_mode: true, exp: 9999999999 })),
-  "fake-signature",
-].join(".");
-
 const familyInvite = {
   id: 1,
   token: "tok-abc",
@@ -69,8 +63,6 @@ function renderLayout(sessionToken = token, initialEntry = "/lists") {
   );
 }
 
-const renderSimpleLayout = () => renderLayout(simpleModeToken);
-
 function topNav() {
   return screen.getByRole("navigation", { name: "Primary navigation" });
 }
@@ -94,7 +86,7 @@ describe("Layout", () => {
     renderLayout();
     await screen.findByLabelText("Account menu");
 
-    for (const label of ["Home", "Connect", "Connections", "Families", "Family Lists", "Occasions"]) {
+    for (const label of ["Home", "Connect", "Connections", "Families", "Family Lists", "Folders"]) {
       expect(within(bottomNav()).queryByText(label)).not.toBeInTheDocument();
       expect(within(topNav()).queryByText(label)).not.toBeInTheDocument();
     }
@@ -201,33 +193,7 @@ describe("Layout", () => {
     });
   });
 
-  it("simple-mode: renders only the Lists tab in both navs", async () => {
-    renderSimpleLayout();
-    await screen.findByLabelText("Account menu");
-
-    expect(within(bottomNav()).getByText("Lists")).toBeInTheDocument();
-    expect(within(bottomNav()).queryByText("People")).not.toBeInTheDocument();
-    expect(within(topNav()).getByText("Lists")).toBeInTheDocument();
-    expect(within(topNav()).queryByText("People")).not.toBeInTheDocument();
-  });
-
-  it("simple-mode: keeps the same label, not a simple-mode-only one", async () => {
-    renderSimpleLayout();
-    await screen.findByLabelText("Account menu");
-    expect(within(bottomNav()).queryByText("My Lists")).not.toBeInTheDocument();
-  });
-
-  it("simple-mode: People collapses into the account menu", async () => {
-    const user = userEvent.setup();
-    renderSimpleLayout();
-    await screen.findByLabelText("Account menu");
-    expect(screen.queryByRole("link", { name: "People" })).not.toBeInTheDocument();
-
-    await user.click(screen.getByLabelText("Account menu"));
-    expect(screen.getByRole("link", { name: "People" })).toHaveAttribute("href", "/people");
-  });
-
-  it("full mode: opening the account menu adds no second People link", async () => {
+  it("opening the account menu adds no second People link", async () => {
     const user = userEvent.setup();
     renderLayout();
     await screen.findByLabelText("Account menu");

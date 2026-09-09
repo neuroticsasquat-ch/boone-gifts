@@ -52,22 +52,37 @@ describe("attributionFor", () => {
     ).toEqual({ kind: "owner", subject: "Jane Boone", keeper: null });
   });
 
-  it("names the family on a family share", () => {
+  it("names the family behind the occasion a list was shared to", () => {
     // Its own kind, because the family is a source and not a person: the row
-    // reads "Boone Family", never "from Boone Family".
+    // reads "Boone Family", never "from Boone Family". The occasion is how the
+    // share was made; the family is who the viewer recognises.
     expect(
-      attributionFor(list({ shared_via: { kind: "family", id: 1, name: "Boone Family" } })),
+      attributionFor(
+        list({
+          shared_via: {
+            kind: "occasion",
+            id: 3,
+            name: "Christmas 2026",
+            family: { id: 1, name: "Boone Family" },
+          },
+        }),
+      ),
     ).toEqual({ kind: "family", subject: "Boone Family", keeper: null });
   });
 
   it("prefers the absent-person form over the source label", () => {
-    // Who the list is *for* outranks how it reached the viewer: a family share
-    // of a list kept for Beth still reads "for Beth · kept by Tom".
+    // Who the list is *for* outranks how it reached the viewer: an occasion
+    // share of a list kept for Beth still reads "for Beth · kept by Tom".
     expect(
       attributionFor(
         list({
           recipient_name: "Beth",
-          shared_via: { kind: "family", id: 1, name: "Boone Family" },
+          shared_via: {
+            kind: "occasion",
+            id: 3,
+            name: "Christmas 2026",
+            family: { id: 1, name: "Boone Family" },
+          },
         }),
       ),
     ).toEqual({ kind: "absent", subject: "Beth", keeper: "Tom" });

@@ -254,8 +254,7 @@ describe("People", () => {
 
     renderPeople();
 
-    // Present before the families query settles — this banner is the only route
-    // to a pending item in simple mode, so a slow list must not hide it
+    // Present before the families query settles — a slow list must not hide it
     await waitFor(() => {
       expect(screen.getByLabelText("Accept connection request from Bob")).toBeInTheDocument();
     });

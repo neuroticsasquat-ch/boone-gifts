@@ -1,11 +1,21 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { http, HttpResponse } from "msw";
 import { server } from "../test/mocks/server";
-import { apiClient, setAccessToken, getAccessToken, clearAccessToken } from "../api/client";
+import {
+  apiClient,
+  setAccessToken,
+  getAccessToken,
+  clearAccessToken,
+  setSessionEndedHandler,
+} from "../api/client";
 
 describe("apiClient", () => {
   beforeEach(() => {
     clearAccessToken();
+  });
+
+  afterEach(() => {
+    setSessionEndedHandler(null);
   });
 
   it("attaches the access token to requests", async () => {
@@ -75,5 +85,46 @@ describe("apiClient", () => {
 
     await expect(apiClient.get("/test")).rejects.toThrow();
     expect(getAccessToken()).toBeNull();
+  });
+
+  it("tells the session-ended handler when refresh fails", async () => {
+    setAccessToken("expired-token");
+    const onSessionEnded = vi.fn();
+    setSessionEndedHandler(onSessionEnded);
+
+    server.use(
+      http.get("https://boone-gifts-api.localhost/test", () => {
+        return HttpResponse.json({ detail: "Unauthorized" }, { status: 401 });
+      }),
+      http.post("https://boone-gifts-api.localhost/auth/refresh", () => {
+        return HttpResponse.json({ detail: "Unauthorized" }, { status: 401 });
+      })
+    );
+
+    await expect(apiClient.get("/test")).rejects.toThrow();
+    expect(onSessionEnded).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves the session alone when refresh succeeds", async () => {
+    setAccessToken("expired-token");
+    const onSessionEnded = vi.fn();
+    setSessionEndedHandler(onSessionEnded);
+
+    let attempt = 0;
+    server.use(
+      http.get("https://boone-gifts-api.localhost/test", () => {
+        attempt++;
+        if (attempt === 1) {
+          return HttpResponse.json({ detail: "Unauthorized" }, { status: 401 });
+        }
+        return HttpResponse.json({ ok: true });
+      }),
+      http.post("https://boone-gifts-api.localhost/auth/refresh", () => {
+        return HttpResponse.json({ access_token: "new-access-token", token_type: "bearer" });
+      })
+    );
+
+    await apiClient.get("/test");
+    expect(onSessionEnded).not.toHaveBeenCalled();
   });
 });

@@ -5,27 +5,27 @@ import { MemoryRouter } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { server } from "../test/mocks/server";
-import { Occasions } from "./Occasions";
+import { Folders } from "./Folders";
 
 const API = "https://boone-gifts-api.localhost";
 
-function renderOccasions() {
+function renderFolders() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
-        <Occasions />
+        <Folders />
       </MemoryRouter>
     </QueryClientProvider>
   );
 }
 
-describe("Occasions", () => {
-  it("renders occasions list with links", async () => {
+describe("Folders", () => {
+  it("renders folders list with links", async () => {
     server.use(
-      http.get(`${API}/occasions`, () =>
+      http.get(`${API}/folders`, () =>
         HttpResponse.json([
           { id: 1, name: "Christmas 2026", description: "Holiday gifts", owner_id: 1, created_at: "2026-01-01", updated_at: "2026-01-01" },
           { id: 2, name: "Birthdays", description: null, owner_id: 1, created_at: "2026-01-01", updated_at: "2026-01-01" },
@@ -33,7 +33,7 @@ describe("Occasions", () => {
       ),
     );
 
-    renderOccasions();
+    renderFolders();
 
     await waitFor(() => {
       expect(screen.getByText("Christmas 2026")).toBeInTheDocument();
@@ -42,44 +42,44 @@ describe("Occasions", () => {
     expect(screen.getByText("Birthdays")).toBeInTheDocument();
   });
 
-  it("creates an occasion and clears form", async () => {
+  it("creates a folder and clears form", async () => {
     server.use(
-      http.get(`${API}/occasions`, () => HttpResponse.json([])),
-      http.post(`${API}/occasions`, () =>
+      http.get(`${API}/folders`, () => HttpResponse.json([])),
+      http.post(`${API}/folders`, () =>
         HttpResponse.json(
-          { id: 3, name: "New Occasion", description: "", owner_id: 1, created_at: "2026-01-01", updated_at: "2026-01-01" },
+          { id: 3, name: "New Folder", description: "", owner_id: 1, created_at: "2026-01-01", updated_at: "2026-01-01" },
           { status: 201 }
         )
       ),
     );
 
-    renderOccasions();
+    renderFolders();
 
     await waitFor(() => {
-      expect(screen.getByPlaceholderText("Occasion name")).toBeInTheDocument();
+      expect(screen.getByPlaceholderText("Folder name")).toBeInTheDocument();
     });
 
-    await userEvent.type(screen.getByPlaceholderText("Occasion name"), "New Occasion");
+    await userEvent.type(screen.getByPlaceholderText("Folder name"), "New Folder");
     await userEvent.click(screen.getByText("Create"));
 
     await waitFor(() => {
-      expect(screen.getByPlaceholderText("Occasion name")).toHaveValue("");
+      expect(screen.getByPlaceholderText("Folder name")).toHaveValue("");
     });
   });
 
-  it("deletes an occasion", async () => {
+  it("deletes a folder", async () => {
     server.use(
-      http.get(`${API}/occasions`, () =>
+      http.get(`${API}/folders`, () =>
         HttpResponse.json([
           { id: 1, name: "To Delete", description: null, owner_id: 1, created_at: "2026-01-01", updated_at: "2026-01-01" },
         ])
       ),
-      http.delete(`${API}/occasions/1`, () =>
+      http.delete(`${API}/folders/1`, () =>
         new HttpResponse(null, { status: 204 })
       ),
     );
 
-    renderOccasions();
+    renderFolders();
 
     await waitFor(() => {
       expect(screen.getByText("To Delete")).toBeInTheDocument();
@@ -90,13 +90,13 @@ describe("Occasions", () => {
 
   it("shows empty state", async () => {
     server.use(
-      http.get(`${API}/occasions`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => HttpResponse.json([])),
     );
 
-    renderOccasions();
+    renderFolders();
 
     await waitFor(() => {
-      expect(screen.getByText("No occasions yet.")).toBeInTheDocument();
+      expect(screen.getByText("No folders yet.")).toBeInTheDocument();
     });
   });
 });

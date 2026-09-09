@@ -15,7 +15,6 @@ export interface AuthUser {
   email: string;
   name: string;
   role: string;
-  simple_mode: boolean;
 }
 
 // User (from API)
@@ -31,16 +30,18 @@ export interface User {
 
 // Gift Lists
 /**
- * How a shared list reached the viewer: a direct share from a person, or a grant
- * to a family they belong to. A list reachable both ways reports `kind: "user"`
+ * How a shared list reached the viewer: a direct share from a person, or the
+ * occasion it was shared to. A list reachable both ways reports `kind: "user"`
  * — the backend resolves that (NEU-1227), the client never re-derives it.
+ *
+ * A list is shared to an occasion, never to a family (project spec §5.1), so the
+ * occasion arm carries the family it belongs to rather than naming it directly.
  */
-export interface SharedVia {
-  kind: "user" | "family";
-  /** The sharing user, or the family — whichever `kind` names. */
-  id: number;
-  name: string;
-}
+export type SharedVia =
+  | { kind: "user"; id: number; name: string }
+  /** The family rides on the occasion arm and only there. It is not optional:
+   *  the backend refuses an occasion share that does not carry one. */
+  | { kind: "occasion"; id: number; name: string; family: FamilyRef };
 
 export interface GiftList {
   id: number;
@@ -65,14 +66,52 @@ export interface GiftList {
   /** Present only on a list in the `shared` scope — null on one the caller owns,
    * absent on a response cached from before the field existed. */
   shared_via?: SharedVia | null;
-  families?: FamilyRef[];
+  /** How many of the viewer's *own* claims on this list are still unbought —
+   * what the `• N to buy` badge counts (project spec §9.1).
+   *
+   * Optional here because this one interface serves both scopes: the backend
+   * declares it **required** on the viewer schema, so every row in the `shared`
+   * scope carries it, and omits it entirely from the owned schema, because an
+   * owner never sees a claim. Optional is the honest typing of that pair — not
+   * an invitation to treat a missing count as zero. */
+  my_unpurchased_claim_count?: number;
 }
 
-/** One family the list owner belongs to, and whether the list is shared with it. */
-export interface ListFamilyShareState {
+/**
+ * One occasion the list can be shared to, and whether it already is.
+ *
+ * `is_archived` is only ever true on an occasion the list is *already* shared
+ * to: archiving blocks new shares without withdrawing old ones, so the name
+ * still has to be displayable (project spec §5.4).
+ */
+export interface ShareTargetOccasion {
   id: number;
   name: string;
+  is_archived: boolean;
   shared: boolean;
+}
+
+/**
+ * One family the list's owner belongs to, with the occasions it can be shared
+ * to. An empty `occasions` is the "no active occasion" state — the family is
+ * still listed, disabled, with the reason given (project spec §5.2).
+ */
+export interface ShareTargetFamily {
+  id: number;
+  name: string;
+  occasions: ShareTargetOccasion[];
+}
+
+/**
+ * One occasion a claim can be filed under, as the viewer's list-detail payload
+ * carries it. `family` is not decoration: two families routinely both call an
+ * occasion "Christmas 2026", so the name alone does not identify one.
+ */
+export interface ClaimOccasion {
+  id: number;
+  name: string;
+  is_archived: boolean;
+  family: { id: number; name: string };
 }
 
 export interface Gift {
@@ -80,9 +119,18 @@ export interface Gift {
   name: string;
   description: string | null;
   url: string | null;
+  /** The *owner's* asking price. Public to every viewer, and never the same
+   * thing as what the claimer paid — see `amount_paid`. */
   price: string | null;
   claimed_by_id: number | null;
   claimed_at: string | null;
+  purchased_at: string | null;
+  /** What the **claimer** paid, and only ever legible to them: the claim these
+   * fields are flattened from is private, and no owner-facing response carries
+   * it (project spec §6.3). A string over the wire like `price`, because the
+   * backend serialises `Decimal` that way. Null is a first-class answer — the
+   * claimer skipped the amount — not a missing value to guess at. */
+  amount_paid: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -135,6 +183,16 @@ export interface GiftListDetailViewer {
   account_person_name: string | null;
   is_archived: boolean;
   gifts: Gift[];
+  /** The occasions a claim on this list would be filed under — the backend's
+   * `suggested` set (NEU-1269 spec §2). **Its length is the whole prompting
+   * rule**: 0 or 1 claims silently, 2+ asks once before the claim commits.
+   * Never present on the owner's payload, which carries no claim state at all. */
+  claim_candidates: ClaimOccasion[];
+  /** The wider `allowed` set, which a claim may also be filed under but which
+   * is not suggested — archived occasions, in practice. It rides along so the
+   * picker can offer past occasions without a second request; without it the
+   * correction path exists in the API and no UI can reach it (spec §3.5). */
+  claim_options: ClaimOccasion[];
   created_at: string;
   updated_at: string;
 }
@@ -169,8 +227,8 @@ export interface ListShare {
   created_at: string;
 }
 
-// Occasions
-export interface Occasion {
+// Folders
+export interface Folder {
   id: number;
   name: string;
   description: string | null;
@@ -180,7 +238,7 @@ export interface Occasion {
   updated_at: string;
 }
 
-export interface OccasionDetail {
+export interface FolderDetail {
   id: number;
   name: string;
   description: string | null;
@@ -189,6 +247,31 @@ export interface OccasionDetail {
   lists: GiftList[];
   created_at: string;
   updated_at: string;
+}
+
+// Occasions
+/**
+ * A family's shared gifting occasion — "Christmas 2026". The unit a list is
+ * shared *to*, owned by the family. Not a {@link Folder}, which is one user's
+ * private grouping of lists — see `docs/adr/0002-occasion-and-folder.md`.
+ */
+export interface Occasion {
+  id: number;
+  family_id: number;
+  name: string;
+  is_archived: boolean;
+  created_by_id: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * The create response. A second active occasion is allowed, so the backend
+ * reports whether the family already had one rather than refusing — a caller
+ * with no occasion list to hand can warn off this alone.
+ */
+export interface OccasionCreated extends Occasion {
+  has_other_active: boolean;
 }
 
 // Shared Users
@@ -200,9 +283,26 @@ export interface UrlMeta {
   image: string | null;
 }
 
-// Shopping List
-export interface ShoppingListItem {
-  id: number;
+// Shopping
+/**
+ * One line on a shopping tab: the viewer's own claim, and the gift it stands
+ * on. Both tabs — an occasion's and a folder's — serve the same shape from the
+ * same backend select, so one type covers them.
+ *
+ * **Only ever the viewer's own claims.** There is no parameter and no endpoint
+ * that returns anyone else's (`CONTEXT.md` rule 2, project spec §7).
+ *
+ * `price` is the *owner's* asking price and `amount_paid` is what the claimer
+ * actually spent; they are never interchangeable and neither is ever seeded
+ * from the other. Both are strings, like every money value on the wire.
+ *
+ * `claim_id` is what makes this tab the place a recorded amount can be
+ * corrected: `PATCH /claims/{id}` needs it, and the list-detail payload does
+ * not carry it (project spec §6.2).
+ */
+export interface ShoppingItem {
+  claim_id: number;
+  gift_id: number;
   name: string;
   description: string | null;
   url: string | null;
@@ -210,6 +310,58 @@ export interface ShoppingListItem {
   list_id: number;
   list_name: string;
   purchased_at: string | null;
+  amount_paid: string | null;
+}
+
+/**
+ * The budget line: the viewer's own target, what they have spent against it,
+ * and the counts underneath (project spec §7).
+ *
+ * **Only ever the viewer's own figures.** No endpoint aggregates spend across
+ * accounts, so there is nothing here that could be anyone else's
+ * (`CONTEXT.md` rule 2).
+ *
+ * `amount` and `remaining` are null when no budget is set — that null is what
+ * tells this app to offer *set* rather than *edit*, and the counts are worth
+ * rendering either way. `remaining` may be negative: a budget is a target, not
+ * a limit, and an overspend is a state to show plainly rather than an error.
+ *
+ * **The money total discloses its own incompleteness.** A purchase with no
+ * amount recorded counts toward `bought_count` and `unpriced_count` and never
+ * toward `spent`, so `unpriced_count` is what makes an understated total read
+ * as an understatement rather than as fact.
+ */
+export interface BudgetRollup {
+  amount: string | null;
+  spent: string;
+  remaining: string | null;
+  bought_count: number;
+  total_count: number;
+  unpriced_count: number;
+}
+
+/**
+ * A shopping tab, whole: the viewer's claims and the budget they count against.
+ *
+ * The rollup travels *with* the items rather than behind a second endpoint
+ * because the two are one screen and must agree — a budget line fetched
+ * separately can render a total the list beneath it contradicts.
+ */
+export interface ShoppingPayload {
+  budget: BudgetRollup;
+  items: ShoppingItem[];
+}
+
+/** A claim as its own claimer sees it — the body `PATCH /claims/{id}` returns.
+ *  Never handed to anyone else: the filing is private to the claimer, and the
+ *  list's owner sees no claim state at all. */
+export interface ClaimRead {
+  id: number;
+  gift_id: number;
+  occasion_id: number | null;
+  claimed_at: string;
+  purchased_at: string | null;
+  amount_paid: string | null;
 }
 
 // Invites (admin)
@@ -231,7 +383,7 @@ export interface FamilyMember { user_id: number; name: string; role: string; }
 export interface FamilyDetail { id: number; name: string; created_by_id: number; members: FamilyMember[]; }
 export interface FamilyRef { id: number; name: string; }
 export interface FamilyInvite {
-  id: number; family_id: number; email: string; role: string; simple_mode: boolean;
+  id: number; family_id: number; email: string; role: string;
   token: string; invited_by_id: number; expires_at: string;
   accepted_at: string | null; declined_at: string | null; created_at: string;
   status: "pending" | "accepted" | "declined" | "expired";

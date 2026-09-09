@@ -1,16 +1,17 @@
 import { useState, type FormEvent } from "react";
-import { Link, useParams, useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getFamily, renameFamily, deleteFamily, removeMember, updateMemberRole, createInvite, getInvites, revokeInvite } from "../api/families";
 import { useAuth } from "../hooks/useAuth";
 import { useTitle } from "../hooks/useTitle";
 import { Spinner } from "../components/Spinner";
+import { useNumericId } from "../components/NumericId";
+import { OccasionsSection } from "./family-detail/OccasionsSection";
 import toast from "react-hot-toast";
 import { isAxiosError } from "axios";
 
 export function FamilyDetail() {
-  const { id } = useParams();
-  const familyId = Number(id);
+  const familyId = useNumericId();
   const navigate = useNavigate();
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -21,13 +22,11 @@ export function FamilyDetail() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("member");
-  const [inviteSimpleMode, setInviteSimpleMode] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
 
   const family = useQuery({
     queryKey: ["family", familyId],
     queryFn: () => getFamily(familyId),
-    enabled: Number.isFinite(familyId),
   });
 
   useTitle(family.data?.name ?? "Family");
@@ -43,17 +42,16 @@ export function FamilyDetail() {
   const invites = useQuery({
     queryKey: ["family-invites", familyId],
     queryFn: () => getInvites(familyId),
-    enabled: isOrganizer && Number.isFinite(familyId),
+    enabled: isOrganizer,
   });
 
   const sendInviteMutation = useMutation({
-    mutationFn: (invite: { email: string; role: string; simple_mode: boolean }) =>
+    mutationFn: (invite: { email: string; role: string }) =>
       createInvite(familyId, invite),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["family-invites", familyId] });
       setInviteEmail("");
       setInviteRole("member");
-      setInviteSimpleMode(false);
       setInviteError(null);
     },
     onError: (err: unknown) => {
@@ -84,7 +82,6 @@ export function FamilyDetail() {
     sendInviteMutation.mutate({
       email: inviteEmail.trim(),
       role: inviteRole,
-      simple_mode: inviteSimpleMode,
     });
   }
 
@@ -224,6 +221,9 @@ export function FamilyDetail() {
         </ul>
       </section>
 
+      {/* Occasions — any member may create; renaming and archiving are organizer-only */}
+      <OccasionsSection familyId={familyId} familyName={f.name} isOrganizer={isOrganizer} />
+
       {/* Leave family */}
       <section>
         <button
@@ -270,21 +270,6 @@ export function FamilyDetail() {
                   Send Invite
                 </button>
               </div>
-              <label className="mt-2 flex items-start gap-2 text-sm text-gray-700">
-                <input
-                  type="checkbox"
-                  checked={inviteSimpleMode}
-                  onChange={(e) => setInviteSimpleMode(e.target.checked)}
-                  className="mt-0.5"
-                />
-                <span>
-                  Start them in simple mode
-                  <span className="block text-xs text-gray-500">
-                    Only applies to a new account. Someone who already has an account keeps
-                    the mode they are using.
-                  </span>
-                </span>
-              </label>
             </form>
             {inviteError && <p className="mt-2 text-sm text-red-600">{inviteError}</p>}
           </section>
@@ -301,7 +286,6 @@ export function FamilyDetail() {
                       <p className="text-sm text-gray-500">
                         <span className="capitalize">{invite.status}</span>
                         {` · ${invite.role === "organizer" ? "Organizer" : "Member"}`}
-                        {invite.simple_mode && " · Simple mode"}
                       </p>
                     </div>
                     {invite.status === "pending" && (

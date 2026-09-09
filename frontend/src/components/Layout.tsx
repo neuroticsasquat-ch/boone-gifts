@@ -46,9 +46,7 @@ export function Layout() {
   const unseenCount = unseenShares.data ?? 0;
   const familyInviteCount = familyInvites.data?.length ?? 0;
 
-  // One tab set, same labels and destinations at every screen size and in both
-  // modes. Simple mode is purely subtractive: it drops People, which moves into
-  // the account menu below.
+  // One tab set, same labels and destinations at every screen size.
   const tabs = [
     {
       to: "/lists",
@@ -65,7 +63,6 @@ export function Layout() {
       badgeCount: requestCount + familyInviteCount,
     },
   ];
-  const visibleTabs = user?.simple_mode ? tabs.filter((tab) => tab.to !== "/people") : tabs;
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -87,7 +84,7 @@ export function Layout() {
             <Link to="/lists" className="flex items-center gap-1.5 text-xl font-bold text-gray-900">
               <GiftIcon className="h-6 w-6" /> Boone Gifts
             </Link>
-            {visibleTabs.map(({ to, label, badgeCount }) => (
+            {tabs.map(({ to, label, badgeCount }) => (
               <Link key={to} to={to} className="hidden md:inline relative text-gray-600 hover:text-gray-900">
                 {label}
                 {badgeCount > 0 && (
@@ -117,11 +114,6 @@ export function Layout() {
                   <p className="text-sm font-medium text-gray-900 truncate">{user?.email}</p>
                 </div>
                 <div className="py-1">
-                  {user?.simple_mode && (
-                    <Link to="/people" onClick={() => setMenuOpen(false)} className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                      People
-                    </Link>
-                  )}
                   <Link to="/account" onClick={() => setMenuOpen(false)} className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
                     Account Settings
                   </Link>
@@ -157,7 +149,7 @@ export function Layout() {
       {/* Bottom tab bar — mobile only */}
       <nav className="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-200 md:hidden" aria-label="Mobile navigation">
         <div className="flex justify-around">
-          {visibleTabs.map(({ to, label, Icon, match, badgeCount }) => {
+          {tabs.map(({ to, label, Icon, match, badgeCount }) => {
             const active = match(location.pathname);
             return (
               <Link
