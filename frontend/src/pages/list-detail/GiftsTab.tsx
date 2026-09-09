@@ -5,6 +5,7 @@ import { isAxiosError } from "axios";
 import { createGift, updateGift, deleteGift, claimGift, unclaimGift, purchaseGift, unpurchaseGift } from "../../api/gifts";
 import { fetchUrlMeta } from "../../api/meta";
 import type { ClaimOccasion, GiftListDetailOwner, GiftListDetailViewer, GiftOwnerView, Gift } from "../../types";
+import { formatMoney } from "../../lib/money";
 import toast from "react-hot-toast";
 
 interface GiftsTabProps {
@@ -168,6 +169,7 @@ function ViewerGifts({
 // --- Shared Components ---
 
 function GiftInfo({ name, description, url, price }: { name: string; description: string | null; url: string | null; price: string | null }) {
+  const priceText = formatMoney(price);
   return (
     <div className="min-w-0 md:flex-1">
       <div className="flex items-baseline justify-between gap-3">
@@ -178,7 +180,7 @@ function GiftInfo({ name, description, url, price }: { name: string; description
         ) : (
           <p className="font-semibold text-gray-900 break-words">{name}</p>
         )}
-        {price && <span className="hidden md:inline text-sm text-gray-500 shrink-0">${price}</span>}
+        {priceText && <span className="hidden md:inline text-sm text-gray-500 shrink-0">{priceText}</span>}
       </div>
       {description && <p className="text-sm text-gray-500 break-words">{description}</p>}
     </div>
@@ -388,6 +390,7 @@ function OwnerGiftRow({
   queryClient: ReturnType<typeof useQueryClient>;
 }) {
   const [editing, setEditing] = useState(false);
+  const priceText = formatMoney(gift.price);
 
   if (editing) {
     return <EditGiftRow gift={gift} listId={listId} queryClient={queryClient} onDone={() => setEditing(false)} />;
@@ -397,7 +400,7 @@ function OwnerGiftRow({
     <li className="flex flex-col gap-2 px-4 py-3 md:flex-row md:items-center md:justify-between">
       <GiftInfo name={gift.name} description={gift.description} url={gift.url} price={gift.price} />
       <div className="flex items-center justify-between md:justify-end gap-2 shrink-0 md:ml-4">
-        {gift.price && <span className="text-sm text-gray-500 md:hidden">${gift.price}</span>}
+        {priceText && <span className="text-sm text-gray-500 md:hidden">{priceText}</span>}
         <div className="flex gap-2 ml-auto md:ml-0">
           <button
             onClick={() => setEditing(true)}
@@ -647,6 +650,8 @@ function ViewerGiftRow({
     );
   }
 
+  const priceText = formatMoney(gift.price);
+
   return (
     <li className={`px-4 py-2 ${rowStyle}`}>
       <div className="flex items-start justify-between gap-2">
@@ -659,7 +664,7 @@ function ViewerGiftRow({
           {actionButton}
         </div>
       </div>
-      {gift.price && <p className="text-xs text-gray-400 mt-0.5">${gift.price}</p>}
+      {priceText && <p className="text-xs text-gray-400 mt-0.5">{priceText}</p>}
       {/* Gated on `mustAsk` as well as `choosing`: a refetch — including the one
           the 400 handler fires — can drop the candidates below two while the
           picker is open, and a picker with nothing left to choose strands the
@@ -868,6 +873,8 @@ function PurchaseControl({
   }
 
   const amountFieldId = `purchase-amount-${gift.id}`;
+  const paidText = formatMoney(gift.amount_paid);
+  const priceText = formatMoney(gift.price);
 
   return (
     <div className="mt-1">
@@ -883,8 +890,8 @@ function PurchaseControl({
           Bought
         </label>
         {isPurchased &&
-          (gift.amount_paid ? (
-            <span className="text-xs text-gray-600">you paid ${gift.amount_paid}</span>
+          (paidText ? (
+            <span className="text-xs text-gray-600">you paid {paidText}</span>
           ) : (
             // An understated total must read as an understatement, never as
             // fact (project spec §7).
@@ -908,7 +915,7 @@ function PurchaseControl({
             />
             {/* The owner's asking price, as a hint beside the field and never
                 inside it (project spec §6.3). */}
-            {gift.price && <span className="text-xs text-gray-400">listed at ${gift.price}</span>}
+            {priceText && <span className="text-xs text-gray-400">listed at {priceText}</span>}
           </div>
           <div className="flex gap-2">
             <button

@@ -332,6 +332,30 @@ describe("Gift list item responsive layout", () => {
     const prices = await screen.findAllByText("$15.00");
     expect(prices.length).toBeGreaterThanOrEqual(1);
   });
+
+  it("pads a price that arrives with fewer than two decimals", async () => {
+    // The fixtures above all carry two decimals already, so they pass with or
+    // without the shared formatter. This one does not: `19.5` reaching a row
+    // that hardcodes a `$` reads `$19.5`, which is the whole reason
+    // `formatMoney` exists (NEU-1272, project spec §14 open question 1).
+    server.use(
+      http.get(`${API}/lists/1`, () =>
+        HttpResponse.json({
+          ...viewerListDetail,
+          gifts: [{ id: 10, name: "Short Price Gift", description: null, url: null, price: "19.5", claimed_by_id: null }],
+        }),
+      ),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => HttpResponse.json([])),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
+    );
+
+    renderListDetail(viewerToken);
+
+    // The positive assertion is the whole guard: without the formatter the row
+    // renders "$19.5", which does not match this exact-text query.
+    expect(await screen.findAllByText("$19.50")).not.toHaveLength(0);
+  });
 });
 
 describe("ListDetail — no tab bar", () => {

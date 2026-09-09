@@ -92,7 +92,8 @@ src/
                      # FolderPicker (the ⋯ menu's "Add to a folder…")
   lib/               # attribution.ts, recipient.ts, list-for.ts — who a list is for,
                      # and how that reads on a row; occasion-choice.ts — the
-                     # sharing control's one-, several-, no-occasion rule
+                     # sharing control's one-, several-, no-occasion rule;
+                     # money.ts — formatMoney, the one place money becomes text
   types/index.ts     # Types mirroring the backend Pydantic schemas
   test/
     setup.ts         # Vitest setup (Testing Library + MSW)
@@ -212,9 +213,11 @@ purchase controls from the viewer branch alone.
 
 **`amount_paid` is what the *claimer* paid; `price` is the *owner's* asking price.** They are never
 interchangeable. Both arrive as **strings**, because the backend serialises `Decimal` that way
-(Pydantic v2 default), already at the column's two-decimal scale — so both render as-is. Anywhere a
-number is actually needed, coerce with `Number(...)`, as the viewer's price sort already does. There
-is no shared money formatter yet; project spec §14 open question 1 hands that to the budgets ticket.
+(Pydantic v2 default). Anywhere a number is actually needed, coerce with `Number(...)`, as the
+viewer's price sort already does. **Anywhere one is displayed, go through `formatMoney`**
+(`src/lib/money.ts`) — never a hardcoded `$` before a raw value. It pads short decimals, groups
+thousands, and returns `null` for absent/blank/unparseable so the call site can guard its markup on
+the formatted value. Currency is single and implicit (ADR 0003).
 
 `PurchaseControl` (in `GiftsTab.tsx`) is the tick and the amount prompt:
 

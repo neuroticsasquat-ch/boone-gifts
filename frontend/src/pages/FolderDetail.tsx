@@ -16,6 +16,7 @@ import { useTitle } from "../hooks/useTitle";
 import toast from "react-hot-toast";
 import { Spinner } from "../components/Spinner";
 import { ListAttributionLine } from "../components/ListAttribution";
+import { formatMoney } from "../lib/money";
 
 export function FolderDetail() {
   const { id } = useParams();
@@ -408,6 +409,7 @@ function ShoppingList({ folderId }: { folderId: number }) {
           <ul className="divide-y divide-gray-100">
             {listItems.map((item) => {
               const isPurchased = item.purchased_at !== null;
+              const priceText = formatMoney(item.price);
               return (
                 <li key={item.id} className={`flex items-start gap-3 px-4 py-3 ${isPurchased ? "bg-gray-50" : ""}`}>
                   <input
@@ -434,9 +436,9 @@ function ShoppingList({ folderId }: { folderId: number }) {
                           {item.name}
                         </span>
                       )}
-                      {item.price && (
+                      {priceText && (
                         <span className={`text-sm ${isPurchased ? "text-gray-400" : "text-gray-500"}`}>
-                          ${item.price}
+                          {priceText}
                         </span>
                       )}
                     </div>

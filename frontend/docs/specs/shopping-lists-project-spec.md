@@ -592,11 +592,12 @@ without amounts; budgets over, under and exactly at target. Keep it working as t
 
 Resolve these in the owning ticket's `/planit`, not by guessing:
 
-1. **Currency.** There is no currency handling in either repo: `Decimal` serializes to a JSON string
-   (Pydantic v2 default, hence `price: string | null` in the TS types) and every display site
-   hardcodes a literal `$`. Budgets make this visible. At minimum this project adds one shared
-   formatting helper used by every money site; whether it also adds a stored currency is the call to
-   make in the ticket that introduces `budgets`.
+1. ~~**Currency.**~~ **Resolved 2026-09-09** in NEU-1272: one shared formatter,
+   `src/lib/money.ts`, and **every** money site goes through it — the existing `gifts.price`
+   displays included, which were rendering correctly only because the column round-trips two
+   decimals. **No stored currency**: it stays single and implicit (US dollars), because nothing in
+   the product offers a choice and a computed budget total is the case that actually needed fixing.
+   See frontend `docs/adr/0003-money-is-formatted-in-one-place.md`.
 2. ~~**Where claim candidates are exposed.**~~ **Resolved 2026-09-08** in NEU-1269's `/planit`:
    `claim_candidates` and `claim_options` ride on the viewer list-detail payload (§10.4), and the
    `allowed`/`suggested` split is settled in §6.2. See

@@ -200,6 +200,40 @@ describe("FolderDetail", () => {
     expect(screen.getByText("Book")).toBeInTheDocument();
   });
 
+  it("pads a shopping-list price that arrives with fewer than two decimals", async () => {
+    // The shopping list is the second site the shared formatter converted
+    // (NEU-1272), and the fixtures above all carry two decimals already, so
+    // they pass with or without it. This one does not.
+    const shoppingItems = [
+      {
+        id: 1,
+        name: "Lego Set",
+        description: null,
+        url: null,
+        price: "19.5",
+        list_id: 10,
+        list_name: "My Wishlist",
+        purchased_at: null,
+      },
+    ];
+
+    server.use(
+      http.get(`${API}/folders/1`, () => HttpResponse.json(sampleFolder)),
+      http.get(`${API}/lists`, () => HttpResponse.json([])),
+      http.get(`${API}/folders/1/shopping-list`, () => HttpResponse.json(shoppingItems)),
+    );
+
+    renderFolderDetail();
+
+    await waitFor(() => {
+      expect(screen.getByText("Christmas 2026")).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByText("My Shopping List"));
+
+    expect(await screen.findByText("$19.50")).toBeInTheDocument();
+  });
+
   it("toggles purchase status on checkbox click", async () => {
     const shoppingItems = [
       {
