@@ -1,5 +1,5 @@
 import { apiClient } from "./client";
-import type { GiftList, Occasion, OccasionCreated } from "../types";
+import type { GiftList, Occasion, OccasionCreated, ShoppingItem } from "../types";
 
 export async function getFamilyOccasions(
   familyId: number,
@@ -45,5 +45,23 @@ export async function updateOccasion(
  */
 export async function getOccasionLists(id: number): Promise<GiftList[]> {
   const response = await apiClient.get<GiftList[]>(`/occasions/${id}/lists`);
+  return response.data;
+}
+
+/**
+ * This occasion's shopping tab: the caller's own claims **filed under** it,
+ * grouped by list in a stable order.
+ *
+ * Keyed on the stored filing alone, so a claim whose list was later unshared —
+ * or whose occasion was archived — stays on the tab it was filed under. Filing
+ * is stored rather than derived precisely so a budget cannot rewrite its own
+ * history (project spec §6.2), and an archived occasion still serves its
+ * shopping payload.
+ *
+ * **Only ever the caller's own claims.** There is no parameter, no admin path
+ * and no aggregate here that returns anyone else's.
+ */
+export async function getOccasionShopping(id: number): Promise<ShoppingItem[]> {
+  const response = await apiClient.get<ShoppingItem[]>(`/occasions/${id}/shopping`);
   return response.data;
 }

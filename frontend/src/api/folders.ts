@@ -1,5 +1,5 @@
 import { apiClient } from "./client";
-import type { Folder, FolderDetail, ShoppingListItem } from "../types";
+import type { Folder, FolderDetail, ShoppingItem } from "../types";
 
 export async function getFolders(archived?: boolean): Promise<Folder[]> {
   const params = archived !== undefined ? { archived: String(archived) } : undefined;
@@ -42,7 +42,19 @@ export async function getFolderIdsForList(listId: number): Promise<number[]> {
   return response.data;
 }
 
-export async function getShoppingList(folderId: number): Promise<ShoppingListItem[]> {
-  const response = await apiClient.get<ShoppingListItem[]>(`/folders/${folderId}/shopping-list`);
+/**
+ * This folder's shopping tab: the caller's own claims on gifts in the lists the
+ * folder holds, grouped by list in a stable order.
+ *
+ * Scoped by folder membership rather than by a claim's filing, which is what
+ * makes a folder the only route to a claim on a directly-shared list — that
+ * claim belongs to no occasion and so appears on no occasion's tab
+ * (project spec §9.4).
+ *
+ * Replaces `/folders/{id}/shopping-list`, which read `gifts.claimed_by_id`; the
+ * claim moved onto its own table in M4 and that endpoint went with it.
+ */
+export async function getFolderShopping(folderId: number): Promise<ShoppingItem[]> {
+  const response = await apiClient.get<ShoppingItem[]>(`/folders/${folderId}/shopping`);
   return response.data;
 }

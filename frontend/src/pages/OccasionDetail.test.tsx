@@ -70,10 +70,12 @@ function renderOccasion({
   userId = 1,
   occasionResponse = HttpResponse.json(occasion),
   lists = [list()],
+  shopping = [],
 }: {
   userId?: number;
   occasionResponse?: Response;
   lists?: ReturnType<typeof list>[];
+  shopping?: Record<string, unknown>[];
 } = {}) {
   server.use(
     http.post(`${API}/auth/refresh`, () =>
@@ -81,6 +83,7 @@ function renderOccasion({
     ),
     http.get(`${API}/occasions/3`, () => occasionResponse.clone()),
     http.get(`${API}/occasions/3/lists`, () => HttpResponse.json(lists)),
+    http.get(`${API}/occasions/3/shopping`, () => HttpResponse.json(shopping)),
     http.get(`${API}/families/7`, () => HttpResponse.json(family))
   );
 
@@ -129,13 +132,64 @@ describe("OccasionDetail", () => {
     expect(await screen.findByText("No lists are shared to this occasion yet.")).toBeInTheDocument();
   });
 
-  it("ships the tab bar with Lists alone", async () => {
+  it("ships the tab bar with Lists and My shopping, Lists first", async () => {
     renderOccasion();
 
     const tabs = await screen.findAllByRole("tab");
-    expect(tabs).toHaveLength(1);
-    expect(tabs[0]).toHaveTextContent("Lists");
+    expect(tabs.map((tab) => tab.textContent)).toEqual(["Lists", "My shopping"]);
     expect(tabs[0]).toHaveAttribute("aria-selected", "true");
+  });
+
+  // The tab's own behaviour is `components/MyShopping.test.tsx`; what belongs
+  // here is that the occasion page scopes it to *this occasion*.
+  it("scopes My shopping to the claims filed under this occasion", async () => {
+    renderOccasion({
+      shopping: [
+        {
+          claim_id: 100,
+          gift_id: 20,
+          name: "Running shoes",
+          description: null,
+          url: null,
+          price: "85.00",
+          list_id: 10,
+          list_name: "Jane's Wishlist",
+          purchased_at: "2026-09-01T00:00:00Z",
+          amount_paid: "85.00",
+        },
+      ],
+    });
+
+    await userEvent.click(await screen.findByRole("tab", { name: "My shopping" }));
+
+    expect(await screen.findByText("Running shoes")).toBeInTheDocument();
+    expect(screen.getByText("you paid $85.00")).toBeInTheDocument();
+  });
+
+  // Archiving takes an occasion out of the default views and does nothing else
+  // — the claims filed under it are still the claimer's to finish shopping for.
+  it("serves My shopping on an archived occasion too", async () => {
+    renderOccasion({
+      occasionResponse: HttpResponse.json({ ...occasion, is_archived: true }),
+      shopping: [
+        {
+          claim_id: 101,
+          gift_id: 21,
+          name: "Puzzle",
+          description: null,
+          url: null,
+          price: "18.00",
+          list_id: 11,
+          list_name: "Gran's List",
+          purchased_at: null,
+          amount_paid: null,
+        },
+      ],
+    });
+
+    await userEvent.click(await screen.findByRole("tab", { name: "My shopping" }));
+
+    expect(await screen.findByText("Puzzle")).toBeInTheDocument();
   });
 
   it("renames the occasion from the organizer's menu", async () => {

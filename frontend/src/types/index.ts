@@ -274,9 +274,26 @@ export interface UrlMeta {
   image: string | null;
 }
 
-// Shopping List
-export interface ShoppingListItem {
-  id: number;
+// Shopping
+/**
+ * One line on a shopping tab: the viewer's own claim, and the gift it stands
+ * on. Both tabs — an occasion's and a folder's — serve the same shape from the
+ * same backend select, so one type covers them.
+ *
+ * **Only ever the viewer's own claims.** There is no parameter and no endpoint
+ * that returns anyone else's (`CONTEXT.md` rule 2, project spec §7).
+ *
+ * `price` is the *owner's* asking price and `amount_paid` is what the claimer
+ * actually spent; they are never interchangeable and neither is ever seeded
+ * from the other. Both are strings, like every money value on the wire.
+ *
+ * `claim_id` is what makes this tab the place a recorded amount can be
+ * corrected: `PATCH /claims/{id}` needs it, and the list-detail payload does
+ * not carry it (project spec §6.2).
+ */
+export interface ShoppingItem {
+  claim_id: number;
+  gift_id: number;
   name: string;
   description: string | null;
   url: string | null;
@@ -284,6 +301,19 @@ export interface ShoppingListItem {
   list_id: number;
   list_name: string;
   purchased_at: string | null;
+  amount_paid: string | null;
+}
+
+/** A claim as its own claimer sees it — the body `PATCH /claims/{id}` returns.
+ *  Never handed to anyone else: the filing is private to the claimer, and the
+ *  list's owner sees no claim state at all. */
+export interface ClaimRead {
+  id: number;
+  gift_id: number;
+  occasion_id: number | null;
+  claimed_at: string;
+  purchased_at: string | null;
+  amount_paid: string | null;
 }
 
 // Invites (admin)

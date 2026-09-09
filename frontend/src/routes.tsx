@@ -13,6 +13,7 @@ import { ListDetail } from "./pages/ListDetail";
 import { People } from "./pages/People";
 import { ConnectionProfile } from "./pages/ConnectionProfile";
 import { FamilyDetail } from "./pages/FamilyDetail";
+import { FolderDetail } from "./pages/FolderDetail";
 import { OccasionDetail } from "./pages/OccasionDetail";
 import { AcceptFamilyInvite } from "./pages/AcceptFamilyInvite";
 import { Account } from "./pages/Account";
@@ -54,6 +55,10 @@ export const routes: RouteObject[] = [
           { path: "people/families/:id", element: <FamilyDetail /> },
           { path: "people/:id", element: <ConnectionProfile /> },
           { path: "occasions/:id", element: <OccasionDetail /> },
+          // A folder page, but no folder *index*: the folder filter on /lists is
+          // where a user meets the concept, and NEU-1277's Group by is what
+          // links here. `Folders.tsx` stays unrouted.
+          { path: "folders/:id", element: <FolderDetail /> },
           { path: "account", element: <Account /> },
           {
             path: "admin",

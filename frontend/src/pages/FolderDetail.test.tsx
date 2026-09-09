@@ -30,7 +30,7 @@ function renderFolderDetail(id = "1") {
       <MemoryRouter initialEntries={[`/folders/${id}`]}>
         <Routes>
           <Route path="/folders/:id" element={<FolderDetail />} />
-          <Route path="/folders" element={<div>Folders List</div>} />
+          <Route path="/lists" element={<div>Lists</div>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>
@@ -134,146 +134,62 @@ describe("FolderDetail", () => {
     });
   });
 
-  it("switches to shopping list view and shows empty state", async () => {
+  it("carries the same two tabs the occasion page does, Lists first", async () => {
     server.use(
       http.get(`${API}/folders/1`, () => HttpResponse.json(sampleFolder)),
       http.get(`${API}/lists`, () => HttpResponse.json([])),
-      http.get(`${API}/folders/1/shopping-list`, () => HttpResponse.json([])),
     );
 
     renderFolderDetail();
 
-    await waitFor(() => {
-      expect(screen.getByText("Christmas 2026")).toBeInTheDocument();
-    });
-
-    await userEvent.click(screen.getByText("My Shopping List"));
-
-    await waitFor(() => {
-      expect(screen.getByText("No claimed gifts in this folder.")).toBeInTheDocument();
-    });
+    const tabs = await screen.findAllByRole("tab");
+    expect(tabs.map((tab) => tab.textContent)).toEqual(["Lists", "My shopping"]);
+    expect(tabs[0]).toHaveAttribute("aria-selected", "true");
   });
 
-  it("shows shopping list items grouped by list and summary count", async () => {
-    const shoppingItems = [
-      {
-        id: 1,
-        name: "Lego Set",
-        description: "Great fun",
-        url: "https://lego.com",
-        price: "49.99",
-        list_id: 10,
-        list_name: "My Wishlist",
-        purchased_at: null,
-      },
-      {
-        id: 2,
-        name: "Book",
-        description: null,
-        url: null,
-        price: "14.99",
-        list_id: 10,
-        list_name: "My Wishlist",
-        purchased_at: "2026-01-10T00:00:00",
-      },
-    ];
-
+  // The tab's own behaviour is `components/MyShopping.test.tsx`; what belongs
+  // here is that the folder page scopes it to *this folder*, which is the whole
+  // difference between the two pages that mount it.
+  it("scopes My shopping to this folder's own claims", async () => {
     server.use(
       http.get(`${API}/folders/1`, () => HttpResponse.json(sampleFolder)),
       http.get(`${API}/lists`, () => HttpResponse.json([])),
-      http.get(`${API}/folders/1/shopping-list`, () => HttpResponse.json(shoppingItems)),
-    );
-
-    renderFolderDetail();
-
-    await waitFor(() => {
-      expect(screen.getByText("Christmas 2026")).toBeInTheDocument();
-    });
-
-    await userEvent.click(screen.getByText("My Shopping List"));
-
-    await waitFor(() => {
-      expect(screen.getByText("1 of 2 purchased")).toBeInTheDocument();
-    });
-    expect(screen.getByText("My Wishlist")).toBeInTheDocument();
-    expect(screen.getByText("Lego Set")).toBeInTheDocument();
-    expect(screen.getByText("Book")).toBeInTheDocument();
-  });
-
-  it("pads a shopping-list price that arrives with fewer than two decimals", async () => {
-    // The shopping list is the second site the shared formatter converted
-    // (NEU-1272), and the fixtures above all carry two decimals already, so
-    // they pass with or without it. This one does not.
-    const shoppingItems = [
-      {
-        id: 1,
-        name: "Lego Set",
-        description: null,
-        url: null,
-        price: "19.5",
-        list_id: 10,
-        list_name: "My Wishlist",
-        purchased_at: null,
-      },
-    ];
-
-    server.use(
-      http.get(`${API}/folders/1`, () => HttpResponse.json(sampleFolder)),
-      http.get(`${API}/lists`, () => HttpResponse.json([])),
-      http.get(`${API}/folders/1/shopping-list`, () => HttpResponse.json(shoppingItems)),
-    );
-
-    renderFolderDetail();
-
-    await waitFor(() => {
-      expect(screen.getByText("Christmas 2026")).toBeInTheDocument();
-    });
-
-    await userEvent.click(screen.getByText("My Shopping List"));
-
-    expect(await screen.findByText("$19.50")).toBeInTheDocument();
-  });
-
-  it("toggles purchase status on checkbox click", async () => {
-    const shoppingItems = [
-      {
-        id: 1,
-        name: "Lego Set",
-        description: null,
-        url: null,
-        price: null,
-        list_id: 10,
-        list_name: "My Wishlist",
-        purchased_at: null,
-      },
-    ];
-
-    server.use(
-      http.get(`${API}/folders/1`, () => HttpResponse.json(sampleFolder)),
-      http.get(`${API}/lists`, () => HttpResponse.json([])),
-      http.get(`${API}/folders/1/shopping-list`, () => HttpResponse.json(shoppingItems)),
-      http.post(`${API}/lists/10/gifts/1/purchase`, () =>
-        HttpResponse.json({ ...shoppingItems[0], purchased_at: "2026-01-10T00:00:00" })
+      http.get(`${API}/folders/1/shopping`, () =>
+        HttpResponse.json([
+          {
+            claim_id: 100,
+            gift_id: 1,
+            name: "Lego Set",
+            description: null,
+            url: null,
+            price: "49.99",
+            list_id: 10,
+            list_name: "My Wishlist",
+            purchased_at: null,
+            amount_paid: null,
+          },
+        ])
       ),
     );
 
     renderFolderDetail();
 
-    await waitFor(() => {
-      expect(screen.getByText("Christmas 2026")).toBeInTheDocument();
-    });
+    await userEvent.click(await screen.findByRole("tab", { name: "My shopping" }));
 
-    await userEvent.click(screen.getByText("My Shopping List"));
+    expect(await screen.findByText("Lego Set")).toBeInTheDocument();
+    expect(screen.getByText("listed at $49.99")).toBeInTheDocument();
+  });
 
-    await waitFor(() => {
-      expect(screen.getByLabelText(/Mark "Lego Set" as purchased/)).toBeInTheDocument();
-    });
+  // Folders have no index page, so back cannot mean one.
+  it("heads back to the lists rather than a folder index", async () => {
+    server.use(
+      http.get(`${API}/folders/1`, () => HttpResponse.json(sampleFolder)),
+      http.get(`${API}/lists`, () => HttpResponse.json([])),
+    );
 
-    await userEvent.click(screen.getByLabelText(/Mark "Lego Set" as purchased/));
+    renderFolderDetail();
 
-    await waitFor(() => {
-      expect(screen.queryByText("Failed to mark as purchased.")).not.toBeInTheDocument();
-    });
+    expect(await screen.findByRole("link", { name: /Lists/ })).toHaveAttribute("href", "/lists");
   });
 
   it("attributes folder lists the same way every other list view does", async () => {

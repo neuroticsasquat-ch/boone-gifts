@@ -45,9 +45,9 @@ describe("routes", () => {
     expect(router.state.location.pathname).toBe("/lists");
   });
 
-  // `/folders*` are the renamed `Folders` / `FolderDetail` pages, which stay
-  // unrouted until the folder page is given a home.
-  it.each(["/family-lists", "/families", "/families/1", "/folders", "/folders/1", "/connections"])(
+  // `/folders` stays unrouted: `Folders.tsx` was retired with the nav project
+  // and the folder filter on /lists is where a user meets the concept now.
+  it.each(["/family-lists", "/families", "/families/1", "/folders", "/connections"])(
     "no longer matches the retired route %s",
     (path) => {
       const router = renderAt(path);
@@ -58,11 +58,16 @@ describe("routes", () => {
 
   // `/occasions/:id` is back, and means a *family's* occasion now — the folder
   // pages took the old meaning of the word with them (frontend ADR 0002).
-  it.each(["/lists", "/people", "/people/1", "/people/families/1", "/occasions/1"])(
-    "still matches %s",
-    (path) => {
-      const router = renderAt(path);
-      expect(router.state.errors).toBeNull();
-    }
-  );
+  // `/folders/:id` is routed at last (NEU-1274), the index page still is not.
+  it.each([
+    "/lists",
+    "/people",
+    "/people/1",
+    "/people/families/1",
+    "/occasions/1",
+    "/folders/1",
+  ])("still matches %s", (path) => {
+    const router = renderAt(path);
+    expect(router.state.errors).toBeNull();
+  });
 });

@@ -10,15 +10,19 @@ import { useTitle } from "../hooks/useTitle";
 import { Spinner } from "../components/Spinner";
 import { HeaderMenu } from "../components/HeaderMenu";
 import { ListAttributionLine, RecipientLine } from "../components/ListAttribution";
+import { MyShopping } from "../components/MyShopping";
+import { TabBar } from "../components/TabBar";
 import type { Occasion } from "../types";
 
 /**
- * The tabs the occasion page carries. **Lists** is the whole set today; **My
- * shopping** joins it in M5 (project spec §9.2), which is why the bar is driven
- * by this array and the body by the active key — adding the second tab is an
- * entry here plus its panel, not a reshaping of the page.
+ * The tabs the occasion page carries (project spec §9.2). The bar is driven by
+ * this array and the body by the active key, which is what made **My shopping**
+ * an entry here plus its panel rather than a reshaping of the page.
  */
-const TABS = [{ key: "lists", label: "Lists" }] as const;
+const TABS = [
+  { key: "lists", label: "Lists" },
+  { key: "shopping", label: "My shopping" },
+] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
 
@@ -104,23 +108,13 @@ function OccasionPage({ occasion }: { occasion: Occasion }) {
 
       <OccasionHeader occasion={occasion} isOrganizer={isOrganizer} />
 
-      <div className="flex gap-3" role="tablist" aria-label="Occasion sections">
-        {TABS.map(({ key, label }) => (
-          <button
-            key={key}
-            role="tab"
-            aria-selected={tab === key}
-            onClick={() => setTab(key)}
-            className={`rounded px-4 py-2 text-sm font-medium transition-colors ${
-              tab === key ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <TabBar tabs={TABS} active={tab} onSelect={setTab} label="Occasion sections" />
 
-      {tab === "lists" && <ListsTab occasionId={occasion.id} />}
+      {tab === "lists" ? (
+        <ListsTab occasionId={occasion.id} />
+      ) : (
+        <MyShopping scope={{ kind: "occasion", id: occasion.id }} />
+      )}
     </div>
   );
 }

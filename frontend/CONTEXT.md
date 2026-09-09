@@ -13,9 +13,10 @@ architecture live in [`AGENTS.md`](AGENTS.md); this file is only about what the 
 | **for Beth** | This list is kept for a person with no account | `components/ListAttribution.tsx`, `lib/attribution.ts` |
 | **People** | Connections and families together — everyone I share with | `pages/People.tsx` |
 | **Family** | A named group of people. A list reaches one **through an occasion of that family**, never the family itself | `pages/FamilyDetail.tsx` |
-| **Folder** | My saved grouping of lists — "Christmas 2026". Was called a *collection*, then an *occasion* | `pages/Folder*.tsx` |
+| **Folder** | My saved grouping of lists — "Christmas 2026". Was called a *collection*, then an *occasion*. Has a page (`/folders/:id`) but no index | `pages/FolderDetail.tsx` |
 | **Occasion** | A family's shared gifting occasion — "Christmas 2026". The unit a list is shared *to*, and the only thing that makes a family shareable | `pages/OccasionDetail.tsx`, `pages/family-detail/OccasionsSection.tsx`, `lib/occasion-choice.ts` |
 | **Claim** / "I'll get this" | My private intent to buy a gift. Never visible to the list's owner | `pages/list-detail/GiftsTab.tsx` |
+| **My shopping** | Everything *I* have claimed within one occasion or one folder — what I still have to buy, what I bought, and what I paid. Never anyone else's, in any aggregate | `components/MyShopping.tsx` |
 | **Account person** | A named person on a shared login; a list can be marked as being for one | `components/ListForFields.tsx` |
 
 Words the UI must **not** use: "collection" (rejected outright — it reads too close to "connection"),
@@ -31,9 +32,11 @@ behaviour).
 1. **The backend is always the gate.** Hidden or read-only controls are a courtesy, never a
    permission. Anything the UI hides is also refused server-side.
 
-2. **Owners are blind to claims.** No screen, count, badge, or error message may reveal claim state
-   on a list the viewer owns — including the revoke-a-share dialog, which offers a choice
-   without naming gifts, claimers, or counts.
+2. **Owners are blind to claims, and no user sees another's.** No screen, count, badge, or error
+   message may reveal claim state on a list the viewer owns — including the revoke-a-share dialog,
+   which offers a choice without naming gifts, claimers, or counts. The **My shopping** tabs are the
+   same rule seen from the other side: they show only the viewer's own claims, and no endpoint
+   behind them takes a parameter that could widen that.
 
 3. **Source is a label, not a destination.** How a list reached the viewer is rendered on the row.
    It never becomes its own page, tab, or filter-by-default.

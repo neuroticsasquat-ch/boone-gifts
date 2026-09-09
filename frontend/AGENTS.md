@@ -61,7 +61,9 @@ src/
     families.ts      # 13 functions — see "Families" below
     account.ts       # GET/PUT /account — the shared-account flag and its people
     occasions.ts     # A family's occasions: list, read, create, rename/archive,
-                     # and the lists shared to one
+                     # the lists shared to one, and its shopping payload
+    claims.ts        # updateClaim — PATCH /claims/{id}, the only way to correct
+                     # a recorded amount without re-stamping the purchase
     connections.ts, shares.ts, folders.ts, invites.ts, users.ts, meta.ts
   contexts/AuthContext.tsx   # Access token in memory, silent refresh on mount
   hooks/             # useAuth, useTitle
@@ -76,14 +78,20 @@ src/
     ActionableBanner.tsx  # Pending connection requests + family invites, accept/decline
                           # inline. The one implementation; renders nothing when empty
     ListAttribution.tsx   # "from Jane" / "for Beth · kept by Tom" row lines
+    MyShopping.tsx        # The My shopping tab both the occasion and folder
+                          # pages mount — the viewer's own claims, grouped by
+                          # list, with the purchase tick and what they paid
+    TabBar.tsx            # The Lists · My shopping bar those two pages share
     ListForFields.tsx     # "Who is this list for?" — the shared-account picker,
                           # falling back to RecipientFields on a normal account
     RecipientFields.tsx   # The "this list is for someone else" control
-  pages/             # One per route (see table below), plus Folders.tsx and
-                     # FolderDetail.tsx — still unrouted; the Lists page's
-                     # folder filter and list detail's "Add to a folder…"
-                     # are where a user meets the concept now
-    OccasionDetail.tsx  # /occasions/:id — a family occasion and its lists
+  pages/             # One per route (see table below), plus Folders.tsx — the
+                     # folder *index*, still unrouted; the Lists page's folder
+                     # filter and list detail's "Add to a folder…" are where a
+                     # user meets the concept
+    OccasionDetail.tsx  # /occasions/:id — a family occasion, its lists, and
+                        # the viewer's own shopping for it
+    FolderDetail.tsx    # /folders/:id — the same two tabs for a user's folder
     family-detail/   # OccasionsSection (the family's occasions, its create
                      # action, and the organizer-only rename and archive)
     list-detail/     # GiftsTab (the page body), SharingSummary (the header's
@@ -116,7 +124,8 @@ src/
 | `/people` | `People` | The People tab: families, then individuals, under the actionable banner |
 | `/people/:id` | `ConnectionProfile` | |
 | `/people/families/:id` | `FamilyDetail` | Members, occasions, invites, rename, delete, leave |
-| `/occasions/:id` | `OccasionDetail` | A family occasion: header, tab bar (**Lists** only until M5), and the lists shared to it. The `⋯` menu's rename and archive are organizer-only |
+| `/occasions/:id` | `OccasionDetail` | A family occasion: header, tab bar (**Lists · My shopping**), and the lists shared to it. The `⋯` menu's rename and archive are organizer-only |
+| `/folders/:id` | `FolderDetail` | One user's folder, with the same two tabs. There is no `/folders` index — `Folders.tsx` stays unrouted, and NEU-1277's Group by is what will link here |
 | `/account` | `Account` | Via the user menu |
 | `/admin/invites`, `/admin/users` | `AdminInvites`, `AdminUsers` | Admin-only |
 
@@ -152,11 +161,12 @@ occasions sit behind the same in-page toggle the Lists page uses, carrying **Una
 never a one-way door; NEU-1278 replaces both toggles with one archive view.
 
 **The occasion page** (`pages/OccasionDetail.tsx`, `/occasions/:id`) is where an occasion is met on its
-own: its name and family in the header, a back link to `/people/families/:id`, and a tab bar. The bar
-ships with **Lists** alone — every list shared to the occasion that the viewer can see, from
+own: its name and family in the header, a back link to `/people/families/:id`, and a tab bar of
+**Lists · My shopping**. **Lists** is every list shared to the occasion that the viewer can see, from
 `/occasions/{id}/lists`, which filters by `can_view_list` so a list the viewer cannot see is *absent*
-rather than greyed. **My shopping** joins it in M5 (NEU-1274), which is why the bar is driven by a
-`TABS` array and the body by the active key. The `⋯` menu carries rename and archive, **organizer
+rather than greyed; **My shopping** is `components/MyShopping.tsx` scoped to this occasion. The bar is
+driven by a `TABS` array and the body by the active key, which is what made the second tab an entry
+plus a panel rather than a reshaping. The `⋯` menu carries rename and archive, **organizer
 only** and gated on the family's members exactly as the family page's controls are — the backend
 enforces both, so a 403 still has a message. An **archived** occasion renders like any other, carrying
 an Archived pill and offering Unarchive: archiving takes an occasion out of the default views and does
@@ -262,12 +272,40 @@ not regress, because it is nearly every claim.
   occasions, in practice. Without it the correction path exists in the API and no UI can reach it, and
   a January purchase could never be filed under the Christmas it was actually for.
 
-**Correcting an amount is untick-then-tick**, and there is deliberately no in-place edit. Post-hoc
-correction belongs to the occasion's shopping tab (project spec §6.2, NEU-1274), which has the
-`ClaimRead` id that `PATCH /claims/{id}` needs and the list-detail payload does not carry. An edit
-built on a second `POST /purchase` would also re-stamp `purchased_at` to today
-(`app/gifts/service.py` sets it unconditionally), silently moving a purchase across an occasion
-boundary.
+**On list detail, correcting an amount is untick-then-tick**, and there is deliberately no in-place
+edit there. Post-hoc correction belongs to the **shopping tabs** (project spec §6.2), which carry the
+`claim_id` that `PATCH /claims/{id}` needs and the list-detail payload does not. An edit built on a
+second `POST /purchase` would re-stamp `purchased_at` to today (`app/gifts/service.py` sets it
+unconditionally), silently moving a purchase across an occasion boundary — so `api/claims.ts` is the
+only path an amount edit takes.
+
+## My shopping
+
+`components/MyShopping.tsx` is the **My shopping** tab, mounted by both the occasion page and the
+folder page and scoped by a `ShoppingScope` — `{ kind: "occasion" | "folder", id }`. One component,
+because the two reads (`GET /occasions/{id}/shopping`, `GET /folders/{id}/shopping`) return the same
+`ShoppingItem[]` from the same backend select and differ only in what bounds the set: an occasion the
+claims are *filed under*, or a folder the claimed-from lists are *in*. Keyed `["shopping", kind, id]`.
+
+- **Only ever the viewer's own claims.** The endpoints take no parameter that could widen it, so this
+  is structural rather than a filter applied here (`CONTEXT.md` rule 2).
+- **Grouped on `list_id`, never on `list_name`** — two lists routinely share a name and grouping on
+  it would silently merge them under one heading. Order comes from the backend and is stable.
+- **Two amount paths, deliberately not one.** Ticking an unbought claim reveals the same prompt list
+  detail's `PurchaseControl` does — Save and Skip commit, the asking price is a "listed at $39" hint
+  beside the field and never inside it. A claim that is *already* bought is corrected in place
+  instead: **Add amount** / **Edit** opens the field and saves through `PATCH /claims/{id}`. Saving
+  it empty clears the amount; **Cancel** is the way out without changing anything.
+- **Both fields seed from the claimer's own `amount_paid` and from nothing else** — empty on a claim
+  never priced, and carrying the last answer on one that was unticked. Unticking leaves `amount_paid`
+  standing on the server so re-ticking need not retype it (project spec §10.4), and because a blank
+  field saves as an explicit `null`, a prompt that arrived blank would quietly destroy it.
+- An archived occasion still serves its shopping payload — archiving takes an occasion out of the
+  default views and does nothing else.
+- A change here invalidates `["list", listId]` too, because it is the same claim list detail renders.
+- **The budget line is a gap in the layout, not a design around one.** Project spec §9.2 puts it
+  directly above the groups and NEU-1276 is where it arrives; the tab is a vertical stack so
+  inserting it costs no reflow.
 
 ## Recipients
 
@@ -304,9 +342,12 @@ takes.
 
 A folder is a user's saved grouping of lists — called a "collection" until NEU-1229 and an
 "occasion" until NEU-1259, which vacated that word for a family's shared occasion (see
-`docs/adr/0002-occasion-and-folder.md`). It has **no top-level route** any more, so the **folder
-filter on `/lists` is the primary place a user meets the concept**, and it carries the explanation
-the old page's blurb used to.
+`docs/adr/0002-occasion-and-folder.md`). A folder has a **page** again — `/folders/:id`, rebuilt in
+NEU-1274 with the occasion page's two tabs — but still **no index**: `Folders.tsx` stays unrouted, so
+the **folder filter on `/lists` is the primary place a user meets the concept**, and it carries the
+explanation the old page's blurb used to. Nothing in the UI links to `/folders/:id` yet; NEU-1277's
+Group by is what will. Its back link and its post-delete redirect both go to `/lists`, because there
+is no folder index to return to.
 
 **Membership is an action on the list, not a tab.** `list-detail/FolderPicker.tsx` is opened by
 "Add to a folder…" in list detail's `⋯` menu — a checkbox per folder, ticked where this list is
@@ -337,7 +378,7 @@ has. This deliberately diverges from the project spec §4.2 wireframe, which sti
 against each section heading.
 
 ## Testing
-- ~335 test cases across 31 files, run inside the container via `task test`
+- ~395 test cases across 34 files, run inside the container via `task test`
 - MSW mocks live in `src/test/mocks/handlers.ts` (default `/auth/refresh → 401`); setup in `src/test/setup.ts`
 
 ## Critical conventions
