@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo, type FormEvent } from "react";
+import { useState, useRef, useMemo, type FormEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as Sentry from "@sentry/react";
 import { isAxiosError } from "axios";
@@ -6,6 +6,7 @@ import { createGift, updateGift, deleteGift, claimGift, unclaimGift, purchaseGif
 import { fetchUrlMeta } from "../../api/meta";
 import type { ClaimOccasion, GiftListDetailOwner, GiftListDetailViewer, GiftOwnerView, Gift } from "../../types";
 import { formatMoney } from "../../lib/money";
+import { useTimeout } from "../../hooks/useTimeout";
 import toast from "react-hot-toast";
 
 interface GiftsTabProps {
@@ -202,7 +203,7 @@ function AddGiftForm({
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
   const [isFetching, setIsFetching] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const urlDebounce = useTimeout();
   const fetchIdRef = useRef(0);
   const nameRef = useRef("");
   const descriptionRef = useRef("");
@@ -225,12 +226,6 @@ function AddGiftForm({
     },
   });
 
-  useEffect(() => {
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, []);
-
   function updateName(value: string) {
     setName(value);
     nameRef.current = value;
@@ -249,13 +244,13 @@ function AddGiftForm({
   function handleUrlChange(value: string) {
     setUrl(value);
 
-    if (debounceRef.current) clearTimeout(debounceRef.current);
+    urlDebounce.clear();
 
     if (!value.startsWith("http://") && !value.startsWith("https://")) return;
 
     const currentFetchId = ++fetchIdRef.current;
 
-    debounceRef.current = setTimeout(async () => {
+    urlDebounce.start(async () => {
       setIsFetching(true);
       try {
         const meta = await fetchUrlMeta(value);
@@ -286,7 +281,7 @@ function AddGiftForm({
     updateName("");
     updateDescription("");
     updatePrice("");
-    if (debounceRef.current) clearTimeout(debounceRef.current);
+    urlDebounce.clear();
     setIsFetching(false);
   }
 

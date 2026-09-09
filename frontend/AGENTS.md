@@ -69,7 +69,7 @@ src/
                      # a recorded amount without re-stamping the purchase
     connections.ts, shares.ts, folders.ts, invites.ts, users.ts, meta.ts
   contexts/AuthContext.tsx   # Access token in memory, silent refresh on mount
-  hooks/             # useAuth, useTitle
+  hooks/             # useAuth, useTitle, useTimeout (a setTimeout that clears on unmount)
   components/
     Layout.tsx            # App shell: one tab set (Lists · People) + outlet, badge queries
     ProtectedRoute.tsx    # Auth guard        AdminRoute.tsx — admin guard for /admin/*
@@ -509,7 +509,7 @@ section that claims to hold everything shared with the viewer.
   organizer-only act; unarchiving is, and that is enforced where it happens.
 
 ## Testing
-- 471 test cases across 38 files, run inside the container via `task test`
+- 476 test cases across 39 files, run inside the container via `task test`
 - MSW mocks live in `src/test/mocks/handlers.ts` (default `/auth/refresh → 401`); setup in `src/test/setup.ts`
 
 ## Critical conventions

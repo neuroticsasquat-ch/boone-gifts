@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getInvites, createInvite, deleteInvite } from "../api/invites";
 import { useTitle } from "../hooks/useTitle";
+import { useTimeout } from "../hooks/useTimeout";
 import type { Invite } from "../types";
 import toast from "react-hot-toast";
 
@@ -15,6 +16,7 @@ export function AdminInvites() {
   useTitle("Invites");
   const queryClient = useQueryClient();
   const [copiedId, setCopiedId] = useState<number | null>(null);
+  const copiedTimeout = useTimeout();
 
   const invites = useQuery({ queryKey: ["invites"], queryFn: getInvites });
 
@@ -37,7 +39,7 @@ export function AdminInvites() {
     try {
       await navigator.clipboard.writeText(url);
       setCopiedId(id);
-      setTimeout(() => setCopiedId(null), 2000);
+      copiedTimeout.start(() => setCopiedId(null), 2000);
     } catch {
       // Clipboard API unavailable
     }
@@ -152,6 +154,7 @@ function CreateInviteForm({
 }) {
   const [email, setEmail] = useState("");
   const [success, setSuccess] = useState(false);
+  const successTimeout = useTimeout();
 
   const mutation = useMutation({
     mutationFn: (emailVal: string) => createInvite(emailVal),
@@ -159,7 +162,7 @@ function CreateInviteForm({
       queryClient.invalidateQueries({ queryKey: ["invites"] });
       setEmail("");
       setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
+      successTimeout.start(() => setSuccess(false), 3000);
     },
     onError: () => toast.error("Failed to send invite."),
   });
