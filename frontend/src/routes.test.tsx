@@ -66,8 +66,21 @@ describe("routes", () => {
     "/people/families/1",
     "/occasions/1",
     "/folders/1",
+    "/lists/archive",
+    "/people/families/1/archive",
   ])("still matches %s", (path) => {
     const router = renderAt(path);
     expect(router.state.errors).toBeNull();
+  });
+
+  // The archive is a static segment sitting beside `lists/:id`, so it has to
+  // outrank it — otherwise the archive link opens a list detail page for a list
+  // called "archive" (NEU-1278).
+  it("routes /lists/archive to the archive, not to a list called archive", async () => {
+    server.use(http.get(`${API}/folders`, () => HttpResponse.json([])));
+
+    renderAt("/lists/archive");
+
+    expect(await screen.findByRole("heading", { name: "Archive" })).toBeInTheDocument();
   });
 });

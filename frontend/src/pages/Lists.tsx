@@ -38,11 +38,11 @@ function visibleLists(
 
 /** The rows of one shared section — the whole section when it is flat, one
  *  bucket of it when the viewer has grouped it. */
-function SharedRows({ lists, dimmed }: { lists: GiftList[]; dimmed: boolean }) {
+function SharedRows({ lists }: { lists: GiftList[] }) {
   return (
     <ul className="mt-3 divide-y divide-gray-200 rounded-lg bg-white shadow">
       {lists.map((list) => (
-        <li key={list.id} className={dimmed ? "opacity-60" : undefined}>
+        <li key={list.id}>
           <Link to={`/lists/${list.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50">
             <div>
               <p className="font-medium text-gray-900">{list.name}</p>
@@ -60,20 +60,21 @@ function SharedRows({ lists, dimmed }: { lists: GiftList[]; dimmed: boolean }) {
 
 export function Lists() {
   useTitle("Lists");
-  const [showArchived, setShowArchived] = useState(false);
   const [sortBy, setSortBy] = useState<SortBy>("updated");
   const [folderId, setFolderId] = useState<number | null>(null);
   // Off by default, so the shipped flat page is what a viewer who asks for
   // nothing still gets (project spec §9.1).
   const [groupBy, setGroupBy] = useState<GroupBy>("none");
 
+  // Active only, always. Nothing archived appears in a default view — the
+  // archive is `/lists/archive` and nothing else (NEU-1278, project spec §9.5).
   const ownedLists = useQuery({
-    queryKey: ["lists", "owned", { archived: showArchived }],
-    queryFn: () => getLists("owned", showArchived || undefined),
+    queryKey: ["lists", "owned", { archived: false }],
+    queryFn: () => getLists("owned"),
   });
   const sharedLists = useQuery({
-    queryKey: ["lists", "shared", { archived: showArchived }],
-    queryFn: () => getLists("shared", showArchived || undefined),
+    queryKey: ["lists", "shared", { archived: false }],
+    queryFn: () => getLists("shared"),
   });
 
   // The folders pages lost their route (NEU-1231), so this filter is now the
@@ -168,14 +169,12 @@ export function Lists() {
           <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900">
             <ClipboardIcon className="h-6 w-6" /> Lists
           </h1>
-          {!showArchived && (
-            <Link
-              to="/lists/new"
-              className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-            >
-              New List
-            </Link>
-          )}
+          <Link
+            to="/lists/new"
+            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            New List
+          </Link>
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -225,13 +224,6 @@ export function Lists() {
               <option value="folder">Folder</option>
             </select>
           </label>
-
-          <button
-            onClick={() => setShowArchived(!showArchived)}
-            className="text-sm text-blue-600 hover:underline"
-          >
-            {showArchived ? "View active lists" : "View archived lists"}
-          </button>
         </div>
 
         {/* Always shown, filter or no filter: with the folders pages unrouted
@@ -255,8 +247,6 @@ export function Lists() {
               <p className="mt-3 text-gray-500">
                 {filtering ? (
                   `None of your lists are in ${folderName}.`
-                ) : showArchived ? (
-                  "No archived lists."
                 ) : (
                   <>
                     You haven't created any lists yet.{" "}
@@ -269,7 +259,7 @@ export function Lists() {
             {visibleOwned.length > 0 && (
               <ul className="mt-3 divide-y divide-gray-200 rounded-lg bg-white shadow">
                 {visibleOwned.map((list) => (
-                  <li key={list.id} className={showArchived ? "opacity-60" : undefined}>
+                  <li key={list.id}>
                     <Link to={`/lists/${list.id}`} className="block px-4 py-3 hover:bg-gray-50">
                       <p className="font-medium text-gray-900">{list.name}</p>
                       <RecipientLine list={list} />
@@ -297,8 +287,6 @@ export function Lists() {
               <p className="mt-3 text-gray-500">
                 {filtering ? (
                   `No lists shared with you are in ${folderName}.`
-                ) : showArchived ? (
-                  "No archived lists shared with you."
                 ) : (
                   <>
                     No one has shared a list with you yet.{" "}
@@ -320,7 +308,7 @@ export function Lists() {
                           <Link to={group.href} className="text-blue-600 hover:underline">{group.heading}</Link>
                         ) : group.heading}
                       </h3>
-                      <SharedRows lists={group.lists} dimmed={showArchived} />
+                      <SharedRows lists={group.lists} />
                     </section>
                   ))}
                 </div>
@@ -331,13 +319,24 @@ export function Lists() {
                       Your folders couldn't be loaded, so these lists aren't grouped by folder.
                     </p>
                   )}
-                  <SharedRows lists={visibleShared} dimmed={showArchived} />
+                  <SharedRows lists={visibleShared} />
                 </>
               )
             )}
           </section>
         </>
       )}
+
+      {/* The one way in to archived lists and folders, where project spec §9.1
+          draws it — at the foot of the page, apart from the header row, because
+          it is a destination rather than a control that reshapes what is above
+          it. It replaces the "View archived lists" toggle: nothing archived is
+          reachable from the dashboard itself any more (NEU-1278). */}
+      <p>
+        <Link to="/lists/archive" className="text-sm text-blue-600 hover:underline">
+          View archive
+        </Link>
+      </p>
     </div>
   );
 }

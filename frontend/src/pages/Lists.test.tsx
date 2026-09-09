@@ -320,7 +320,7 @@ describe("Lists — folder filter", () => {
   });
 });
 
-describe("Lists — sort and archive", () => {
+describe("Lists — sort and the archive link", () => {
   it("sorts both sections from the one header control", async () => {
     lists({
       owned: [
@@ -341,15 +341,16 @@ describe("Lists — sort and archive", () => {
     expect(names).toEqual(["Adam's List", "Zoe's List", "Adam's Wishlist", "Zoe's Wishlist"]);
   });
 
-  it("swaps to archived lists and back", async () => {
+  // The dashboard has no archived state any more: the archive is `/lists/archive`
+  // and the page links to it (NEU-1278, project spec §9.5).
+  it("links to the archive and never asks for archived lists", async () => {
+    const asked: (string | null)[] = [];
     server.use(
       http.get(`${API}/lists`, ({ request }) => {
         const params = new URL(request.url).searchParams;
-        if (params.get("filter") !== "owned") return HttpResponse.json([]);
+        asked.push(params.get("archived"));
         return HttpResponse.json(
-          params.get("archived") === "true"
-            ? [ownedList({ id: 9, name: "Last Christmas", is_archived: true })]
-            : [ownedList({ id: 1, name: "Tom's Wishlist" })],
+          params.get("filter") === "owned" ? [ownedList({ id: 1, name: "Tom's Wishlist" })] : [],
         );
       }),
     );
@@ -358,14 +359,15 @@ describe("Lists — sort and archive", () => {
 
     await screen.findByText("Tom's Wishlist");
 
-    await userEvent.click(screen.getByRole("button", { name: "View archived lists" }));
-    expect(await screen.findByText("Last Christmas")).toBeInTheDocument();
-    expect(screen.queryByText("Tom's Wishlist")).not.toBeInTheDocument();
-    // Creating a list is not an action you take while looking at archived ones.
-    expect(screen.queryByRole("link", { name: "New List" })).not.toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole("button", { name: "View active lists" }));
-    expect(await screen.findByText("Tom's Wishlist")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View archive" })).toHaveAttribute(
+      "href",
+      "/lists/archive",
+    );
+    expect(screen.queryByRole("button", { name: "View archived lists" })).not.toBeInTheDocument();
+    expect(asked).not.toContain("true");
+    // Creating a list is always on offer here — there is no archived state left
+    // for it to be hidden behind.
+    expect(screen.getByRole("link", { name: "New List" })).toBeInTheDocument();
   });
 });
 
@@ -386,26 +388,6 @@ describe("Lists — empty states", () => {
 
     expect(await screen.findByText(/No one has shared a list with you yet/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Add a connection" })).toHaveAttribute("href", "/people");
-  });
-
-  it("says there are no archived lists when the archive is empty", async () => {
-    server.use(
-      http.get(`${API}/lists`, ({ request }) => {
-        const params = new URL(request.url).searchParams;
-        if (params.get("filter") !== "owned" || params.get("archived") === "true") {
-          return HttpResponse.json([]);
-        }
-        return HttpResponse.json([ownedList({ id: 1, name: "Tom's Wishlist" })]);
-      }),
-    );
-
-    renderLists();
-
-    await screen.findByText("Tom's Wishlist");
-    await userEvent.click(screen.getByRole("button", { name: "View archived lists" }));
-
-    expect(await screen.findByText("No archived lists.")).toBeInTheDocument();
-    expect(screen.getByText("No archived lists shared with you.")).toBeInTheDocument();
   });
 });
 

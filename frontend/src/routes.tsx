@@ -8,11 +8,13 @@ import { Register } from "./pages/Register";
 import { ForgotPassword } from "./pages/ForgotPassword";
 import { ResetPassword } from "./pages/ResetPassword";
 import { Lists } from "./pages/Lists";
+import { ListsArchive } from "./pages/ListsArchive";
 import { CreateList } from "./pages/CreateList";
 import { ListDetail } from "./pages/ListDetail";
 import { People } from "./pages/People";
 import { ConnectionProfile } from "./pages/ConnectionProfile";
 import { FamilyDetail } from "./pages/FamilyDetail";
+import { FamilyArchive } from "./pages/FamilyArchive";
 import { FolderDetail } from "./pages/FolderDetail";
 import { OccasionDetail } from "./pages/OccasionDetail";
 import { AcceptFamilyInvite } from "./pages/AcceptFamilyInvite";
@@ -50,9 +52,17 @@ export const routes: RouteObject[] = [
         children: [
           { path: "lists", element: <Lists /> },
           { path: "lists/new", element: <CreateList /> },
+          // Archived lists and folders have one way in, and it is this page —
+          // the dashboard no longer has an archived state to be put into
+          // (NEU-1278). A static segment outranks `lists/:id`, the same way
+          // `lists/new` already does.
+          { path: "lists/archive", element: <ListsArchive /> },
           { path: "lists/:id", element: <ListDetail /> },
           { path: "people", element: <People /> },
           { path: "people/families/:id", element: <FamilyDetail /> },
+          // The same for a family's archived occasions, reached from the
+          // occasions section on the family page.
+          { path: "people/families/:id/archive", element: <FamilyArchive /> },
           { path: "people/:id", element: <ConnectionProfile /> },
           { path: "occasions/:id", element: <OccasionDetail /> },
           // A folder page, but no folder *index*: the folder filter on /lists is

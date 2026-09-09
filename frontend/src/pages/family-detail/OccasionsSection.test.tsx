@@ -337,7 +337,9 @@ describe("OccasionsSection", () => {
     });
   });
 
-  it("the archive entry point swaps the section for the archived occasions", async () => {
+  // The section is the family's *active* occasions and has no archived state to
+  // be put into: the archive is a page of its own now (NEU-1278).
+  it("the archive entry point is a link to the family's archive, not a toggle", async () => {
     server.use(
       serveOccasions([occasion(3, "Christmas 2026")], [occasion(2, "Christmas 2025", true)]),
     );
@@ -348,20 +350,35 @@ describe("OccasionsSection", () => {
       expect(screen.getByText("Christmas 2026")).toBeInTheDocument();
     });
 
-    await userEvent.click(screen.getByRole("button", { name: "View archived occasions" }));
+    expect(screen.getByRole("link", { name: "View archive" })).toHaveAttribute(
+      "href",
+      "/people/families/1/archive",
+    );
+    expect(
+      screen.queryByRole("button", { name: "View archived occasions" })
+    ).not.toBeInTheDocument();
+  });
 
-    await waitFor(() => {
-      expect(screen.getByText("Christmas 2025")).toBeInTheDocument();
-    });
-    expect(screen.queryByText("Christmas 2026")).not.toBeInTheDocument();
-    // Nothing archived is created into, and nothing archived is edited here.
-    expect(screen.queryByRole("button", { name: "Create Occasion" })).not.toBeInTheDocument();
+  // Nothing archived reaches the family page — not through a toggle, and not by
+  // the section quietly asking for it.
+  it("only ever asks for the active occasions", async () => {
+    const asked: (string | null)[] = [];
+    server.use(
+      http.get(`${API}/families/1/occasions`, ({ request }) => {
+        asked.push(new URL(request.url).searchParams.get("archived"));
+        return HttpResponse.json([occasion(3, "Christmas 2026")]);
+      }),
+    );
 
-    await userEvent.click(screen.getByRole("button", { name: "View active occasions" }));
+    renderFamilyDetail(memberToken);
+
     await waitFor(() => {
       expect(screen.getByText("Christmas 2026")).toBeInTheDocument();
     });
+    expect(asked).not.toContain("true");
+    expect(screen.queryByText("Christmas 2025")).not.toBeInTheDocument();
   });
+
   it("a stale list is back-stopped: has_other_active on the create response says so afterwards", async () => {
     server.use(
       // The page loads an empty list, so nothing warns before the write — but
@@ -416,37 +433,5 @@ describe("OccasionsSection", () => {
       expect(screen.getByPlaceholderText(/Occasion name/)).toHaveValue("");
     });
     expect(screen.queryByText(/already had an active occasion/)).not.toBeInTheDocument();
-  });
-
-  it("an organizer can unarchive from the archived list, so Archive is not a one-way door", async () => {
-    let capturedBody: unknown;
-    server.use(
-      serveOccasions([], [occasion(2, "Christmas 2025", true)]),
-      http.put(`${API}/occasions/2`, async ({ request }) => {
-        capturedBody = await request.json();
-        return HttpResponse.json(occasion(2, "Christmas 2025"));
-      }),
-    );
-
-    renderFamilyDetail(organizerToken);
-
-    await waitFor(() => {
-      expect(
-        screen.getByRole("button", { name: "View archived occasions" })
-      ).toBeInTheDocument();
-    });
-    await userEvent.click(screen.getByRole("button", { name: "View archived occasions" }));
-
-    await waitFor(() => {
-      expect(screen.getByText("Christmas 2025")).toBeInTheDocument();
-    });
-    // The archived list carries its inverse and nothing else.
-    const row = within(rowFor("Christmas 2025"));
-    expect(row.queryByRole("button", { name: "Rename" })).not.toBeInTheDocument();
-    await userEvent.click(row.getByRole("button", { name: "Unarchive" }));
-
-    await waitFor(() => {
-      expect(capturedBody).toEqual({ is_archived: false });
-    });
   });
 });

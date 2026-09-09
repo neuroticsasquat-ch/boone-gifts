@@ -1,0 +1,81 @@
+import { Link, useParams } from "react-router";
+import { useQuery } from "@tanstack/react-query";
+import { getFamily } from "../api/families";
+import { getFamilyOccasions } from "../api/occasions";
+import { useTitle } from "../hooks/useTitle";
+import { Spinner } from "../components/Spinner";
+import { ArchiveIcon } from "../components/Icons";
+
+/**
+ * A family's archived occasions (`/people/families/:id/archive`, project spec
+ * §9.5).
+ *
+ * The family page's entry point lands here, replacing the "View archived
+ * occasions" toggle `OccasionsSection` used to carry — so the section on the
+ * family page is now the family's *active* occasions and nothing else
+ * (NEU-1278).
+ *
+ * Every member may look. Unarchiving stays organizer-only and stays on the
+ * occasion's own page, which already gates and enforces it; a row here is the
+ * way to reach that page, not a second copy of its controls.
+ */
+export function FamilyArchive() {
+  const { id } = useParams();
+  const familyId = Number(id);
+
+  const family = useQuery({
+    queryKey: ["family", familyId],
+    queryFn: () => getFamily(familyId),
+    enabled: Number.isFinite(familyId),
+  });
+
+  // Shares the family page's key and its `archived` shape, so archiving or
+  // unarchiving — both of which invalidate the `["occasions", familyId]`
+  // prefix — refreshes this page too.
+  const occasions = useQuery({
+    queryKey: ["occasions", familyId, { archived: true }],
+    queryFn: () => getFamilyOccasions(familyId, true),
+    enabled: Number.isFinite(familyId),
+  });
+
+  useTitle(family.data ? `${family.data.name} archive` : "Archive");
+
+  return (
+    <div className="space-y-8">
+      <header>
+        <Link to={`/people/families/${familyId}`} className="text-sm text-blue-600 hover:underline">
+          ← {family.data?.name ?? "Family"}
+        </Link>
+        <h1 className="mt-1 flex items-center gap-2 text-2xl font-bold text-gray-900">
+          <ArchiveIcon className="h-6 w-6" /> Archived Occasions
+        </h1>
+        <p className="mt-2 text-xs text-gray-500">
+          Archiving takes an occasion out of the default views and does nothing else. The
+          lists shared to it are still shared, and your shopping and budget for it are
+          still here — open one to pick it back up.
+        </p>
+      </header>
+
+      {occasions.isPending ? (
+        <Spinner />
+      ) : occasions.isError ? (
+        <p className="text-sm text-red-600">Couldn&apos;t load occasions.</p>
+      ) : occasions.data.length === 0 ? (
+        <p className="text-gray-500">No archived occasions.</p>
+      ) : (
+        <ul className="divide-y divide-gray-200 rounded-lg bg-white shadow">
+          {occasions.data.map((occasion) => (
+            <li key={occasion.id}>
+              <Link
+                to={`/occasions/${occasion.id}`}
+                className="block px-4 py-3 font-medium text-gray-900 hover:bg-gray-50"
+              >
+                {occasion.name}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}

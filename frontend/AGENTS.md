@@ -95,6 +95,10 @@ src/
                      # folder *index*, still unrouted; the Lists page's folder
                      # filter and list detail's "Add to a folder…" are where a
                      # user meets the concept
+    ListsArchive.tsx    # /lists/archive — archived lists and folders, the one
+                        # way in from the Lists dashboard
+    FamilyArchive.tsx   # /people/families/:id/archive — a family's archived
+                        # occasions, the one way in from its page
     OccasionDetail.tsx  # /occasions/:id — a family occasion, its lists, and
                         # the viewer's own shopping for it
     FolderDetail.tsx    # /folders/:id — the same two tabs for a user's folder
@@ -126,12 +130,14 @@ src/
 | `/reset-password` | `ResetPassword` | Public |
 | `/family-invites/:token` | `AcceptFamilyInvite` | Authenticated, outside `Layout` |
 | `/` | — | Redirects to `/lists`; the app's entry point, not a page |
-| `/lists` | `Lists` | My lists + everything shared with me, under the actionable banner. Header controls: folder filter, sort, group by, archive |
+| `/lists` | `Lists` | My lists + everything shared with me, under the actionable banner. Header controls: folder filter, sort, group by. **Active only** — the archive is its own page, linked at the foot |
+| `/lists/archive` | `ListsArchive` | Archived lists (owned and shared) and archived folders. Read-only: rows link to the detail pages that own unarchive |
 | `/lists/new` | `CreateList` | Also shows "Share with families" checkboxes |
 | `/lists/:id` | `ListDetail` | Owner view or viewer/claimer view. No tab bar: header, then the gifts. Owner header carries the sharing summary line (+ **Change**) and a `⋯` menu holding Add to a folder…, Edit, Archive and Delete; a viewer gets the same menu holding the folder action alone |
 | `/people` | `People` | The People tab: families, then individuals, under the actionable banner |
 | `/people/:id` | `ConnectionProfile` | |
-| `/people/families/:id` | `FamilyDetail` | Members, occasions, invites, rename, delete, leave |
+| `/people/families/:id` | `FamilyDetail` | Members, **active** occasions, invites, rename, delete, leave |
+| `/people/families/:id/archive` | `FamilyArchive` | That family's archived occasions, each linking to `/occasions/:id`. Any member may look |
 | `/occasions/:id` | `OccasionDetail` | A family occasion: header, tab bar (**Lists · My shopping**), and the lists shared to it. The `⋯` menu's rename and archive are organizer-only |
 | `/folders/:id` | `FolderDetail` | One user's folder, with the same two tabs. There is no `/folders` index — `Folders.tsx` stays unrouted; a **Group by: Folder** heading on `/lists` is the one link here |
 | `/account` | `Account` | Via the user menu |
@@ -165,8 +171,8 @@ the member controls are. A second active occasion is warned about, never blocked
 occasions the family already has, built from the list already on the page — `has_other_active` cannot be
 read before the write it rides on, so it back-stops that warning afterwards when the list was stale. A
 family with no active occasion says so outright, because that is what makes it unshareable. Archived
-occasions sit behind the same in-page toggle the Lists page uses, carrying **Unarchive** so Archive is
-never a one-way door; NEU-1278 replaces both toggles with one archive view.
+occasions are **not here at all**: a "View archive" link goes to `/people/families/:id/archive`
+(NEU-1278), so the section holds one shape and nothing archived reaches the family page.
 
 **The occasion page** (`pages/OccasionDetail.tsx`, `/occasions/:id`) is where an occasion is met on its
 own: its name and family in the header, a back link to `/people/families/:id`, and a tab bar of
@@ -457,8 +463,44 @@ decided on is still what a viewer who asks for nothing sees.
   §9.1 draws it on its own line under the page title. Same deliberate divergence as the sort control
   above: one row holds every control that reshapes the page.
 
+## Archive views
+
+**Archived things have one way in each, and it is a page** (NEU-1278, project spec §9.5). Before this
+the Lists page and the family page each carried a *toggle* that swapped the surface into an archived
+state; both are gone, and with them the last routes by which something archived could appear in a
+default view.
+
+| Page | Holds | Entry point |
+|---|---|---|
+| `pages/ListsArchive.tsx` (`/lists/archive`) | Archived lists — owned and shared — and archived folders | "View archive", at the **foot** of `/lists` |
+| `pages/FamilyArchive.tsx` (`/people/families/:id/archive`) | That family's archived occasions | "View archive", beside the Occasions heading on the family page |
+
+- **The dashboards no longer have an archived state.** `Lists.tsx` reads `{ archived: false }`
+  unconditionally and `OccasionsSection` likewise; the `showArchived` state, both toggle buttons and
+  every branch that hung off them are deleted. That is what makes "nothing archived appears in a
+  default view" structural rather than a default someone has to keep choosing.
+- **Nothing is unarchived from an archive view.** List detail's `⋯` menu, the folder page's header
+  and the occasion page's organizer-only `⋯` menu already own that mutation — with its confirm, its
+  403 handling and its gating — so the rows are **links to those pages** and the archive stays a way
+  of finding them. A second copy of Unarchive would be a second thing to keep honest, and the
+  occasion one would have to re-derive organizer-ness the occasion page already knows.
+- Archive is still not a one-way door; the door just lives on the thing itself.
+- The queries reuse the dashboards' keys with `archived: true`
+  (`["lists", "owned", { archived: true }]`, `["folders", { archived: true }]`,
+  `["occasions", familyId, { archived: true }]`), so archiving from a detail page — which invalidates
+  the `["lists"]` / `["folders"]` / `["occasions", familyId]` prefixes — refreshes the archive too.
+- **A failed read is not an empty one**, the same rule the folder grouping follows. Each section says
+  which read failed and the rows that did arrive stay on the page. "You haven't archived anything
+  yet" is one line in place of three "No archived …" ones, and it renders **only** when all three
+  reads have actually succeeded and come back empty.
+- The Lists entry point sits at the foot of the page, where project spec §9.1 draws it, rather than in
+  the header row with the folder filter, sort and group-by. Those reshape what is on the page; this is
+  a destination. Same reasoning, opposite conclusion to the sort and group-by placement above.
+- The family archive is readable by **any member**. Looking at what was archived is not an
+  organizer-only act; unarchiving is, and that is enforced where it happens.
+
 ## Testing
-- 457 test cases across 36 files, run inside the container via `task test`
+- 470 test cases across 38 files, run inside the container via `task test`
 - MSW mocks live in `src/test/mocks/handlers.ts` (default `/auth/refresh → 401`); setup in `src/test/setup.ts`
 
 ## Critical conventions

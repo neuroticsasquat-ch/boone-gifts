@@ -32,16 +32,22 @@ function alreadyActiveWarning(familyName: string, active: Occasion[]): string {
 /**
  * The family's occasions, on the family page (project spec §9.6).
  *
+ * The family's **active** occasions and nothing else. Archived ones live behind
+ * the "View archive" link, on their own page (NEU-1278) — this section has no
+ * archived state to be put into, so nothing archived reaches the family page.
+ *
  * Creating is open to **any member** — nobody should be blocked waiting on an
  * absent organizer, because a family with no active occasion cannot be shared
- * to at all. Renaming and archiving — and unarchiving, so Archive is not a
- * one-way door — are organizer-only, gated the same way the member controls
- * above are. The backend enforces both regardless.
+ * to at all. Renaming and archiving are organizer-only, gated the same way the
+ * member controls above are. The backend enforces both regardless.
+ *
+ * Archive is still not a one-way door: **unarchiving** is on the occasion's own
+ * page, which the archive links to and which already gates it to organizers.
+ * A second copy of that mutation here would be a second thing to keep honest.
  */
 export function OccasionsSection({ familyId, familyName, isOrganizer }: OccasionsSectionProps) {
   const queryClient = useQueryClient();
 
-  const [showArchived, setShowArchived] = useState(false);
   const [newName, setNewName] = useState("");
   const [pendingName, setPendingName] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -49,9 +55,12 @@ export function OccasionsSection({ familyId, familyName, isOrganizer }: Occasion
   const [renamingId, setRenamingId] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState("");
 
+  // The family's *active* occasions and nothing else. The archived ones have
+  // their own page now, so this section no longer has a state that can show
+  // them (NEU-1278, project spec §9.5).
   const occasions = useQuery({
-    queryKey: ["occasions", familyId, { archived: showArchived }],
-    queryFn: () => getFamilyOccasions(familyId, showArchived),
+    queryKey: ["occasions", familyId, { archived: false }],
+    queryFn: () => getFamilyOccasions(familyId, false),
     enabled: Number.isFinite(familyId),
   });
 
@@ -98,13 +107,12 @@ export function OccasionsSection({ familyId, familyName, isOrganizer }: Occasion
     },
   });
 
-  const setArchivedMutation = useMutation({
-    mutationFn: ({ id, isArchived }: { id: number; isArchived: boolean }) =>
-      updateOccasion(id, { is_archived: isArchived }),
-    onSuccess: (_data, { isArchived }) => {
+  const archiveMutation = useMutation({
+    mutationFn: (id: number) => updateOccasion(id, { is_archived: true }),
+    onSuccess: () => {
       invalidate();
       setActionError(null);
-      toast.success(isArchived ? "Occasion archived." : "Occasion unarchived.");
+      toast.success("Occasion archived.");
     },
     onError: (err: unknown) => {
       if (isAxiosError(err) && err.response?.status === 403) {
@@ -137,19 +145,15 @@ export function OccasionsSection({ familyId, familyName, isOrganizer }: Occasion
   return (
     <section>
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-900">
-          {showArchived ? "Archived Occasions" : "Occasions"}
-        </h2>
-        <button
-          onClick={() => {
-            setShowArchived(!showArchived);
-            setPendingName(null);
-            setRenamingId(null);
-          }}
+        <h2 className="text-lg font-semibold text-gray-900">Occasions</h2>
+        {/* The entry point to what has been archived — a destination, not a
+            state this section can be put into. */}
+        <Link
+          to={`/people/families/${familyId}/archive`}
           className="text-sm text-blue-600 hover:underline"
         >
-          {showArchived ? "View active occasions" : "View archived occasions"}
-        </button>
+          View archive
+        </Link>
       </div>
 
       {actionError && <p className="mb-3 text-sm text-red-600">{actionError}</p>}
@@ -160,9 +164,7 @@ export function OccasionsSection({ familyId, familyName, isOrganizer }: Occasion
         <p className="text-sm text-red-600">Couldn&apos;t load occasions.</p>
       ) : occasions.data.length === 0 ? (
         <p className="text-sm text-gray-600">
-          {showArchived
-            ? "No archived occasions."
-            : `${familyName} has no active occasion, so no list can be shared with it.`}
+          {familyName} has no active occasion, so no list can be shared with it.
         </p>
       ) : (
         <ul className="divide-y divide-gray-200 rounded-lg bg-white shadow">
@@ -208,38 +210,22 @@ export function OccasionsSection({ familyId, familyName, isOrganizer }: Occasion
                   </Link>
                   {isOrganizer && (
                     <div className="flex items-center gap-2">
-                      {showArchived ? (
-                        <button
-                          onClick={() =>
-                            setArchivedMutation.mutate({ id: occasion.id, isArchived: false })
-                          }
-                          disabled={setArchivedMutation.isPending}
-                          className="rounded bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50"
-                        >
-                          Unarchive
-                        </button>
-                      ) : (
-                        <>
-                          <button
-                            onClick={() => {
-                              setRenamingId(occasion.id);
-                              setRenameValue(occasion.name);
-                            }}
-                            className="rounded bg-blue-100 px-3 py-1 text-sm font-medium text-blue-700 hover:bg-blue-200"
-                          >
-                            Rename
-                          </button>
-                          <button
-                            onClick={() =>
-                              setArchivedMutation.mutate({ id: occasion.id, isArchived: true })
-                            }
-                            disabled={setArchivedMutation.isPending}
-                            className="rounded bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50"
-                          >
-                            Archive
-                          </button>
-                        </>
-                      )}
+                      <button
+                        onClick={() => {
+                          setRenamingId(occasion.id);
+                          setRenameValue(occasion.name);
+                        }}
+                        className="rounded bg-blue-100 px-3 py-1 text-sm font-medium text-blue-700 hover:bg-blue-200"
+                      >
+                        Rename
+                      </button>
+                      <button
+                        onClick={() => archiveMutation.mutate(occasion.id)}
+                        disabled={archiveMutation.isPending}
+                        className="rounded bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50"
+                      >
+                        Archive
+                      </button>
                     </div>
                   )}
                 </>
@@ -249,55 +235,51 @@ export function OccasionsSection({ familyId, familyName, isOrganizer }: Occasion
         </ul>
       )}
 
-      {!showArchived && (
-        <>
-          <form onSubmit={handleCreate} className="mt-3 flex gap-2">
-            <label className="sr-only" htmlFor="new-occasion-name">
-              New occasion name
-            </label>
-            <input
-              id="new-occasion-name"
-              type="text"
-              placeholder="Occasion name, e.g. Christmas 2026"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm"
-            />
+      <form onSubmit={handleCreate} className="mt-3 flex gap-2">
+        <label className="sr-only" htmlFor="new-occasion-name">
+          New occasion name
+        </label>
+        <input
+          id="new-occasion-name"
+          type="text"
+          placeholder="Occasion name, e.g. Christmas 2026"
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm"
+        />
+        <button
+          type="submit"
+          disabled={createMutation.isPending || occasions.isPending}
+          className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+        >
+          Create Occasion
+        </button>
+      </form>
+
+      {pendingName !== null && (
+        <div className="mt-3 rounded border border-amber-300 bg-amber-50 px-3 py-2">
+          <p className="text-sm text-amber-900">
+            {alreadyActiveWarning(familyName, occasions.data ?? [])}
+          </p>
+          <div className="mt-2 flex gap-2">
             <button
-              type="submit"
-              disabled={createMutation.isPending || occasions.isPending}
-              className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              onClick={() => createMutation.mutate({ name: pendingName, warned: true })}
+              disabled={createMutation.isPending}
+              className="rounded bg-blue-600 px-3 py-1 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
             >
-              Create Occasion
+              Create Anyway
             </button>
-          </form>
-
-          {pendingName !== null && (
-            <div className="mt-3 rounded border border-amber-300 bg-amber-50 px-3 py-2">
-              <p className="text-sm text-amber-900">
-                {alreadyActiveWarning(familyName, occasions.data ?? [])}
-              </p>
-              <div className="mt-2 flex gap-2">
-                <button
-                  onClick={() => createMutation.mutate({ name: pendingName, warned: true })}
-                  disabled={createMutation.isPending}
-                  className="rounded bg-blue-600 px-3 py-1 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-                >
-                  Create Anyway
-                </button>
-                <button
-                  onClick={() => setPendingName(null)}
-                  className="rounded bg-gray-200 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-300"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
-
-          {createError && <p className="mt-2 text-sm text-red-600">{createError}</p>}
-        </>
+            <button
+              onClick={() => setPendingName(null)}
+              className="rounded bg-gray-200 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-300"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       )}
+
+      {createError && <p className="mt-2 text-sm text-red-600">{createError}</p>}
     </section>
   );
 }
