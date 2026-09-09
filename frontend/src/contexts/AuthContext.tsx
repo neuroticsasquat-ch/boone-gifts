@@ -1,6 +1,12 @@
 /* eslint-disable react/only-export-components */
-import { createContext, useState, useCallback, useEffect, type ReactNode } from "react";
-import { apiClient, setAccessToken, clearAccessToken } from "../api/client";
+import { createContext, useState, useCallback, useEffect, useRef, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  apiClient,
+  setAccessToken,
+  clearAccessToken,
+  setSessionEndedHandler,
+} from "../api/client";
 import {
   logout as apiLogout,
   register as apiRegister,
@@ -36,6 +42,36 @@ function decodePayload(token: string): AuthUser {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
+
+  // The cache is keyed by resource, never by viewer (ADR 0004), so one person's entries
+  // would otherwise be served to the next. Keyed on the id and not the user object:
+  // updateProfile renaming someone is not a change of viewer.
+  //
+  // A viewer leaving empties the cache outright. A viewer arriving sweeps what is left
+  // unobserved instead: a mutation that outlived the departing viewer's last screen can
+  // still write its response in after that clear (mutations are not cancelled by it), and
+  // an arrival is the last moment to catch that before the next person is served it. The
+  // sweep spares observed and in-flight queries, which an outright clear would strand.
+  const viewerId = useRef(user?.id);
+  useEffect(() => {
+    const departing = viewerId.current;
+    viewerId.current = user?.id;
+    if (departing === user?.id) return;
+    if (departing !== undefined) {
+      queryClient.clear();
+    } else if (user?.id !== undefined) {
+      queryClient.removeQueries({ type: "inactive" });
+    }
+  }, [user?.id, queryClient]);
+
+  // The 401 interceptor cannot reach React state, so it calls back in here when a refresh
+  // gives up. Clearing the user both empties the cache above and lands the viewer on
+  // /login instead of stranding them on a mounted page with a dead token.
+  useEffect(() => {
+    setSessionEndedHandler(() => setUser(null));
+    return () => setSessionEndedHandler(null);
+  }, []);
 
   // Silent refresh on mount — restores session if cookie exists
   useEffect(() => {

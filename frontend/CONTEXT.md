@@ -37,7 +37,9 @@ behaviour).
    message may reveal claim state on a list the viewer owns — including the revoke-a-share dialog,
    which offers a choice without naming gifts, claimers, or counts. The **My shopping** tabs are the
    same rule seen from the other side: they show only the viewer's own claims, and no endpoint
-   behind them takes a parameter that could widen that.
+   behind them takes a parameter that could widen that. The rule holds across an account switch
+   and not only per request: the client's query cache is dropped whenever the viewer changes, so
+   one person's fetched data is never painted for the next on a shared device.
 
 3. **Source is a label, not a destination.** How a list reached the viewer is rendered on the row.
    It never becomes its own page, tab, or filter-by-default.

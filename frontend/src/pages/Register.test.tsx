@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, it, expect } from "vitest";
 import { MemoryRouter, Routes, Route } from "react-router";
 import { http, HttpResponse } from "msw";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { server } from "../test/mocks/server";
 import { AuthProvider } from "../contexts/AuthContext";
 import { Register } from "./Register";
@@ -17,16 +18,21 @@ const fakeAccessToken = [
 ].join(".");
 
 function renderRegister(query: string) {
+  // AuthProvider clears the query cache at the identity boundary (ADR 0004), so it needs
+  // a QueryClientProvider above it, exactly as App.tsx gives it one.
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <AuthProvider>
-      <MemoryRouter initialEntries={[`/register${query}`]}>
-        <Routes>
-          <Route path="/register" element={<Register />} />
-          <Route path="/lists" element={<div>App home</div>} />
-          <Route path="/login" element={<div>Login page</div>} />
-        </Routes>
-      </MemoryRouter>
-    </AuthProvider>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <MemoryRouter initialEntries={[`/register${query}`]}>
+          <Routes>
+            <Route path="/register" element={<Register />} />
+            <Route path="/lists" element={<div>App home</div>} />
+            <Route path="/login" element={<div>Login page</div>} />
+          </Routes>
+        </MemoryRouter>
+      </AuthProvider>
+    </QueryClientProvider>
   );
 }
 
