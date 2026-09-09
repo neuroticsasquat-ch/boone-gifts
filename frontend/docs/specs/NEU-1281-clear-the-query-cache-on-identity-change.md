@@ -58,7 +58,7 @@ const queryClient = useQueryClient();
 // otherwise be served to the next. Keyed on the id and not the user object:
 // updateProfile renaming someone is not a change of viewer.
 const viewerId = useRef(user?.id);
-useEffect(() => {
+useLayoutEffect(() => {
   const departing = viewerId.current;
   viewerId.current = user?.id;
   if (departing === user?.id) return;
@@ -83,6 +83,14 @@ the same commit — but not at an arrival. Removing the unobserved entries catch
 departed viewer can have left behind, since nothing of theirs is still mounted by then.
 
 The initial mount is neither: `user?.id` does not change, so nothing runs.
+
+**It must be a layout effect.** A passive effect fires after its commit is painted, and the screens
+an arriving viewer mounts read the cache while they render — so the previous viewer's data would
+reach the new one's screen first. It also loses a race it cannot see: React Query subscribes its
+observer in a passive effect, and a child's run before the parent's, so a screen mounting in the
+same commit claims the stale entry and makes it *active* before a passive sweep runs — sparing it
+from a sweep that spares active queries, and leaving it served for the full `staleTime`. A layout
+effect runs before paint and before any child subscribes, which closes both.
 
 ### 2.2 End the session properly when the refresh fails
 
@@ -137,7 +145,8 @@ because there was no session to end and its own `.catch` already leaves the view
 - Nothing clears on first mount, and a session restored by the silent refresh does not strand a
   query that is still in flight.
 - An entry left in the cache after the departing viewer's clear — a mutation response landing late
-  — is gone before the next viewer is served it.
+  — is gone before the next viewer is served it, including when a screen mounting in that same
+  commit is what would read it.
 
 Pin these at the seam — one test that the cache is empty after an identity change is worth more
 than a test per page, and it does not rot as pages are added.

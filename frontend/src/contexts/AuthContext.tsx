@@ -1,5 +1,13 @@
 /* eslint-disable react/only-export-components */
-import { createContext, useState, useCallback, useEffect, useRef, type ReactNode } from "react";
+import {
+  createContext,
+  useState,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  type ReactNode,
+} from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   apiClient,
@@ -53,8 +61,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // still write its response in after that clear (mutations are not cancelled by it), and
   // an arrival is the last moment to catch that before the next person is served it. The
   // sweep spares observed and in-flight queries, which an outright clear would strand.
+  //
+  // A layout effect, not a passive one, and both halves depend on it:
+  //   - The screens the arriving viewer mounts read the cache while they render. A passive
+  //     effect fires after that render is painted, so the previous viewer's data reaches
+  //     the new one's screen before it is dropped.
+  //   - React Query subscribes an observer in a passive effect, which for a child runs
+  //     BEFORE this one. So by the time a passive sweep ran, a screen mounted in the same
+  //     commit had already claimed the stale entry, making it active and sparing it from
+  //     the sweep entirely — it was then served for the full staleTime.
+  // Running here, before paint and before any child subscribes, closes both. Queries
+  // observed from an earlier commit are still active and still spared.
   const viewerId = useRef(user?.id);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const departing = viewerId.current;
     viewerId.current = user?.id;
     if (departing === user?.id) return;

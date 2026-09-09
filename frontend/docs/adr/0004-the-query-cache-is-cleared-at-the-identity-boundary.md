@@ -44,6 +44,17 @@ left behind, since by then nothing of theirs is still mounted, and strands nothi
 Every path that can leak — logout, an account switch, a session ended by a failed refresh — is a
 departure; the arrival sweep is the backstop for what lands after one.
 
+**Both halves run in a layout effect, and the choice is load-bearing rather than stylistic.** A
+passive effect fires after the commit it belongs to has been painted, which breaks the sweep twice
+over. The screens an arriving viewer mounts read the cache *while they render*, so the previous
+viewer's data reaches the new one's screen before a passive effect could drop it. Worse, React
+Query subscribes its observer in a passive effect of its own, and a child's passive effects run
+before its parent's — so by the time a passive sweep ran, a screen mounted in the same commit had
+already claimed the stale entry. That made it *active*, which spared it from a sweep that spares
+active queries, and `staleTime` then served it for the full 30s with no refetch. Running before
+paint and before any child subscribes closes both. Queries observed from an earlier commit are
+still active, and still spared.
+
 Keyed on **identity change**, not wired into `logout` and `login` as a pair of calls, because a
 list of entry points is a list a future entry point can be left off. It is keyed on the **id** and
 not the user object so that `updateProfile` renaming someone is not treated as a change of viewer.
@@ -73,7 +84,10 @@ not the user object so that `updateProfile` renaming someone is not treated as a
   immediately after, and the reason arrival sweeps rather than clears. Pinned by a test.
 - The arrival sweep spares observed queries, so it would not catch a viewer's data that something
   was still observing at the moment the next viewer arrived. Nothing can be: protected screens
-  unmount with `setUser(null)`, and the public ones issue no queries.
+  unmount with `setUser(null)`, the public ones issue no queries, and a screen mounting in the same
+  commit has not subscribed yet when the layout effect runs.
+- `useLayoutEffect` is synchronous with the commit, so the work happens on React's critical path.
+  It is a ref comparison and, at most, one cache operation per identity change — not per render.
 - `AuthProvider` now requires a `QueryClientProvider` above it. `App.tsx` already provided one;
   tests that render the provider must too.
 - The rule is invisible at the call sites it protects. Someone reading `["lists"]` cannot see why

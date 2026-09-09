@@ -39,7 +39,7 @@ Dev web on `http://localhost:5173`, API on `http://localhost:8000`, Mailpit on `
 
 **Auth**: access token in memory (module-level variable in `api/client.ts`), refresh token in a backend-managed HttpOnly cookie. Silent refresh on mount restores sessions; a 401 triggers refresh and retry, skipping `/auth/` URLs to avoid loops, with a failed-request queue for concurrent 401s. When that refresh gives up, the interceptor calls the handler `AuthProvider` registered via `setSessionEndedHandler`, which clears the user and lands the viewer on `/login` rather than leaving a mounted page with a dead token.
 
-**The query cache is dropped whenever the viewer changes** — an effect in `AuthProvider` keyed on `user?.id`, covering logout, an account switch, and a token-expiry re-login alike. This is *why* no `queryKey` carries a user id: don't "fix" the keys by adding one. A viewer *departing* triggers `queryClient.clear()`; a viewer *arriving* removes only unobserved entries (`removeQueries({ type: "inactive" })`), because a mutation can write its response in after the departure clear, while clearing an in-flight query would leave its observer pending forever. Keyed on the id, not the user object, so `updateProfile` renaming someone is not a change of viewer. `AuthProvider` therefore requires a `QueryClientProvider` above it — `App.tsx` and every test that renders it must supply one. See [ADR 0004](docs/adr/0004-the-query-cache-is-cleared-at-the-identity-boundary.md).
+**The query cache is dropped whenever the viewer changes** — an effect in `AuthProvider` keyed on `user?.id`, covering logout, an account switch, and a token-expiry re-login alike. This is *why* no `queryKey` carries a user id: don't "fix" the keys by adding one. A viewer *departing* triggers `queryClient.clear()`; a viewer *arriving* removes only unobserved entries (`removeQueries({ type: "inactive" })`), because a mutation can write its response in after the departure clear, while clearing an in-flight query would leave its observer pending forever. It is a **`useLayoutEffect`** and must stay one — a passive effect runs after paint, and after a mounting screen's own passive effect has claimed the stale entry and made it active, which spares it from the sweep. Keyed on the id, not the user object, so `updateProfile` renaming someone is not a change of viewer. `AuthProvider` therefore requires a `QueryClientProvider` above it — `App.tsx` and every test that renders it must supply one. See [ADR 0004](docs/adr/0004-the-query-cache-is-cleared-at-the-identity-boundary.md).
 
 **Routing**: `routes.tsx` — public paths, then `ProtectedRoute` → `Layout` (nav shell) for authenticated pages.
 
@@ -425,7 +425,7 @@ has. This deliberately diverges from the project spec §4.2 wireframe, which sti
 against each section heading.
 
 ## Testing
-- 433 test cases across 35 files, run inside the container via `task test`
+- 434 test cases across 35 files, run inside the container via `task test`
 - MSW mocks live in `src/test/mocks/handlers.ts` (default `/auth/refresh → 401`); setup in `src/test/setup.ts`
 
 ## Critical conventions

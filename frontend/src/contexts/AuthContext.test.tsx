@@ -278,6 +278,58 @@ describe("AuthContext — the query cache at the identity boundary", () => {
     expect(cachedKeyCount()).toBe(0);
   });
 
+  it("does not serve a leftover entry to a screen that claims it as the next viewer mounts", async () => {
+    // The sweep has to beat the arriving screen to the entry. React Query subscribes its
+    // observer in a passive effect, and a child's runs before the provider's, so a passive
+    // sweep arrived too late: the screen had already made the stale entry active, which
+    // spared it from the sweep, and staleTime then served it for 30s without a refetch.
+    server.use(
+      loginReturns(fakeAccessToken),
+      http.get("https://boone-gifts-api.localhost/account", () =>
+        HttpResponse.json({ owner: "B" })
+      )
+    );
+
+    function Account() {
+      const { data } = useQuery({
+        queryKey: ["account"],
+        queryFn: async () => (await apiClient.get("/account")).data,
+      });
+      return <div data-testid="account">{JSON.stringify(data ?? null)}</div>;
+    }
+
+    function Gate() {
+      // Mounts only once a viewer exists — what ProtectedRoute does.
+      const { user } = useAuth();
+      return user ? <Account /> : null;
+    }
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <AuthConsumer />
+          <Gate />
+        </AuthProvider>
+      </QueryClientProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("user")).toHaveTextContent("none");
+    });
+
+    // A's payload, written in late by a mutation that outlived A's last screen.
+    queryClient.setQueryData(["account"], { owner: "A" });
+
+    await userEvent.click(screen.getByText("Login"));
+    await waitFor(() => {
+      expect(screen.getByTestId("user")).toHaveTextContent("test@test.com");
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("account")).toHaveTextContent('{"owner":"B"}');
+    });
+  });
+
   it("does not strand a query already running when a session is restored", async () => {
     // The arrival sweep spares observed queries: an outright clear here drops one that is
     // still in flight and leaves its observer pending forever.
