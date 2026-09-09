@@ -11,6 +11,7 @@ architecture live in [`AGENTS.md`](AGENTS.md); this file is only about what the 
 | **Shared with me** | Every list someone else has made visible to me, **however it reached me** — a direct share, or an occasion of a family I belong to. One section, never two destinations | `pages/Lists.tsx` |
 | **from Jane** / **Boone Family** | The source label on a shared row — `shared_via` from the API. An occasion share is labelled with its **family**: the occasion is how the share was made, the family is who the viewer recognises | `components/ListAttribution.tsx` |
 | **for Beth** | This list is kept for a person with no account | `components/ListAttribution.tsx`, `lib/attribution.ts` |
+| **Group by** | How I ask *Shared with me* to subdivide — by occasion, person, or folder. Off by default; every grouping keeps a "Not in a …" bucket so nothing vanishes | `pages/Lists.tsx`, `lib/list-grouping.ts` |
 | **People** | Connections and families together — everyone I share with | `pages/People.tsx` |
 | **Family** | A named group of people. A list reaches one **through an occasion of that family**, never the family itself | `pages/FamilyDetail.tsx` |
 | **Folder** | My saved grouping of lists — "Christmas 2026". Was called a *collection*, then an *occasion*. Has a page (`/folders/:id`) but no index | `pages/FolderDetail.tsx` |
@@ -42,7 +43,12 @@ behaviour).
    one person's fetched data is never painted for the next on a shared device.
 
 3. **Source is a label, not a destination.** How a list reached the viewer is rendered on the row.
-   It never becomes its own page, tab, or filter-by-default.
+   It never becomes its own page, tab, or filter-by-default. It may become a *heading* — but only
+   inside **Shared with me**, only because the viewer switched Group by on, and never as a link:
+   the one grouping whose heading leads anywhere is Folder, which is the viewer's own grouping and
+   not a source at all (see [`docs/adr/0005-grouping-returns-as-an-opt-in.md`](docs/adr/0005-grouping-returns-as-an-opt-in.md)).
+   Every grouping keeps its "Not in a …" bucket, because a section that claims to hold everything
+   shared with the viewer may never quietly drop a list that fits no bucket.
 
 4. **A list is for an account person, or for someone with no account, or for neither.** The two
    controls are mutually exclusive; picking one clears the other.

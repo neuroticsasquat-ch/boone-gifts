@@ -104,7 +104,8 @@ src/
                      # "Shared with …" line), SharingPanel (the combined people
                      # + families picker behind the header's Change control),
                      # FolderPicker (the ⋯ menu's "Add to a folder…")
-  lib/               # attribution.ts, recipient.ts, list-for.ts — who a list is for,
+  lib/               # list-grouping.ts — how Shared with me subdivides under Group by;
+                     # attribution.ts, recipient.ts, list-for.ts — who a list is for,
                      # and how that reads on a row; occasion-choice.ts — the
                      # sharing control's one-, several-, no-occasion rule;
                      # money.ts — formatMoney, the one place money becomes text;
@@ -125,14 +126,14 @@ src/
 | `/reset-password` | `ResetPassword` | Public |
 | `/family-invites/:token` | `AcceptFamilyInvite` | Authenticated, outside `Layout` |
 | `/` | — | Redirects to `/lists`; the app's entry point, not a page |
-| `/lists` | `Lists` | My lists + everything shared with me, under the actionable banner. Header controls: folder filter, sort, archive |
+| `/lists` | `Lists` | My lists + everything shared with me, under the actionable banner. Header controls: folder filter, sort, group by, archive |
 | `/lists/new` | `CreateList` | Also shows "Share with families" checkboxes |
 | `/lists/:id` | `ListDetail` | Owner view or viewer/claimer view. No tab bar: header, then the gifts. Owner header carries the sharing summary line (+ **Change**) and a `⋯` menu holding Add to a folder…, Edit, Archive and Delete; a viewer gets the same menu holding the folder action alone |
 | `/people` | `People` | The People tab: families, then individuals, under the actionable banner |
 | `/people/:id` | `ConnectionProfile` | |
 | `/people/families/:id` | `FamilyDetail` | Members, occasions, invites, rename, delete, leave |
 | `/occasions/:id` | `OccasionDetail` | A family occasion: header, tab bar (**Lists · My shopping**), and the lists shared to it. The `⋯` menu's rename and archive are organizer-only |
-| `/folders/:id` | `FolderDetail` | One user's folder, with the same two tabs. There is no `/folders` index — `Folders.tsx` stays unrouted, and NEU-1277's Group by is what will link here |
+| `/folders/:id` | `FolderDetail` | One user's folder, with the same two tabs. There is no `/folders` index — `Folders.tsx` stays unrouted; a **Group by: Folder** heading on `/lists` is the one link here |
 | `/account` | `Account` | Via the user menu |
 | `/admin/invites`, `/admin/users` | `AdminInvites`, `AdminUsers` | Admin-only |
 
@@ -392,9 +393,9 @@ A folder is a user's saved grouping of lists — called a "collection" until NEU
 `docs/adr/0002-occasion-and-folder.md`). A folder has a **page** again — `/folders/:id`, rebuilt in
 NEU-1274 with the occasion page's two tabs — but still **no index**: `Folders.tsx` stays unrouted, so
 the **folder filter on `/lists` is the primary place a user meets the concept**, and it carries the
-explanation the old page's blurb used to. Nothing in the UI links to `/folders/:id` yet; NEU-1277's
-Group by is what will. Its back link and its post-delete redirect both go to `/lists`, because there
-is no folder index to return to.
+explanation the old page's blurb used to. The **one link to `/folders/:id`** is a Group by: Folder
+heading on `/lists` (NEU-1277). Its back link and its post-delete redirect both go to `/lists`,
+because there is no folder index to return to.
 
 **Membership is an action on the list, not a tab.** `list-detail/FolderPicker.tsx` is opened by
 "Add to a folder…" in list detail's `⋯` menu — a checkbox per folder, ticked where this list is
@@ -424,8 +425,40 @@ collapsed into one `sortBy` governing both — the same both-sections-at-once re
 has. This deliberately diverges from the project spec §4.2 wireframe, which still draws `[sort ▾]`
 against each section heading.
 
+**Group by subdivides Shared with me, and only when asked** (NEU-1277, project spec §9.1,
+[ADR 0005](docs/adr/0005-grouping-returns-as-an-opt-in.md)). A fourth header control —
+**None · Occasion · Person · Folder** — with **None the default**, so the flat section ADR 0001
+decided on is still what a viewer who asks for nothing sees.
+
+- `lib/list-grouping.ts` holds the whole rule as a pure function over the rows the page has already
+  filtered and sorted. Order inside a bucket is the order it was handed; the buckets themselves are
+  alphabetical, leftover last, so they do not reshuffle as lists arrive.
+- **Every grouping renders its leftover bucket** — "Not in an occasion", "Not shared directly by a person",
+  "Not in a folder". Each keys on something a list may not have (a direct share belongs to no
+  occasion, a family share to no person), and without it those lists silently vanish from a section
+  that claims to hold everything shared with the viewer. This is the failure mode to test first.
+- **Occasion and Person both come off `shared_via`**, which is one value per list, so those buckets
+  are exclusive. **Folder membership is many-to-many** and a list filed under two folders renders
+  under each — the same rule the folder filter already applies.
+- A **folder heading is a link** to `/folders/:id`, the page's only entry point; an occasion or
+  person heading is not a link, because a source is a label and not a destination
+  (`CONTEXT.md` rule 3).
+- Grouping by folder needs every folder's membership, so it fans out `getFolder` over
+  `folders.data` with `useQueries` on the same `["folder", id]` keys the filter uses — **enabled only
+  while that grouping is chosen**, and the section shows a spinner rather than filing lists under
+  "Not in a folder" and then moving them.
+- A membership read that **failed** is not an empty one: the grouping is abandoned, the section says
+  so and stays flat, and every row stays on the page. Filing those lists under "Not in a folder"
+  would answer a question the page cannot currently answer — and losing them is the failure this
+  control exists to avoid.
+- Grouping composes with the filter and the sort rather than replacing them: it subdivides whatever
+  the filter left, in the order the sort put it. My Lists is untouched.
+- The control sits **in the header row** beside the folder filter and the sort, where project spec
+  §9.1 draws it on its own line under the page title. Same deliberate divergence as the sort control
+  above: one row holds every control that reshapes the page.
+
 ## Testing
-- 434 test cases across 35 files, run inside the container via `task test`
+- 457 test cases across 36 files, run inside the container via `task test`
 - MSW mocks live in `src/test/mocks/handlers.ts` (default `/auth/refresh → 401`); setup in `src/test/setup.ts`
 
 ## Critical conventions

@@ -431,3 +431,170 @@ describe("Lists — shared account labels", () => {
     expect(screen.getAllByText(/^for /)).toHaveLength(1);
   });
 });
+
+describe("Lists — group by", () => {
+  const viaBoone = {
+    kind: "occasion", id: 3, name: "Christmas 2026",
+    family: { id: 1, name: "Boone Family" },
+  };
+  const viaExtended = {
+    kind: "occasion", id: 4, name: "Christmas 2026",
+    family: { id: 2, name: "Extended Family" },
+  };
+
+  /** Two occasion shares and one direct share — the mix every grouping has to
+   *  account for, since each keys on something one of them lacks. */
+  function mixedShares() {
+    lists({
+      owned: [ownedList({ id: 9, name: "Tom's Wishlist" })],
+      shared: [
+        sharedList({ id: 1, name: "Carol's Wishlist", owner_name: "Carol Boone", shared_via: viaBoone }),
+        sharedList({ id: 2, name: "Dave's Wishlist", owner_name: "Dave Boone", shared_via: viaExtended }),
+        sharedList({ id: 3, name: "Jane's Wishlist", shared_via: { kind: "user", id: 2, name: "Jane Boone" } }),
+      ],
+    });
+  }
+
+  it("leaves the section flat until the viewer asks otherwise", async () => {
+    mixedShares();
+
+    renderLists();
+
+    const control = await screen.findByLabelText("Group by");
+    expect(control).toHaveValue("none");
+    expect(await screen.findByText("Carol's Wishlist")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Boone Family · Christmas 2026" })).not.toBeInTheDocument();
+  });
+
+  // The failure mode this ticket exists to avoid: a list that fits no bucket
+  // silently disappearing from a section that claims to hold everything.
+  it("keeps a directly-shared list visible under Group by: Occasion", async () => {
+    mixedShares();
+
+    renderLists();
+
+    await userEvent.selectOptions(await screen.findByLabelText("Group by"), "occasion");
+
+    expect(await screen.findByRole("heading", { name: "Not in an occasion" })).toBeInTheDocument();
+    expect(screen.getByText("Jane's Wishlist")).toBeInTheDocument();
+  });
+
+  it("names each occasion bucket for its family as well as its occasion", async () => {
+    mixedShares();
+
+    renderLists();
+
+    await userEvent.selectOptions(await screen.findByLabelText("Group by"), "occasion");
+
+    // Both families call it "Christmas 2026"; the family is what tells them apart.
+    expect(await screen.findByRole("heading", { name: "Boone Family · Christmas 2026" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Extended Family · Christmas 2026" })).toBeInTheDocument();
+    expect(screen.getByText("Carol's Wishlist")).toBeInTheDocument();
+    expect(screen.getByText("Dave's Wishlist")).toBeInTheDocument();
+  });
+
+  it("groups by the person who shared, leaving family shares their own bucket", async () => {
+    mixedShares();
+
+    renderLists();
+
+    await userEvent.selectOptions(await screen.findByLabelText("Group by"), "person");
+
+    const person = await screen.findByRole("heading", { name: "Jane Boone" });
+    expect(within(person.parentElement as HTMLElement).getByText("Jane's Wishlist")).toBeInTheDocument();
+
+    const rest = screen.getByRole("heading", { name: "Not shared directly by a person" });
+    const restLists = within(rest.parentElement as HTMLElement);
+    expect(restLists.getByText("Carol's Wishlist")).toBeInTheDocument();
+    expect(restLists.getByText("Dave's Wishlist")).toBeInTheDocument();
+  });
+
+  it("shows a list under each folder it is filed in, and the rest under none", async () => {
+    mixedShares();
+    folders([
+      { id: 5, name: "Christmas 2026", lists: [{ id: 1 }] },
+      { id: 6, name: "Birthdays", lists: [{ id: 1 }] },
+    ]);
+
+    renderLists();
+
+    await userEvent.selectOptions(await screen.findByLabelText("Group by"), "folder");
+
+    const christmas = await screen.findByRole("heading", { name: "Christmas 2026" });
+    const birthdays = screen.getByRole("heading", { name: "Birthdays" });
+    expect(within(christmas.parentElement as HTMLElement).getByText("Carol's Wishlist")).toBeInTheDocument();
+    expect(within(birthdays.parentElement as HTMLElement).getByText("Carol's Wishlist")).toBeInTheDocument();
+
+    const unfiled = within(screen.getByRole("heading", { name: "Not in a folder" }).parentElement as HTMLElement);
+    expect(unfiled.getByText("Dave's Wishlist")).toBeInTheDocument();
+    expect(unfiled.getByText("Jane's Wishlist")).toBeInTheDocument();
+  });
+
+  // Nothing else in the UI links to `/folders/:id`, so this heading is the
+  // folder page's one entry point.
+  it("links a folder heading to that folder's page", async () => {
+    mixedShares();
+    folders([{ id: 5, name: "Christmas 2026", lists: [{ id: 1 }] }]);
+
+    renderLists();
+
+    await userEvent.selectOptions(await screen.findByLabelText("Group by"), "folder");
+
+    expect(await screen.findByRole("link", { name: "Christmas 2026" })).toHaveAttribute("href", "/folders/5");
+  });
+
+  // Grouping subdivides one section; the two-section split is orthogonal to it.
+  it("subdivides Shared with me alone", async () => {
+    mixedShares();
+
+    renderLists();
+
+    await userEvent.selectOptions(await screen.findByLabelText("Group by"), "occasion");
+
+    await screen.findByRole("heading", { name: "Not in an occasion" });
+    const owned = screen.getByRole("heading", { name: /My Lists/ });
+    expect(within(owned.parentElement as HTMLElement).getByText("Tom's Wishlist")).toBeInTheDocument();
+    expect(within(owned.parentElement as HTMLElement).queryByRole("heading", { level: 3 })).not.toBeInTheDocument();
+  });
+
+  // A membership read that failed is not an empty one: filing its lists under
+  // "Not in a folder" would assert something the page cannot currently know.
+  it("says so and stays flat when a folder's membership cannot be read", async () => {
+    mixedShares();
+    server.use(
+      http.get(`${API}/folders`, () => HttpResponse.json([
+        {
+          id: 5, name: "Christmas 2026", description: null, owner_id: 1,
+          is_archived: false, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z",
+        },
+      ])),
+      http.get(`${API}/folders/:id`, () => new HttpResponse(null, { status: 500 })),
+    );
+
+    renderLists();
+
+    await userEvent.selectOptions(await screen.findByLabelText("Group by"), "folder");
+
+    expect(await screen.findByText(/folders couldn't be loaded/)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Not in a folder" })).not.toBeInTheDocument();
+    // Every list is still on the page — nothing is lost to a failed read.
+    expect(screen.getByText("Carol's Wishlist")).toBeInTheDocument();
+    expect(screen.getByText("Dave's Wishlist")).toBeInTheDocument();
+    expect(screen.getByText("Jane's Wishlist")).toBeInTheDocument();
+  });
+
+  it("groups what the folder filter left, not what it removed", async () => {
+    mixedShares();
+    folders([{ id: 5, name: "Christmas 2026", lists: [{ id: 1 }, { id: 3 }] }]);
+
+    renderLists();
+
+    await userEvent.selectOptions(await screen.findByLabelText("Folder"), "5");
+    await userEvent.selectOptions(screen.getByLabelText("Group by"), "occasion");
+
+    expect(await screen.findByRole("heading", { name: "Boone Family · Christmas 2026" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Not in an occasion" })).toBeInTheDocument();
+    // Dave's list is in no folder, so the filter took it before grouping saw it.
+    expect(screen.queryByText("Dave's Wishlist")).not.toBeInTheDocument();
+  });
+});
