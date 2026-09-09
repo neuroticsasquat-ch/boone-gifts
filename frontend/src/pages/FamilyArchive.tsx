@@ -18,6 +18,11 @@ import { ArchiveIcon } from "../components/Icons";
  * Every member may look. Unarchiving stays organizer-only and stays on the
  * occasion's own page, which already gates and enforces it; a row here is the
  * way to reach that page, not a second copy of its controls.
+ *
+ * The two reads fail independently and are reported that way. A family read
+ * that failed must not be allowed to read as the bare word "Family" in the
+ * header — that is a failure wearing a plausible default, which is the thing
+ * the sibling archive page's per-section error arms exist to prevent.
  */
 export function FamilyArchive() {
   const { id } = useParams();
@@ -46,6 +51,12 @@ export function FamilyArchive() {
         <Link to={`/people/families/${familyId}`} className="text-sm text-blue-600 hover:underline">
           ← {family.data?.name ?? "Family"}
         </Link>
+        {family.isError && (
+          <p className="mt-1 text-sm text-red-600">
+            This family&apos;s name couldn&apos;t be loaded. The archived occasions below are
+            still its own.
+          </p>
+        )}
         <h1 className="mt-1 flex items-center gap-2 text-2xl font-bold text-gray-900">
           <ArchiveIcon className="h-6 w-6" /> Archived Occasions
         </h1>

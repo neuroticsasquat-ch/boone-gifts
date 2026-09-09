@@ -332,7 +332,7 @@ export function Lists() {
           it is a destination rather than a control that reshapes what is above
           it. It replaces the "View archived lists" toggle: nothing archived is
           reachable from the dashboard itself any more (NEU-1278). */}
-      <p>
+      <p className="text-right">
         <Link to="/lists/archive" className="text-sm text-blue-600 hover:underline">
           View archive
         </Link>

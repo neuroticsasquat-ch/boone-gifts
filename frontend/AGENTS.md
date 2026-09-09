@@ -467,8 +467,14 @@ decided on is still what a viewer who asks for nothing sees.
 
 **Archived things have one way in each, and it is a page** (NEU-1278, project spec §9.5). Before this
 the Lists page and the family page each carried a *toggle* that swapped the surface into an archived
-state; both are gone, and with them the last routes by which something archived could appear in a
-default view.
+state; both are gone, and neither dashboard has a code path left that can *read* archived rows.
+
+One thing archived still surfaces by name, deliberately: under **Group by: Occasion**, a list shared
+before its occasion was archived is filed under that occasion's heading (`lib/list-grouping.ts`). The
+list is live and the heading is a truthful label for where it came from — archiving blocks new shares
+and nothing else (project spec §5.4) — and `SharedVia`'s occasion arm carries no `is_archived` for a
+client to filter on anyway. Dropping those lists, or the heading, would lose live lists from a
+section that claims to hold everything shared with the viewer.
 
 | Page | Holds | Entry point |
 |---|---|---|
@@ -493,6 +499,9 @@ default view.
   which read failed and the rows that did arrive stay on the page. "You haven't archived anything
   yet" is one line in place of three "No archived …" ones, and it renders **only** when all three
   reads have actually succeeded and come back empty.
+- The same rule reaches the *header*: `FamilyArchive` reads the family and its occasions
+  independently, and a failed family read says so rather than letting the back link settle on the
+  bare word "Family" — a failure wearing a plausible default is the case this rule is about.
 - The Lists entry point sits at the foot of the page, where project spec §9.1 draws it, rather than in
   the header row with the folder filter, sort and group-by. Those reshape what is on the page; this is
   a destination. Same reasoning, opposite conclusion to the sort and group-by placement above.
@@ -500,7 +509,7 @@ default view.
   organizer-only act; unarchiving is, and that is enforced where it happens.
 
 ## Testing
-- 470 test cases across 38 files, run inside the container via `task test`
+- 471 test cases across 38 files, run inside the container via `task test`
 - MSW mocks live in `src/test/mocks/handlers.ts` (default `/auth/refresh → 401`); setup in `src/test/setup.ts`
 
 ## Critical conventions

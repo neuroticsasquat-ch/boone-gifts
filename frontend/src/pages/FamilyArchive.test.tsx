@@ -121,6 +121,19 @@ describe("FamilyArchive", () => {
     expect(screen.queryByText("No archived occasions.")).not.toBeInTheDocument();
   });
 
+  // A failed read is not an empty one, and it is not a plausible default
+  // either: "← Family" would read as an ordinary header rather than a gap.
+  it("says the family's name is missing rather than settling on \"Family\"", async () => {
+    archivedOccasions([occasion(2, "Christmas 2025")]);
+    server.use(http.get(`${API}/families/1`, () => new HttpResponse(null, { status: 500 })));
+
+    renderArchive();
+
+    expect(await screen.findByText(/name couldn't be loaded/)).toBeInTheDocument();
+    // The occasions read succeeded independently, so its rows still stand.
+    expect(screen.getByRole("link", { name: "Christmas 2025" })).toBeInTheDocument();
+  });
+
   // Archiving an occasion takes it out of the default views and does nothing
   // else (project spec §5.4) — the page says so, because a member arriving here
   // needs to know their shopping and the lists shared to it are still live.
