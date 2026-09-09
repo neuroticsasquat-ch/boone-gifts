@@ -6,18 +6,10 @@ import { getFolderShopping } from "../api/folders";
 import { getOccasionShopping } from "../api/occasions";
 import { purchaseGift, unpurchaseGift } from "../api/gifts";
 import { formatMoney } from "../lib/money";
+import { shoppingKey, type ShoppingScope } from "../lib/shopping";
+import { BudgetLine } from "./BudgetLine";
 import { Spinner } from "./Spinner";
 import type { ShoppingItem } from "../types";
-
-/**
- * What bounds a shopping tab: an occasion the claims are *filed under*, or a
- * folder the claimed-from lists are *in*. The two reads return the same shape
- * from the same backend query and differ only in that scope, which is why one
- * component serves both pages rather than each growing its own copy.
- */
-export type ShoppingScope =
-  | { kind: "occasion"; id: number }
-  | { kind: "folder"; id: number };
 
 /** Nothing-here reads differently per scope, because *why* it is empty differs:
  *  an occasion holds claims filed under it, a folder holds claims on the lists
@@ -40,15 +32,18 @@ export function MyShopping({ scope }: { scope: ShoppingScope }) {
   const queryClient = useQueryClient();
 
   const shopping = useQuery({
-    queryKey: ["shopping", scope.kind, scope.id],
+    queryKey: shoppingKey(scope),
     queryFn: () =>
       scope.kind === "occasion" ? getOccasionShopping(scope.id) : getFolderShopping(scope.id),
   });
 
-  // A purchase ticked here is the same claim list detail renders, so its page
-  // is refreshed too rather than left showing yesterday's answer.
   function handleChanged(listId: number) {
-    queryClient.invalidateQueries({ queryKey: ["shopping", scope.kind, scope.id] });
+    // A purchase moves the budget's `spent` and its counts as well as the row,
+    // and the two arrive in one payload — so a single invalidation refreshes
+    // the claims and the line above them together, and they cannot disagree.
+    queryClient.invalidateQueries({ queryKey: shoppingKey(scope) });
+    // The same claim is what list detail renders, so its page is refreshed too
+    // rather than left showing yesterday's answer.
     queryClient.invalidateQueries({ queryKey: ["list", listId] });
   }
 
@@ -67,14 +62,16 @@ export function MyShopping({ scope }: { scope: ShoppingScope }) {
     );
   }
 
-  // The budget line belongs directly above the groups (project spec §9.2), and
-  // NEU-1276 is where it arrives. It is left as a gap in this stack rather than
-  // designed around: inserting one element at the top of a vertical stack costs
-  // nothing, while a layout built as though the groups were the whole tab would
-  // have to be reflowed to take it.
+  // The budget line sits directly above the groups (project spec §9.2), and it
+  // is rendered whether or not there is anything claimed yet: the tally
+  // describes the viewer's shopping either way, and a budget is something they
+  // may well want to set before they have bought anything.
+  const { budget, items } = shopping.data;
+
   return (
     <div className="space-y-4">
-      {shopping.data.length === 0 ? (
+      <BudgetLine budget={budget} scope={scope} />
+      {items.length === 0 ? (
         <div className="rounded-lg bg-white p-6 text-center shadow">
           <p className="text-gray-500">{EMPTY[scope.kind]}</p>
           <p className="mt-1 text-sm text-gray-400">
@@ -82,7 +79,7 @@ export function MyShopping({ scope }: { scope: ShoppingScope }) {
           </p>
         </div>
       ) : (
-        groupByList(shopping.data).map((group) => (
+        groupByList(items).map((group) => (
           <div key={group.listId} className="overflow-hidden rounded-lg bg-white shadow">
             <div className="border-b border-gray-200 bg-gray-50 px-4 py-2">
               <h3 className="text-sm font-semibold text-gray-700">{group.listName}</h3>

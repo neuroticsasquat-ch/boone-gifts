@@ -1,5 +1,11 @@
 import { apiClient } from "./client";
-import type { GiftList, Occasion, OccasionCreated, ShoppingItem } from "../types";
+import type {
+  BudgetRollup,
+  GiftList,
+  Occasion,
+  OccasionCreated,
+  ShoppingPayload,
+} from "../types";
 
 export async function getFamilyOccasions(
   familyId: number,
@@ -61,7 +67,31 @@ export async function getOccasionLists(id: number): Promise<GiftList[]> {
  * **Only ever the caller's own claims.** There is no parameter, no admin path
  * and no aggregate here that returns anyone else's.
  */
-export async function getOccasionShopping(id: number): Promise<ShoppingItem[]> {
-  const response = await apiClient.get<ShoppingItem[]>(`/occasions/${id}/shopping`);
+export async function getOccasionShopping(id: number): Promise<ShoppingPayload> {
+  const response = await apiClient.get<ShoppingPayload>(`/occasions/${id}/shopping`);
+  return response.data;
+}
+
+/**
+ * Set or replace **the caller's own** budget for this occasion, and get the
+ * rollup back.
+ *
+ * A budget is a whole target rather than a delta, so this is a plain replace
+ * and there is no set-versus-update distinction for callers to carry. The
+ * response is the recomputed line, which is why setting a budget is one round
+ * trip and not a write followed by a re-read.
+ */
+export async function setOccasionBudget(id: number, amount: string): Promise<BudgetRollup> {
+  const response = await apiClient.put<BudgetRollup>(`/occasions/${id}/budget`, { amount });
+  return response.data;
+}
+
+/**
+ * Remove the caller's own budget for this occasion and get back the line it
+ * leaves behind — the counts outlive the target, because clearing a budget is
+ * not unclaiming anything. 404 when there was no budget to clear.
+ */
+export async function clearOccasionBudget(id: number): Promise<BudgetRollup> {
+  const response = await apiClient.delete<BudgetRollup>(`/occasions/${id}/budget`);
   return response.data;
 }

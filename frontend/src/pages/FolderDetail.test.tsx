@@ -155,20 +155,30 @@ describe("FolderDetail", () => {
       http.get(`${API}/folders/1`, () => HttpResponse.json(sampleFolder)),
       http.get(`${API}/lists`, () => HttpResponse.json([])),
       http.get(`${API}/folders/1/shopping`, () =>
-        HttpResponse.json([
-          {
-            claim_id: 100,
-            gift_id: 1,
-            name: "Lego Set",
-            description: null,
-            url: null,
-            price: "49.99",
-            list_id: 10,
-            list_name: "My Wishlist",
-            purchased_at: null,
-            amount_paid: null,
+        HttpResponse.json({
+          budget: {
+            amount: null,
+            spent: "0.00",
+            remaining: null,
+            bought_count: 0,
+            total_count: 1,
+            unpriced_count: 0,
           },
-        ])
+          items: [
+            {
+              claim_id: 100,
+              gift_id: 1,
+              name: "Lego Set",
+              description: null,
+              url: null,
+              price: "49.99",
+              list_id: 10,
+              list_name: "My Wishlist",
+              purchased_at: null,
+              amount_paid: null,
+            },
+          ],
+        })
       ),
     );
 
@@ -178,6 +188,10 @@ describe("FolderDetail", () => {
 
     expect(await screen.findByText("Lego Set")).toBeInTheDocument();
     expect(screen.getByText("listed at $49.99")).toBeInTheDocument();
+    // The budget line is on this page too, not the occasion page alone
+    // (project spec §9.3); its own behaviour is `BudgetLine.test.tsx`.
+    expect(screen.getByText("$0.00 spent · no budget set")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Set budget" })).toBeInTheDocument();
   });
 
   // Folders have no index page, so back cannot mean one.

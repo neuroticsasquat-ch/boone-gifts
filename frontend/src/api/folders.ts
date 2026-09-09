@@ -1,5 +1,5 @@
 import { apiClient } from "./client";
-import type { Folder, FolderDetail, ShoppingItem } from "../types";
+import type { BudgetRollup, Folder, FolderDetail, ShoppingPayload } from "../types";
 
 export async function getFolders(archived?: boolean): Promise<Folder[]> {
   const params = archived !== undefined ? { archived: String(archived) } : undefined;
@@ -54,7 +54,31 @@ export async function getFolderIdsForList(listId: number): Promise<number[]> {
  * Replaces `/folders/{id}/shopping-list`, which read `gifts.claimed_by_id`; the
  * claim moved onto its own table in M4 and that endpoint went with it.
  */
-export async function getFolderShopping(folderId: number): Promise<ShoppingItem[]> {
-  const response = await apiClient.get<ShoppingItem[]>(`/folders/${folderId}/shopping`);
+export async function getFolderShopping(folderId: number): Promise<ShoppingPayload> {
+  const response = await apiClient.get<ShoppingPayload>(`/folders/${folderId}/shopping`);
+  return response.data;
+}
+
+/**
+ * Set or replace **the caller's own** budget for this folder, and get the
+ * rollup back.
+ *
+ * A budget is a whole target rather than a delta, so this is a plain replace
+ * and there is no set-versus-update distinction for callers to carry. The
+ * response is the recomputed line, which is why setting a budget is one round
+ * trip and not a write followed by a re-read.
+ */
+export async function setFolderBudget(folderId: number, amount: string): Promise<BudgetRollup> {
+  const response = await apiClient.put<BudgetRollup>(`/folders/${folderId}/budget`, { amount });
+  return response.data;
+}
+
+/**
+ * Remove the caller's own budget for this folder and get back the line it
+ * leaves behind — the counts outlive the target, because clearing a budget is
+ * not unclaiming anything. 404 when there was no budget to clear.
+ */
+export async function clearFolderBudget(folderId: number): Promise<BudgetRollup> {
+  const response = await apiClient.delete<BudgetRollup>(`/folders/${folderId}/budget`);
   return response.data;
 }

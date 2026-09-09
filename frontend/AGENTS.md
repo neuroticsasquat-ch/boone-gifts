@@ -61,7 +61,8 @@ src/
     families.ts      # 13 functions — see "Families" below
     account.ts       # GET/PUT /account — the shared-account flag and its people
     occasions.ts     # A family's occasions: list, read, create, rename/archive,
-                     # the lists shared to one, and its shopping payload
+                     # the lists shared to one, its shopping payload, and the
+                     # caller's own budget for it (PUT/DELETE .../budget)
     claims.ts        # updateClaim — PATCH /claims/{id}, the only way to correct
                      # a recorded amount without re-stamping the purchase
     connections.ts, shares.ts, folders.ts, invites.ts, users.ts, meta.ts
@@ -81,6 +82,9 @@ src/
     MyShopping.tsx        # The My shopping tab both the occasion and folder
                           # pages mount — the viewer's own claims, grouped by
                           # list, with the purchase tick and what they paid
+    BudgetLine.tsx        # The line at the top of that tab — the viewer's own
+                          # spend against their own target, set/edited/cleared
+                          # inline, always disclosing unpriced purchases
     TabBar.tsx            # The Lists · My shopping bar those two pages share
     ListForFields.tsx     # "Who is this list for?" — the shared-account picker,
                           # falling back to RecipientFields on a normal account
@@ -101,7 +105,8 @@ src/
   lib/               # attribution.ts, recipient.ts, list-for.ts — who a list is for,
                      # and how that reads on a row; occasion-choice.ts — the
                      # sharing control's one-, several-, no-occasion rule;
-                     # money.ts — formatMoney, the one place money becomes text
+                     # money.ts — formatMoney, the one place money becomes text;
+                     # shopping.ts — ShoppingScope and the shoppingKey cache key
   types/index.ts     # Types mirroring the backend Pydantic schemas
   test/
     setup.ts         # Vitest setup (Testing Library + MSW)
@@ -303,9 +308,49 @@ claims are *filed under*, or a folder the claimed-from lists are *in*. Keyed `["
 - An archived occasion still serves its shopping payload — archiving takes an occasion out of the
   default views and does nothing else.
 - A change here invalidates `["list", listId]` too, because it is the same claim list detail renders.
-- **The budget line is a gap in the layout, not a design around one.** Project spec §9.2 puts it
-  directly above the groups and NEU-1276 is where it arrives; the tab is a vertical stack so
-  inserting it costs no reflow.
+- **The read is a payload, not a list.** `GET .../shopping` returns `{ budget, items }` — the rollup
+  travels *with* the claims because the two are one screen and must agree, and a budget line fetched
+  behind a second request can render a total the list beneath it contradicts. A purchase moves
+  `spent` as well as the row, so one invalidation of that key refreshes both.
+- **The cache key is `lib/shopping.ts`'s `shoppingKey(scope)`, not a literal.** Two components read
+  and write the entry (`MyShopping` the whole payload, `BudgetLine` its budget half), and a key
+  restated in a second file is a cache bug waiting to happen. `ShoppingScope` lives there with it —
+  out of the component modules so Fast Refresh keeps working.
+
+## Budget line
+
+`components/BudgetLine.tsx` sits at the top of **My shopping**, on both pages, rendered from the
+`budget` half of the payload (project spec §7, §9.2):
+
+```
+$142 of $200 spent · $58 left            [ Edit budget ]
+3 of 7 bought · 2 purchases with no amount recorded
+```
+
+- **Every figure is the viewer's own.** No endpoint aggregates spend across accounts, so there is
+  nothing here that could be anyone else's (`CONTEXT.md` rule 5).
+- **The unpriced count renders whenever it is non-zero**, and is not dropped to tidy the layout. A
+  purchase with no amount counts as bought and never toward `spent`, so without that clause the
+  money line reads as fact when it is an understatement. This is the honesty requirement, not a
+  nicety.
+- **Over budget is stated plainly** — `$12.00 over`, no red, no `role="alert"`. A budget is a target,
+  not a limit, and a line that scolds is one people stop setting.
+- **No budget set** still shows the spend and the tally, with `[ Set budget ]` in place of
+  `[ Edit budget ]`; `amount === null` is the whole signal for which.
+- **Set/edit is `PUT`, clearing is its own `DELETE` button** — an empty field does *not* clear, unlike
+  the claim amount field, because clearing is a different request and the backend answers 404 when
+  there is no budget to remove. Zero is a real target and saves; empty and negative do not.
+- **The field enforces exactly what `BudgetWrite` accepts** — `/^\d{1,8}(\.\d{1,2})?$/`, matching
+  `ge=0`, `decimal_places=2`, `max_digits=10`. A looser check turns `199.999` into a generic
+  "failed to save" toast instead of an answerable message.
+- **Both writes return the recomputed rollup and it is written into the cache**, so the line is one
+  round trip rather than a write followed by a re-read. A *failed* write re-reads instead: the line
+  may be asserting a budget someone already removed elsewhere.
+- The editor seeds from the target already set, never from the spend so far.
+- **Every clause is built from a formatted value and dropped when that value will not format**
+  (ADR 0003). Nothing falls back to the raw wire string under a bare `$`, and nothing substitutes a
+  zero. An overspend moves the sign into the word — the leading `-` is dropped and `$12.00 over`
+  printed — rather than round-tripping the amount through `Number`.
 
 ## Recipients
 

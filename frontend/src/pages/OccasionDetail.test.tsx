@@ -66,6 +66,17 @@ function list(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
+/** No budget set, and counts that say nothing — these tests are about the tab,
+ *  not the budget line, which has its own file. */
+const noBudget = {
+  amount: null,
+  spent: "0.00",
+  remaining: null,
+  bought_count: 0,
+  total_count: 0,
+  unpriced_count: 0,
+};
+
 function renderOccasion({
   userId = 1,
   occasionResponse = HttpResponse.json(occasion),
@@ -83,7 +94,9 @@ function renderOccasion({
     ),
     http.get(`${API}/occasions/3`, () => occasionResponse.clone()),
     http.get(`${API}/occasions/3/lists`, () => HttpResponse.json(lists)),
-    http.get(`${API}/occasions/3/shopping`, () => HttpResponse.json(shopping)),
+    http.get(`${API}/occasions/3/shopping`, () =>
+      HttpResponse.json({ budget: noBudget, items: shopping })
+    ),
     http.get(`${API}/families/7`, () => HttpResponse.json(family))
   );
 

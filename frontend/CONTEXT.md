@@ -18,6 +18,7 @@ architecture live in [`AGENTS.md`](AGENTS.md); this file is only about what the 
 | **Claim** / "I'll get this" | My private intent to buy a gift. Never visible to the list's owner | `pages/list-detail/GiftsTab.tsx` |
 | **My shopping** | Everything *I* have claimed within one occasion or one folder — what I still have to buy, what I bought, and what I paid. Never anyone else's, in any aggregate | `components/MyShopping.tsx` |
 | **Account person** | A named person on a shared login; a list can be marked as being for one | `components/ListForFields.tsx` |
+| **Budget** | A spending target *I* set for myself against one occasion or one folder, and what I have spent toward it. Private to me — organizers name an occasion and never see any money | `components/BudgetLine.tsx` |
 
 Words the UI must **not** use: "collection" (rejected outright — it reads too close to "connection"),
 "occasion" for a folder (the word is reserved for a family's shared occasion — see
@@ -44,7 +45,14 @@ behaviour).
 4. **A list is for an account person, or for someone with no account, or for neither.** The two
    controls are mutually exclusive; picking one clears the other.
 
-5. **A share points at an occasion, not a family.** A family with no active occasion is listed and
+5. **A budget is one person's, and says where it is incomplete.** Every figure on a budget line is
+   the viewer's own; nothing is aggregated across people, and no endpoint behind it names whose
+   budget to read. A purchase recorded with no amount counts as bought and never toward the money
+   total, so the count of them is shown whenever it is non-zero — an understated total must read as
+   an understatement, never as fact. Going over is stated plainly, not as an error: a budget is a
+   target, not a limit.
+
+6. **A share points at an occasion, not a family.** A family with no active occasion is listed and
    disabled with the reason, never hidden; a family with several is not shared to until one is
    chosen. Archiving an occasion blocks new shares and nothing else — it never withdraws one, so an
    existing grant stays visible and revokable.

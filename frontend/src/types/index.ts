@@ -304,6 +304,45 @@ export interface ShoppingItem {
   amount_paid: string | null;
 }
 
+/**
+ * The budget line: the viewer's own target, what they have spent against it,
+ * and the counts underneath (project spec §7).
+ *
+ * **Only ever the viewer's own figures.** No endpoint aggregates spend across
+ * accounts, so there is nothing here that could be anyone else's
+ * (`CONTEXT.md` rule 2).
+ *
+ * `amount` and `remaining` are null when no budget is set — that null is what
+ * tells this app to offer *set* rather than *edit*, and the counts are worth
+ * rendering either way. `remaining` may be negative: a budget is a target, not
+ * a limit, and an overspend is a state to show plainly rather than an error.
+ *
+ * **The money total discloses its own incompleteness.** A purchase with no
+ * amount recorded counts toward `bought_count` and `unpriced_count` and never
+ * toward `spent`, so `unpriced_count` is what makes an understated total read
+ * as an understatement rather than as fact.
+ */
+export interface BudgetRollup {
+  amount: string | null;
+  spent: string;
+  remaining: string | null;
+  bought_count: number;
+  total_count: number;
+  unpriced_count: number;
+}
+
+/**
+ * A shopping tab, whole: the viewer's claims and the budget they count against.
+ *
+ * The rollup travels *with* the items rather than behind a second endpoint
+ * because the two are one screen and must agree — a budget line fetched
+ * separately can render a total the list beneath it contradicts.
+ */
+export interface ShoppingPayload {
+  budget: BudgetRollup;
+  items: ShoppingItem[];
+}
+
 /** A claim as its own claimer sees it — the body `PATCH /claims/{id}` returns.
  *  Never handed to anyone else: the filing is private to the claimer, and the
  *  list's owner sees no claim state at all. */

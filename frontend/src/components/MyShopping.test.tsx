@@ -4,8 +4,9 @@ import { describe, it, expect, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { server } from "../test/mocks/server";
-import { MyShopping, type ShoppingScope } from "./MyShopping";
-import type { ShoppingItem } from "../types";
+import { MyShopping } from "./MyShopping";
+import type { ShoppingScope } from "../lib/shopping";
+import type { BudgetRollup, ShoppingItem } from "../types";
 
 const API = "https://boone-gifts-api.localhost";
 
@@ -25,13 +26,29 @@ function item(overrides: Partial<ShoppingItem> = {}): ShoppingItem {
   };
 }
 
+/** The rollup the tab's budget line reads. Defaulted to "no budget set" so a
+ *  test about claims says nothing about money it does not care about. */
+function budget(overrides: Partial<BudgetRollup> = {}): BudgetRollup {
+  return {
+    amount: null,
+    spent: "0.00",
+    remaining: null,
+    bought_count: 0,
+    total_count: 1,
+    unpriced_count: 0,
+    ...overrides,
+  };
+}
+
 function renderShopping({
   items = [item()],
   scope = { kind: "occasion", id: 3 } as ShoppingScope,
-}: { items?: ShoppingItem[]; scope?: ShoppingScope } = {}) {
+  rollup = budget(),
+}: { items?: ShoppingItem[]; scope?: ShoppingScope; rollup?: BudgetRollup } = {}) {
+  const payload = { budget: rollup, items };
   server.use(
-    http.get(`${API}/occasions/3/shopping`, () => HttpResponse.json(items)),
-    http.get(`${API}/folders/5/shopping`, () => HttpResponse.json(items)),
+    http.get(`${API}/occasions/3/shopping`, () => HttpResponse.json(payload)),
+    http.get(`${API}/folders/5/shopping`, () => HttpResponse.json(payload)),
   );
 
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -123,6 +140,71 @@ describe("MyShopping", () => {
     });
 
     expect(await screen.findByText("no amount recorded")).toBeInTheDocument();
+  });
+
+  // The line itself is `BudgetLine.test.tsx`; what belongs here is that the tab
+  // mounts it, above the groups, from the same payload the claims came in.
+  it("carries the budget line above the claims", async () => {
+    renderShopping({
+      rollup: {
+        amount: "200.00",
+        spent: "142.00",
+        remaining: "58.00",
+        bought_count: 3,
+        total_count: 7,
+        unpriced_count: 2,
+      },
+    });
+
+    expect(await screen.findByText("$142.00 of $200.00 spent · $58.00 left")).toBeInTheDocument();
+    expect(
+      screen.getByText("3 of 7 bought · 2 purchases with no amount recorded"),
+    ).toBeInTheDocument();
+  });
+
+  // A budget is worth setting before anything is claimed, so the line outlives
+  // the empty state rather than being hidden behind it.
+  it("still offers a budget when nothing is claimed yet", async () => {
+    renderShopping({ items: [], rollup: budget({ total_count: 0 }) });
+
+    expect(await screen.findByRole("button", { name: "Set budget" })).toBeInTheDocument();
+  });
+
+  // The write answers with the recomputed rollup, so the line changes without a
+  // second read of the payload.
+  it("shows a saved budget without re-reading the tab", async () => {
+    let reads = 0;
+    const payload = { budget: budget({ spent: "142.00" }), items: [item()] };
+    server.use(
+      http.get(`${API}/occasions/3/shopping`, () => {
+        reads += 1;
+        return HttpResponse.json(payload);
+      }),
+      http.put(`${API}/occasions/3/budget`, () =>
+        HttpResponse.json({
+          amount: "200.00",
+          spent: "142.00",
+          remaining: "58.00",
+          bought_count: 3,
+          total_count: 7,
+          unpriced_count: 0,
+        }),
+      ),
+    );
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <MyShopping scope={{ kind: "occasion", id: 3 }} />
+      </QueryClientProvider>,
+    );
+
+    await userEvent.click(await screen.findByRole("button", { name: "Set budget" }));
+    await userEvent.type(screen.getByLabelText("Budget"), "200");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByText("$142.00 of $200.00 spent · $58.00 left")).toBeInTheDocument();
+    expect(reads).toBe(1);
   });
 
   it("says nothing is here yet, in the words of the scope", async () => {
