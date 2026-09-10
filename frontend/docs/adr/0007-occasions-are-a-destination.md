@@ -1,7 +1,7 @@
 # ADR 0007 — Occasions are a destination
 
 **Status:** Accepted (2026-09-09)
-**Project:** BG: Occasions and Navigation (not yet created in Linear)
+**Project:** [BG: Occasions and Navigation](https://linear.app/neuroticsasquatch/project/bg-occasions-and-navigation-71dae76f947f)
 **Spec:** [`docs/specs/occasions-and-navigation-project-spec.md`](../specs/occasions-and-navigation-project-spec.md)
 **Amends:** [ADR 0005 — Grouping returns to Shared with me, as an opt-in](0005-grouping-returns-as-an-opt-in.md)
 
