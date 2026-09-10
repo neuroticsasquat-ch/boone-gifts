@@ -16,7 +16,9 @@ const sampleFolder = {
   description: "Holiday gifts",
   owner_id: 1,
   lists: [
-    { id: 10, name: "My Wishlist", description: null, owner_id: 1, owner_name: "Me", created_at: "2026-01-01", updated_at: "2026-01-01" },
+    // An owned row: empty routes, which is what the API now sends in place of
+    // the old null (NEU-1290).
+    { id: 10, name: "My Wishlist", description: null, owner_id: 1, owner_name: "Me", shared_via: [], created_at: "2026-01-01", updated_at: "2026-01-01" },
   ],
   created_at: "2026-01-01",
   updated_at: "2026-01-01",

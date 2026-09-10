@@ -44,9 +44,11 @@ export interface ListGroup {
  * What the leftover bucket is called, per grouping.
  *
  * **It is not optional.** Every grouping keys on something a list may not have —
- * a direct share belongs to no occasion, a family share to no person, and most
- * lists to no folder — so without this bucket those lists would silently vanish
- * from a section that claims to hold everything shared with the viewer.
+ * a direct-only share belongs to no occasion, an occasion-only one to no person,
+ * and most lists to no folder — so without this bucket those lists would
+ * silently vanish from a section that claims to hold everything shared with the
+ * viewer. A list that *does* carry a route of the current kind is never here,
+ * however else it also arrived.
  */
 const UNGROUPED_HEADING: Record<Grouping, string> = {
   occasion: "Not in an occasion",
@@ -83,7 +85,7 @@ export function groupLists(
 
   for (const list of lists) {
     // A folder membership is one-to-many — a list filed under both Christmas and
-    // Birthdays belongs under each — where a source is one-to-one.
+    // Birthdays belongs under each.
     if (grouping === "folder") {
       const holders = folders.filter((folder) => folder.listIds.has(list.id));
       if (holders.length === 0) ungrouped.push(list);
@@ -93,16 +95,32 @@ export function groupLists(
       continue;
     }
 
-    const via = list.shared_via;
-    if (grouping === "occasion" && via?.kind === "occasion") {
-      // The family is part of the heading, not decoration: two families
-      // routinely both call an occasion "Christmas 2026".
-      into(`occasion:${via.id}`, `${via.family.name} · ${via.name}`, null, list);
-    } else if (grouping === "person" && via?.kind === "user") {
-      into(`person:${via.id}`, via.name, null, list);
-    } else {
-      ungrouped.push(list);
+    // A source is one-to-many too, since NEU-1290 widened `shared_via` to every
+    // route a list arrived by: a list shared to two families' occasions belongs
+    // under each of their headings, exactly as a list filed in two folders does.
+    // Which route *labels* the row is a separate question, and not one asked
+    // here — `lib/attribution.ts` owns it (NEU-1291).
+    let matched = false;
+    for (const route of list.shared_via) {
+      if (grouping === "occasion" && route.kind === "occasion") {
+        // The family is part of the heading, not decoration: two families
+        // routinely both call an occasion "Christmas 2026".
+        into(
+          `occasion:${route.occasion.id}`,
+          `${route.family.name} · ${route.occasion.name}`,
+          null,
+          list,
+        );
+        matched = true;
+      } else if (grouping === "person" && route.kind === "direct") {
+        into(`person:${route.person.id}`, route.person.name, null, list);
+        matched = true;
+      }
     }
+    // No route of this kind — a direct-only list under Group by: Occasion, or an
+    // occasion-only one under Group by: Person — so the leftover bucket catches
+    // it, exactly as before.
+    if (!matched) ungrouped.push(list);
   }
 
   const named = [...groups.values()].sort((a, b) => a.heading.localeCompare(b.heading));

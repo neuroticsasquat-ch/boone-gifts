@@ -9,7 +9,8 @@ architecture live in [`AGENTS.md`](AGENTS.md); this file is only about what the 
 |---|---|---|
 | **My lists** | Lists this account owns | `pages/Lists.tsx` |
 | **Shared with me** | Every list someone else has made visible to me, **however it reached me** — a direct share, or an occasion of a family I belong to. One section, never two destinations | `pages/Lists.tsx` |
-| **from Jane** / **Boone Family** | The source label on a shared row — `shared_via` from the API. An occasion share is labelled with its **family**: the occasion is how the share was made, the family is who the viewer recognises | `components/ListAttribution.tsx` |
+| **from Jane** / **Boone Family** | The source label on a shared row. A list may have arrived several ways at once, and **direct wins**: a row that also came through an occasion still reads "from Jane", because the direct share is the grant that survives the viewer leaving the family. An occasion-only row is labelled with its **family** — the occasion is how the share was made, the family is who the viewer recognises — and with every distinct family, comma-joined, when more than one carried it | `components/ListAttribution.tsx`, `lib/attribution.ts` |
+| **Share route** | One way a list reached me: a direct share, or an occasion of a family I belong to. A list can have several; `shared_via` is the array of all of them | `lib/attribution.ts`, `lib/list-grouping.ts` |
 | **for Beth** | This list is kept for a person with no account | `components/ListAttribution.tsx`, `lib/attribution.ts` |
 | **Group by** | How I ask *Shared with me* to subdivide — by occasion, person, or folder. Off by default; every grouping keeps a "Not in a …" bucket so nothing vanishes | `pages/Lists.tsx`, `lib/list-grouping.ts` |
 | **People** | Connections and families together — everyone I share with | `pages/People.tsx` |
@@ -51,6 +52,8 @@ behaviour).
    inside **Shared with me**, only because the viewer switched Group by on, and never as a link:
    the one grouping whose heading leads anywhere is Folder, which is the viewer's own grouping and
    not a source at all (see [`docs/adr/0005-grouping-returns-as-an-opt-in.md`](docs/adr/0005-grouping-returns-as-an-opt-in.md)).
+   A list may appear under **several** occasion headings, as it already could under several folders:
+   grouping fans out over every route, where the row's *label* picks one (direct wins).
    Every grouping keeps its "Not in a …" bucket, because a section that claims to hold everything
    shared with the viewer may never quietly drop a list that fits no bucket.
 

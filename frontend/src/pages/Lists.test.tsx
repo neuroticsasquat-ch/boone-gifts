@@ -60,7 +60,7 @@ function ownedList(overrides: Record<string, unknown>) {
   return sharedList({ owner_id: 1, owner_name: "Tom Boone", ...overrides });
 }
 
-/** A list as the `shared` scope returns it, source and all. */
+/** A list as the `shared` scope returns it, routes and all. */
 function sharedList(overrides: Record<string, unknown>) {
   return {
     id: 1,
@@ -74,11 +74,14 @@ function sharedList(overrides: Record<string, unknown>) {
     claimed_count: 0,
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
+    // Never null and never absent, on either scope: an owned row reports the
+    // empty array (NEU-1290).
+    shared_via: [],
     ...overrides,
   };
 }
 
-/** Serve the two scopes separately: only `shared` carries `shared_via`. */
+/** Serve the two scopes separately: only `shared` carries routes to speak of. */
 function lists({ owned = [], shared = [] }: { owned?: unknown[]; shared?: unknown[] }) {
   server.use(
     http.get(`${API}/lists`, ({ request }) => {
@@ -134,21 +137,21 @@ describe("Lists", () => {
   it("labels each shared row with its source", async () => {
     lists({
       shared: [
-        sharedList({ id: 1, name: "Jane's Wishlist", shared_via: { kind: "user", id: 2, name: "Jane Boone" } }),
+        sharedList({ id: 1, name: "Jane's Wishlist", shared_via: [{ kind: "direct", person: { id: 2, name: "Jane Boone" } }] }),
         sharedList({
           id: 2, name: "Carol's Wishlist", owner_name: "Carol Boone",
-          shared_via: {
-            kind: "occasion", id: 3, name: "Christmas 2026",
+          shared_via: [{
+            kind: "occasion", occasion: { id: 3, name: "Christmas 2026" },
             family: { id: 1, name: "Boone Family" },
-          },
+          }],
         }),
         sharedList({
           id: 3, name: "Beth's List", owner_name: "Tom Boone",
           recipient_name: "Beth",
-          shared_via: {
-            kind: "occasion", id: 3, name: "Christmas 2026",
+          shared_via: [{
+            kind: "occasion", occasion: { id: 3, name: "Christmas 2026" },
             family: { id: 1, name: "Boone Family" },
-          },
+          }],
         }),
       ],
     });
@@ -177,14 +180,14 @@ describe("Lists", () => {
       shared: [
         sharedList({
           id: 1, name: "Zoe's Wishlist", updated_at: "2026-02-01T00:00:00Z",
-          shared_via: { kind: "user", id: 2, name: "Zoe" },
+          shared_via: [{ kind: "direct", person: { id: 2, name: "Zoe" } }],
         }),
         sharedList({
           id: 2, name: "Adam's Wishlist", updated_at: "2026-01-01T00:00:00Z",
-          shared_via: {
-            kind: "occasion", id: 3, name: "Christmas 2026",
+          shared_via: [{
+            kind: "occasion", occasion: { id: 3, name: "Christmas 2026" },
             family: { id: 1, name: "Boone Family" },
-          },
+          }],
         }),
       ],
     });
@@ -263,11 +266,11 @@ describe("Lists — folder filter", () => {
     lists({
       owned: [ownedList({ id: 1, name: "Tom's Wishlist" }), ownedList({ id: 2, name: "Beth's List" })],
       shared: [
-        sharedList({ id: 3, name: "Jane's Wishlist", shared_via: { kind: "user", id: 2, name: "Jane Boone" } }),
-        sharedList({ id: 4, name: "Carol's Wishlist", shared_via: {
-            kind: "occasion", id: 3, name: "Christmas 2026",
+        sharedList({ id: 3, name: "Jane's Wishlist", shared_via: [{ kind: "direct", person: { id: 2, name: "Jane Boone" } }] }),
+        sharedList({ id: 4, name: "Carol's Wishlist", shared_via: [{
+            kind: "occasion", occasion: { id: 3, name: "Christmas 2026" },
             family: { id: 1, name: "Boone Family" },
-          } }),
+          }] }),
       ],
     });
     folders([{ id: 5, name: "Christmas 2026", lists: [{ id: 1 }, { id: 3 }] }]);
@@ -304,7 +307,7 @@ describe("Lists — folder filter", () => {
   it("says so per section when the filter matches nothing", async () => {
     lists({
       owned: [ownedList({ id: 1, name: "Tom's Wishlist" })],
-      shared: [sharedList({ id: 3, name: "Jane's Wishlist", shared_via: { kind: "user", id: 2, name: "Jane Boone" } })],
+      shared: [sharedList({ id: 3, name: "Jane's Wishlist", shared_via: [{ kind: "direct", person: { id: 2, name: "Jane Boone" } }] })],
     });
     folders([{ id: 5, name: "Christmas 2026", lists: [] }]);
 
@@ -328,8 +331,8 @@ describe("Lists — sort and the archive link", () => {
         ownedList({ id: 2, name: "Adam's List", updated_at: "2026-01-01T00:00:00Z" }),
       ],
       shared: [
-        sharedList({ id: 3, name: "Zoe's Wishlist", updated_at: "2026-02-01T00:00:00Z", shared_via: { kind: "user", id: 2, name: "Zoe" } }),
-        sharedList({ id: 4, name: "Adam's Wishlist", updated_at: "2026-01-01T00:00:00Z", shared_via: { kind: "user", id: 3, name: "Adam" } }),
+        sharedList({ id: 3, name: "Zoe's Wishlist", updated_at: "2026-02-01T00:00:00Z", shared_via: [{ kind: "direct", person: { id: 2, name: "Zoe" } }] }),
+        sharedList({ id: 4, name: "Adam's Wishlist", updated_at: "2026-01-01T00:00:00Z", shared_via: [{ kind: "direct", person: { id: 3, name: "Adam" } }] }),
       ],
     });
 
@@ -415,14 +418,14 @@ describe("Lists — shared account labels", () => {
 });
 
 describe("Lists — group by", () => {
-  const viaBoone = {
-    kind: "occasion", id: 3, name: "Christmas 2026",
+  const viaBoone = [{
+    kind: "occasion", occasion: { id: 3, name: "Christmas 2026" },
     family: { id: 1, name: "Boone Family" },
-  };
-  const viaExtended = {
-    kind: "occasion", id: 4, name: "Christmas 2026",
+  }];
+  const viaExtended = [{
+    kind: "occasion", occasion: { id: 4, name: "Christmas 2026" },
     family: { id: 2, name: "Extended Family" },
-  };
+  }];
 
   /** Two occasion shares and one direct share — the mix every grouping has to
    *  account for, since each keys on something one of them lacks. */
@@ -432,7 +435,7 @@ describe("Lists — group by", () => {
       shared: [
         sharedList({ id: 1, name: "Carol's Wishlist", owner_name: "Carol Boone", shared_via: viaBoone }),
         sharedList({ id: 2, name: "Dave's Wishlist", owner_name: "Dave Boone", shared_via: viaExtended }),
-        sharedList({ id: 3, name: "Jane's Wishlist", shared_via: { kind: "user", id: 2, name: "Jane Boone" } }),
+        sharedList({ id: 3, name: "Jane's Wishlist", shared_via: [{ kind: "direct", person: { id: 2, name: "Jane Boone" } }] }),
       ],
     });
   }
@@ -591,7 +594,7 @@ describe("Lists — to-buy badge", () => {
       shared: [
         sharedList({
           id: 1, name: "Jane's Wishlist", my_unpurchased_claim_count: 2,
-          shared_via: { kind: "user", id: 2, name: "Jane Boone" },
+          shared_via: [{ kind: "direct", person: { id: 2, name: "Jane Boone" } }],
         }),
       ],
     });
@@ -609,12 +612,12 @@ describe("Lists — to-buy badge", () => {
       shared: [
         sharedList({
           id: 1, name: "Jane's Wishlist", my_unpurchased_claim_count: 0,
-          shared_via: { kind: "user", id: 2, name: "Jane Boone" },
+          shared_via: [{ kind: "direct", person: { id: 2, name: "Jane Boone" } }],
         }),
         // A row that carries no count at all draws no badge either.
         sharedList({
           id: 2, name: "Carol's Wishlist", owner_name: "Carol Boone",
-          shared_via: { kind: "user", id: 4, name: "Carol Boone" },
+          shared_via: [{ kind: "direct", person: { id: 4, name: "Carol Boone" } }],
         }),
       ],
     });
@@ -634,14 +637,14 @@ describe("Lists — to-buy badge", () => {
         sharedList({
           id: 1, name: "Carol's Wishlist", owner_name: "Carol Boone",
           my_unpurchased_claim_count: 1,
-          shared_via: {
-            kind: "occasion", id: 3, name: "Christmas 2026",
+          shared_via: [{
+            kind: "occasion", occasion: { id: 3, name: "Christmas 2026" },
             family: { id: 1, name: "Boone Family" },
-          },
+          }],
         }),
         sharedList({
           id: 2, name: "Jane's Wishlist", my_unpurchased_claim_count: 3,
-          shared_via: { kind: "user", id: 2, name: "Jane Boone" },
+          shared_via: [{ kind: "direct", person: { id: 2, name: "Jane Boone" } }],
         }),
       ],
     });
@@ -664,7 +667,7 @@ describe("Lists — to-buy badge", () => {
       shared: [
         sharedList({
           id: 1, name: "Jane's Wishlist", my_unpurchased_claim_count: 3,
-          shared_via: { kind: "user", id: 2, name: "Jane Boone" },
+          shared_via: [{ kind: "direct", person: { id: 2, name: "Jane Boone" } }],
         }),
       ],
     });

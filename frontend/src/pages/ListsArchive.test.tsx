@@ -95,7 +95,7 @@ describe("ListsArchive", () => {
   it("lists archived lists, archived shared lists and archived folders", async () => {
     archive({
       owned: [list({ id: 1, name: "Last Christmas", owner_id: 1, owner_name: "Tom Boone" })],
-      shared: [list({ id: 2, name: "Jane's Old Wishlist", shared_via: { kind: "user", id: 2, name: "Jane" } })],
+      shared: [list({ id: 2, name: "Jane's Old Wishlist", shared_via: [{ kind: "direct", person: { id: 2, name: "Jane" } }] })],
       folders: [folder({ id: 5, name: "Christmas 2025" })],
     });
 

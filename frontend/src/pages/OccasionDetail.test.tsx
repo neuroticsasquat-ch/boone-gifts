@@ -63,6 +63,19 @@ function list(overrides: Partial<Record<string, unknown>> = {}) {
     claimed_count: 0,
     created_at: "2026-09-01T00:00:00Z",
     updated_at: "2026-09-01T00:00:00Z",
+    // How the row reached the viewer, as every list surface reports it since
+    // NEU-1290: the array of routes, never a scalar and never null. A list on
+    // this page arrived through this occasion by definition, and this one also
+    // came straight from Jane — so direct wins and the row names her, which is
+    // what this page wants ("rather than repeating the family overhead").
+    shared_via: [
+      {
+        kind: "occasion",
+        occasion: { id: 3, name: "Christmas 2026" },
+        family: { id: 1, name: "Boone Family" },
+      },
+      { kind: "direct", person: { id: 2, name: "Jane" } },
+    ],
     ...overrides,
   };
 }
@@ -137,7 +150,11 @@ describe("OccasionDetail", () => {
 
   it("lists every list shared to the occasion, naming who each came from", async () => {
     renderOccasion({
-      lists: [list(), list({ id: 11, name: "My Wishlist", owner_id: 1, owner_name: "Alice" })],
+      lists: [
+        list(),
+        // The viewer's own list: they own it, so no route brought it to them.
+        list({ id: 11, name: "My Wishlist", owner_id: 1, owner_name: "Alice", shared_via: [] }),
+      ],
     });
 
     const jane = await screen.findByRole("link", { name: /Jane's Wishlist/ });

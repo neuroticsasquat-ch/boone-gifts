@@ -30,18 +30,23 @@ export interface User {
 
 // Gift Lists
 /**
- * How a shared list reached the viewer: a direct share from a person, or the
- * occasion it was shared to. A list reachable both ways reports `kind: "user"`
- * — the backend resolves that (NEU-1227), the client never re-derives it.
+ * One way a shared list reached the viewer: a direct share from a person, or an
+ * occasion of a family they belong to. A list can reach them several ways at
+ * once, so `shared_via` is the array of all of them (NEU-1290).
+ *
+ * The backend deliberately **ranks nothing** — routes arrive direct-first then
+ * by ascending occasion id, stable so responses do not churn, and that order is
+ * not a ranking `routes[0]` may be read from. Which route *labels* the row is
+ * the client's rule, and it lives in `lib/attribution.ts` alone (NEU-1291).
  *
  * A list is shared to an occasion, never to a family (project spec §5.1), so the
  * occasion arm carries the family it belongs to rather than naming it directly.
  */
-export type SharedVia =
-  | { kind: "user"; id: number; name: string }
+export type ShareRoute =
+  | { kind: "direct"; person: { id: number; name: string } }
   /** The family rides on the occasion arm and only there. It is not optional:
    *  the backend refuses an occasion share that does not carry one. */
-  | { kind: "occasion"; id: number; name: string; family: FamilyRef };
+  | { kind: "occasion"; occasion: { id: number; name: string }; family: FamilyRef };
 
 export interface GiftList {
   id: number;
@@ -63,9 +68,11 @@ export interface GiftList {
   claimed_count: number;
   created_at: string;
   updated_at: string;
-  /** Present only on a list in the `shared` scope — null on one the caller owns,
-   * absent on a response cached from before the field existed. */
-  shared_via?: SharedVia | null;
+  /** Every route by which this list reached the caller — empty on one they own.
+   * Never null and never absent: the API guarantees the array (NEU-1290), so a
+   * fixture that forgets it should fail to compile rather than quietly
+   * exercising the fallback in `attributionFor`. */
+  shared_via: ShareRoute[];
   /** How many of the viewer's *own* claims on this list are still unbought —
    * what the `• N to buy` badge counts (project spec §9.1).
    *
