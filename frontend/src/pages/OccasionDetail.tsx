@@ -142,7 +142,10 @@ function OccasionHeader({ occasion, isOrganizer }: { occasion: Occasion; isOrgan
   // whether that occasion can still be shared to at all.
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["occasion", occasion.id] });
-    queryClient.invalidateQueries({ queryKey: ["occasions", occasion.family_id] });
+    // The bare prefix rather than this family's: it reaches the family page's
+    // active and archived lists and the /lists occasion strip's index entry
+    // alike, and a rename or an archive moves a card on both.
+    queryClient.invalidateQueries({ queryKey: ["occasions"] });
     queryClient.invalidateQueries({ queryKey: ["share-targets"] });
   };
 

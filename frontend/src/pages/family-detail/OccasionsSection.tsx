@@ -63,9 +63,12 @@ export function OccasionsSection({ familyId, familyName, isOrganizer }: Occasion
     queryFn: () => getFamilyOccasions(familyId, false),
   });
 
-  // Prefix match, so both the active and the archived lists are refetched.
+  // The bare ["occasions"] prefix, so this sweeps both the active and archived
+  // lists for this family *and* the /lists occasion strip's index entry
+  // (["occasions", "index", …]) — creating, renaming or archiving an occasion
+  // changes which cards the landing page draws.
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["occasions", familyId] });
+    queryClient.invalidateQueries({ queryKey: ["occasions"] });
   };
 
   const createMutation = useMutation({

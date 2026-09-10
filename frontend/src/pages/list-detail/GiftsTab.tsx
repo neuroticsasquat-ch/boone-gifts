@@ -584,6 +584,9 @@ function ViewerGiftRow({
     onSuccess: () => {
       setChoosing(false);
       queryClient.invalidateQueries({ queryKey: ["list", listId] });
+      // The claim, and the occasion it was filed under, move that occasion's
+      // my_claimed_count and last_activity_at on the /lists strip.
+      queryClient.invalidateQueries({ queryKey: ["occasions"] });
     },
     onError: (err) => {
       // 400 `ambiguous_occasion` means this client failed to prompt when it
@@ -607,6 +610,7 @@ function ViewerGiftRow({
     mutationFn: () => unclaimGift(listId, gift.id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["list", listId] });
+      queryClient.invalidateQueries({ queryKey: ["occasions"] });
     },
     onError: () => toast.error("Failed to unclaim gift."),
   });
@@ -838,6 +842,9 @@ function PurchaseControl({
     mutationFn: (amountPaid: string | null | undefined) => purchaseGift(listId, gift.id, amountPaid),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["list", listId] });
+      // Buying moves my_bought_count and last_activity_at on the /lists strip,
+      // and claiming then going straight back is the flow it exists for.
+      queryClient.invalidateQueries({ queryKey: ["occasions"] });
       setPrompting(false);
     },
     onError: () => toast.error("Failed to record the purchase."),
@@ -847,6 +854,7 @@ function PurchaseControl({
     mutationFn: () => unpurchaseGift(listId, gift.id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["list", listId] });
+      queryClient.invalidateQueries({ queryKey: ["occasions"] });
     },
     onError: () => toast.error("Failed to update the purchase."),
   });

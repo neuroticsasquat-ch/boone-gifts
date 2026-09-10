@@ -10,6 +10,7 @@ import type { GiftList } from "../types";
 import { groupLists, type FolderMembership, type GroupBy } from "../lib/list-grouping";
 import { ListAttributionLine, RecipientLine } from "../components/ListAttribution";
 import { ActionableBanner } from "../components/ActionableBanner";
+import { OccasionStrip } from "./lists/OccasionStrip";
 
 type SortBy = "updated" | "name" | "created";
 
@@ -192,6 +193,11 @@ export function Lists() {
     <div className="space-y-8">
       {/* Anything awaiting a decision, above the lists. */}
       <ActionableBanner />
+
+      {/* The way in to the occasions the viewer is shopping for. Renders
+          nothing when they have none, and never delays the lists below
+          (ADR 0007). */}
+      <OccasionStrip />
 
       <header>
         <div className="flex items-center justify-between">

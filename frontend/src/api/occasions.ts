@@ -4,8 +4,27 @@ import type {
   GiftList,
   Occasion,
   OccasionCreated,
+  OccasionSummary,
   ShoppingPayload,
 } from "../types";
+
+/**
+ * Every occasion the caller can see, across every family they belong to —
+ * including occasions with no lists shared to them, which §5.1 argues are the
+ * ones most likely to need action.
+ *
+ * Rows arrive ordered `last_activity_at DESC, id DESC`; the `id` tiebreak is
+ * what makes "the first four" stable across requests. Callers render array
+ * order and **do not re-sort**: the server owns the definition of
+ * `last_activity_at` and is the only place that can order on it without a
+ * consumer re-deriving it.
+ */
+export async function getOccasionIndex(archived = false): Promise<OccasionSummary[]> {
+  const response = await apiClient.get<OccasionSummary[]>("/occasions", {
+    params: { archived: String(archived) },
+  });
+  return response.data;
+}
 
 export async function getFamilyOccasions(
   familyId: number,

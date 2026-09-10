@@ -284,6 +284,27 @@ export interface OccasionCreated extends Occasion {
   has_other_active: boolean;
 }
 
+/**
+ * One row of the occasion index — every non-archived occasion in every family
+ * the caller belongs to, including the ones no list has been shared to yet.
+ *
+ * The counts are **the caller's own** and are the caller's by construction:
+ * the endpoint takes no parameter naming another user. `last_activity_at` is
+ * the later of the last share *into* the occasion and the caller's own claim
+ * or purchase filed under it — never another user's claim, which would tell an
+ * owner that somebody is buying them a present (`CONTEXT.md` rule 2). That
+ * definition lives server-side and is not re-derived here.
+ *
+ * Non-null: the server floors it at the occasion's `created_at`.
+ */
+export interface OccasionSummary extends Occasion {
+  family_name: string;
+  list_count: number;
+  my_claimed_count: number;
+  my_bought_count: number;
+  last_activity_at: string;
+}
+
 // Shared Users
 // URL Metadata
 export interface UrlMeta {

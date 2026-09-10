@@ -265,6 +265,9 @@ function FamiliesGroup({ listId, queryClient }: { listId: number; queryClient: Q
     queryClient.invalidateQueries({ queryKey: ["share-targets", listId] });
     queryClient.invalidateQueries({ queryKey: ["list", listId] });
     queryClient.invalidateQueries({ queryKey: ["lists"] });
+    // Sharing a list into an occasion moves that occasion's list_count and its
+    // last_activity_at, so the /lists strip is stale the moment this returns.
+    queryClient.invalidateQueries({ queryKey: ["occasions"] });
   }
 
   const shareMutation = useMutation({

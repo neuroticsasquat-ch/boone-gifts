@@ -22,6 +22,11 @@ export const handlers = [
   http.get("https://boone-gifts-api.localhost/families/:familyId/occasions", () => {
     return HttpResponse.json([]);
   }),
+  // Default handler: no occasions anywhere (the occasion strip fetches the
+  // index on every /lists render)
+  http.get("https://boone-gifts-api.localhost/occasions", () => {
+    return HttpResponse.json([]);
+  }),
   // Default handler: no incoming family invites (ActionableBanner mounts on Lists and People)
   http.get("https://boone-gifts-api.localhost/families/invites", () => {
     return HttpResponse.json([]);

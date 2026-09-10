@@ -202,6 +202,60 @@ describe("Lists", () => {
     expect(screen.getAllByRole("list")).toHaveLength(1);
   });
 
+  // The way in to the occasions the viewer is shopping for, on the page the app
+  // opens on (ADR 0007). Its own behaviour is covered in OccasionStrip.test.tsx;
+  // what this page owns is where it sits and that it never holds the lists up.
+  it("renders the occasion strip between the banner and My Lists", async () => {
+    noLists();
+    // A banner with something in it, so "below the banner" is actually
+    // observable rather than vacuously true against an absent one.
+    server.use(
+      http.get(`${API}/connections/requests`, () => HttpResponse.json([testRequest])),
+    );
+    server.use(
+      http.get(`${API}/occasions`, () =>
+        HttpResponse.json([
+          {
+            id: 4,
+            family_id: 10,
+            name: "Christmas 2026",
+            is_archived: false,
+            created_by_id: 1,
+            created_at: "2026-01-01T00:00:00Z",
+            updated_at: "2026-01-01T00:00:00Z",
+            family_name: "Boone Family",
+            list_count: 2,
+            my_claimed_count: 0,
+            my_bought_count: 0,
+            last_activity_at: "2026-01-01T00:00:00Z",
+          },
+        ])
+      ),
+    );
+
+    renderLists();
+
+    const strip = await screen.findByRole("region", { name: "Occasions" });
+    const banner = await screen.findByRole("region", { name: "Waiting on you" });
+    const heading = screen.getByRole("heading", { name: /My Lists/ });
+
+    // Below the banner, above My Lists — both halves (AC1).
+    expect(banner.compareDocumentPosition(strip)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(strip.compareDocumentPosition(heading)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  // Holding the viewer's own lists behind a request that exists to show
+  // occasions inverts the argument the strip was built on.
+  it("renders the lists without waiting for the occasion strip", async () => {
+    noLists();
+    server.use(http.get(`${API}/occasions`, () => new Promise(() => {})));
+
+    renderLists();
+
+    expect(await screen.findByRole("heading", { name: /My Lists/ })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Occasions" })).not.toBeInTheDocument();
+  });
+
   it("renders no banner region when nothing is pending", async () => {
     noLists();
 
