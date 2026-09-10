@@ -312,7 +312,8 @@ export function Lists() {
               whatever path it took. The backend has already merged the direct and
               family grants and ordered them (NEU-1227). The source shows as a label
               on the row; it becomes a heading only when the viewer asks for one
-              through Group by, and even then it is not a destination (ADR 0005). */}
+              through Group by, and that heading links only where the page behind
+              it carries more than the grouping does (ADR 0007). */}
           <section>
             <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
               <HandshakeIcon className="h-5 w-5" /> Shared with Me
@@ -338,7 +339,11 @@ export function Lists() {
                 <div className="mt-3 space-y-6">
                   {sharedGroups.map((group) => (
                     <section key={group.key}>
+                      {/* The qualifier stays plain text: an occasion heading
+                          reads "Boone Family · Christmas 2026", and only the
+                          occasion name leads to the occasion (ADR 0007). */}
                       <h3 className="text-sm font-semibold text-gray-700">
+                        {group.qualifier && `${group.qualifier} · `}
                         {group.href ? (
                           <Link to={group.href} className="text-blue-600 hover:underline">{group.heading}</Link>
                         ) : group.heading}

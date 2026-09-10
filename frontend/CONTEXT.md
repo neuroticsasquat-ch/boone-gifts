@@ -48,11 +48,17 @@ behaviour).
    and not only per request: the client's query cache is dropped whenever the viewer changes, so
    one person's fetched data is never painted for the next on a shared device.
 
-3. **Source is a label, not a destination.** How a list reached the viewer is rendered on the row.
-   It never becomes its own page, tab, or filter-by-default. It may become a *heading* — but only
-   inside **Shared with me**, only because the viewer switched Group by on, and never as a link:
-   the one grouping whose heading leads anywhere is Folder, which is the viewer's own grouping and
-   not a source at all (see [`docs/adr/0005-grouping-returns-as-an-opt-in.md`](docs/adr/0005-grouping-returns-as-an-opt-in.md)).
+3. **Source is a label; a heading links only when its page carries more.** How a list reached the
+   viewer is rendered on the row. It never becomes a filter-by-default. It may become a *heading* —
+   but only inside **Shared with me**, and only because the viewer switched Group by on.
+
+   A heading links when its destination carries something the grouping does not: `/occasions/:id`
+   has a budget and a shopping tab, `/folders/:id` has membership management. `/people/:id` does
+   not — it is the same lists, filtered the same way — so a person heading leads nowhere
+   ([`docs/adr/0007-occasions-are-a-destination.md`](docs/adr/0007-occasions-are-a-destination.md),
+   amending [ADR 0005](docs/adr/0005-grouping-returns-as-an-opt-in.md)). An occasion heading names
+   its family as an unlinked prefix, because the occasion name alone does not identify one occasion.
+
    A list may appear under **several** occasion headings, as it already could under several folders:
    grouping fans out over every route, where the row's *label* picks one (direct wins).
    Every grouping keeps its "Not in a …" bucket, because a section that claims to hold everything

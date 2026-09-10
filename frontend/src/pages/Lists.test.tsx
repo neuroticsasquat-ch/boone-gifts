@@ -532,6 +532,25 @@ describe("Lists — group by", () => {
     expect(screen.getByText("Dave's Wishlist")).toBeInTheDocument();
   });
 
+  // ADR 0007: the occasion name leads to the occasion, and the family name in
+  // front of it does not — it names a family, and `/people/families/:id` carries
+  // less than this grouping does. This is the assertion that fails if the
+  // heading is ever wrapped in one link again.
+  it("links the occasion name in a heading, but not the family in front of it", async () => {
+    mixedShares();
+
+    renderLists();
+
+    await userEvent.selectOptions(await screen.findByLabelText("Group by"), "occasion");
+
+    const heading = await screen.findByRole("heading", { name: "Boone Family · Christmas 2026" });
+    expect(within(heading).getByRole("link", { name: "Christmas 2026" })).toHaveAttribute(
+      "href",
+      "/occasions/3",
+    );
+    expect(within(heading).queryByRole("link", { name: /Boone Family/ })).not.toBeInTheDocument();
+  });
+
   it("groups by the person who shared, leaving family shares their own bucket", async () => {
     mixedShares();
 
