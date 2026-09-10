@@ -7,6 +7,7 @@ import { fetchUrlMeta } from "../../api/meta";
 import type { ClaimOccasion, GiftListDetailOwner, GiftListDetailViewer, GiftOwnerView, Gift } from "../../types";
 import { formatMoney } from "../../lib/money";
 import { useTimeout } from "../../hooks/useTimeout";
+import { ConfirmDialog, type ConfirmAction } from "../../components/ConfirmDialog";
 import toast from "react-hot-toast";
 
 interface GiftsTabProps {
@@ -550,6 +551,10 @@ function DeleteGiftButton({
 
 // --- Viewer Gift Components ---
 
+// "Never mind" is the wording the unclaim confirmation has always used; the
+// audit in NEU-1319 is where copy like this gets revisited, not here.
+const UNCLAIM_ACTIONS: ConfirmAction[] = [{ id: "unclaim", label: "Never mind", tone: "danger" }];
+
 function ViewerGiftRow({
   gift,
   listId,
@@ -572,6 +577,7 @@ function ViewerGiftRow({
   // exactly as fast as they are today — one click, no question asked.
   const mustAsk = candidates.length >= 2;
   const [choosing, setChoosing] = useState(false);
+  const [confirmingUnclaim, setConfirmingUnclaim] = useState(false);
 
   const claimMutation = useMutation({
     mutationFn: (occasionId?: number) => claimGift(listId, gift.id, occasionId),
@@ -619,11 +625,7 @@ function ViewerGiftRow({
     if (!isArchived) {
       actionButton = (
         <button
-          onClick={() => {
-            if (window.confirm("Are you sure you no longer want to get this gift?")) {
-              unclaimMutation.mutate();
-            }
-          }}
+          onClick={() => setConfirmingUnclaim(true)}
           disabled={isPending}
           className="rounded bg-yellow-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-yellow-700 disabled:opacity-50"
         >
@@ -685,6 +687,15 @@ function ViewerGiftRow({
           disabled={isPending || isArchived}
         />
       )}
+      <ConfirmDialog
+        open={confirmingUnclaim}
+        title="Are you sure you no longer want to get this gift?"
+        actions={UNCLAIM_ACTIONS}
+        onResolve={(id) => {
+          if (id === "unclaim") unclaimMutation.mutate();
+          setConfirmingUnclaim(false);
+        }}
+      />
     </li>
   );
 }

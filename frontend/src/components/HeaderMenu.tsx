@@ -28,6 +28,7 @@ export function HeaderMenu({
 }) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -40,7 +41,12 @@ export function HeaderMenu({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [open]);
 
+  // Focus goes back to `⋯` before the action runs, not after: choosing an item
+  // unmounts it, and an action that opens a ConfirmDialog captures whatever is
+  // focused at that moment as the element to restore to when the dialog closes.
+  // Without this the capture lands on `<body>` and the focus return is lost.
   function run(action: () => void) {
+    triggerRef.current?.focus();
     setOpen(false);
     action();
   }
@@ -48,6 +54,7 @@ export function HeaderMenu({
   return (
     <div className="relative" ref={menuRef}>
       <button
+        ref={triggerRef}
         onClick={() => setOpen(!open)}
         disabled={pending}
         aria-label={ariaLabel}

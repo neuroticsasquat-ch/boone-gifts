@@ -6,9 +6,14 @@ import { useAuth } from "../hooks/useAuth";
 import { useTitle } from "../hooks/useTitle";
 import { Spinner } from "../components/Spinner";
 import { useNumericId } from "../components/NumericId";
+import { ConfirmDialog, type ConfirmAction } from "../components/ConfirmDialog";
 import { OccasionsSection } from "./family-detail/OccasionsSection";
 import toast from "react-hot-toast";
 import { isAxiosError } from "axios";
+
+const DELETE_FAMILY_ACTIONS: ConfirmAction[] = [
+  { id: "delete", label: "Delete Family", tone: "danger" },
+];
 
 export function FamilyDetail() {
   const familyId = useNumericId();
@@ -328,31 +333,26 @@ export function FamilyDetail() {
           {/* Delete */}
           <section>
             <h2 className="text-lg font-semibold text-gray-900 mb-3">Delete Family</h2>
-            {!confirmDelete ? (
-              <button
-                onClick={() => setConfirmDelete(true)}
-                className="rounded bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
-              >
-                Delete Family
-              </button>
-            ) : (
-              <div className="flex items-center gap-3">
-                <p className="text-sm text-gray-700">Are you sure? This cannot be undone.</p>
-                <button
-                  onClick={() => deleteMutation.mutate()}
-                  disabled={deleteMutation.isPending}
-                  className="rounded bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
-                >
-                  Confirm Delete
-                </button>
-                <button
-                  onClick={() => setConfirmDelete(false)}
-                  className="rounded bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
-                >
-                  Cancel
-                </button>
-              </div>
-            )}
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="rounded bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+            >
+              Delete Family
+            </button>
+            {/* Stays open with every button disabled while the delete is in
+                flight, as the two-step it replaces did. Success navigates away
+                and `onError` closes it, so only Cancel closes it from here. */}
+            <ConfirmDialog
+              open={confirmDelete}
+              title="Delete Family?"
+              body="This cannot be undone."
+              actions={DELETE_FAMILY_ACTIONS}
+              pending={deleteMutation.isPending}
+              onResolve={(id) => {
+                if (id === "delete") deleteMutation.mutate();
+                else setConfirmDelete(false);
+              }}
+            />
           </section>
         </>
       )}

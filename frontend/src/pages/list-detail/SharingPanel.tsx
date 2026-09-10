@@ -12,6 +12,7 @@ import {
 } from "../../api/lists";
 import { NO_ACTIVE_OCCASION, occasionChoice } from "../../lib/occasion-choice";
 import type { ShareTargetFamily, ShareTargetOccasion } from "../../types";
+import { ConfirmDialog, type ConfirmAction } from "../../components/ConfirmDialog";
 
 type QueryClient = ReturnType<typeof useQueryClient>;
 
@@ -494,6 +495,11 @@ function FamilyRow({
   );
 }
 
+const REVOKE_CLAIMS_ACTIONS: ConfirmAction[] = [
+  { id: "release", label: "Release those claims", tone: "primary" },
+  { id: "keep", label: "Keep them claimed", tone: "neutral" },
+];
+
 /**
  * Owners are blind to claim state on their own lists, so this reveals only THAT
  * claims exist — never a count, a gift name, or a claimer name.
@@ -510,44 +516,16 @@ function RevokeClaimsDialog({
   onChoose: (claims: "release" | "keep") => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="revoke-claims-title"
-        className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg"
-      >
-        <h2 id="revoke-claims-title" className="text-lg font-semibold text-gray-900">
-          Some gifts are claimed
-        </h2>
-        <p className="mt-2 text-sm text-gray-600">
-          Members of {familyName} have claimed gifts on this list. If you stop
-          sharing, what should happen to those claims?
-        </p>
-        <div className="mt-6 flex flex-col gap-2 sm:flex-row">
-          <button
-            onClick={() => onChoose("release")}
-            disabled={pending}
-            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            Release those claims
-          </button>
-          <button
-            onClick={() => onChoose("keep")}
-            disabled={pending}
-            className="rounded bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300 disabled:opacity-50"
-          >
-            Keep them claimed
-          </button>
-          <button
-            onClick={onCancel}
-            disabled={pending}
-            className="rounded px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 disabled:opacity-50"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
+    <ConfirmDialog
+      open
+      title="Some gifts are claimed"
+      body={`Members of ${familyName} have claimed gifts on this list. If you stop sharing, what should happen to those claims?`}
+      actions={REVOKE_CLAIMS_ACTIONS}
+      pending={pending}
+      onResolve={(id) => {
+        if (id === "release" || id === "keep") onChoose(id);
+        else onCancel();
+      }}
+    />
   );
 }

@@ -13,6 +13,7 @@ import type { FolderDetail as FolderDetailType } from "../types";
 import { useTitle } from "../hooks/useTitle";
 import toast from "react-hot-toast";
 import { Spinner } from "../components/Spinner";
+import { ConfirmDialog, type ConfirmAction } from "../components/ConfirmDialog";
 import { useNumericId } from "../components/NumericId";
 import { ListAttributionLine } from "../components/ListAttribution";
 import { MyShopping } from "../components/MyShopping";
@@ -81,6 +82,9 @@ export function FolderDetail() {
   );
 }
 
+const ARCHIVE_ACTIONS: ConfirmAction[] = [{ id: "archive", label: "Archive", tone: "danger" }];
+const DELETE_ACTIONS: ConfirmAction[] = [{ id: "delete", label: "Delete", tone: "danger" }];
+
 function FolderHeader({
   folder,
   folderId,
@@ -93,6 +97,7 @@ function FolderHeader({
   navigate: ReturnType<typeof useNavigate>;
 }) {
   const [editing, setEditing] = useState(false);
+  const [confirming, setConfirming] = useState<"archive" | "delete" | null>(null);
   const [name, setName] = useState(folder.name);
   const [description, setDescription] = useState(folder.description ?? "");
 
@@ -129,17 +134,12 @@ function FolderHeader({
     updateMutation.mutate({ name, description: description || undefined });
   }
 
-  function handleDelete() {
-    if (window.confirm("Delete this folder? This cannot be undone.")) {
-      deleteMutation.mutate();
-    }
-  }
-
+  // Only the archive direction asks; unarchiving is not destructive.
   function handleArchiveToggle() {
     if (folder.is_archived) {
       archiveMutation.mutate();
-    } else if (window.confirm("Archive this folder?")) {
-      archiveMutation.mutate();
+    } else {
+      setConfirming("archive");
     }
   }
 
@@ -213,7 +213,7 @@ function FolderHeader({
             Edit
           </button>
           <button
-            onClick={handleDelete}
+            onClick={() => setConfirming("delete")}
             disabled={deleteMutation.isPending}
             className="rounded bg-red-600 px-3 py-1 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
           >
@@ -221,6 +221,17 @@ function FolderHeader({
           </button>
         </div>
       </div>
+      <ConfirmDialog
+        open={confirming !== null}
+        title={confirming === "delete" ? "Delete this folder?" : "Archive this folder?"}
+        body={confirming === "delete" ? "This cannot be undone." : undefined}
+        actions={confirming === "delete" ? DELETE_ACTIONS : ARCHIVE_ACTIONS}
+        onResolve={(id) => {
+          if (id === "delete") deleteMutation.mutate();
+          else if (id === "archive") archiveMutation.mutate();
+          setConfirming(null);
+        }}
+      />
     </div>
   );
 }

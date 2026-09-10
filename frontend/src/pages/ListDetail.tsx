@@ -12,6 +12,7 @@ import toast from "react-hot-toast";
 import { Spinner } from "../components/Spinner";
 import { useNumericId } from "../components/NumericId";
 import { HeaderMenu } from "../components/HeaderMenu";
+import { ConfirmDialog, type ConfirmAction } from "../components/ConfirmDialog";
 import { GiftsTab } from "./list-detail/GiftsTab";
 import { SharingPanel } from "./list-detail/SharingPanel";
 import { SharingSummary } from "./list-detail/SharingSummary";
@@ -135,6 +136,8 @@ function OwnerHeader({
   onChangeSharing: () => void;
   onAddToFolder: () => void;
 }) {
+  const [confirming, setConfirming] = useState<"archive" | "delete" | null>(null);
+
   const archiveMutation = useMutation({
     mutationFn: () => updateList(listId, { is_archived: !list.is_archived }),
     onSuccess: () => {
@@ -158,51 +161,59 @@ function OwnerHeader({
     },
   });
 
+  // Only the archive direction asks; unarchiving is not destructive.
   function handleArchiveToggle() {
     if (list.is_archived) {
       archiveMutation.mutate();
-    } else if (window.confirm("Archive this list?")) {
-      archiveMutation.mutate();
-    }
-  }
-
-  function handleDelete() {
-    if (window.confirm("Delete this list? This cannot be undone.")) {
-      deleteMutation.mutate();
+    } else {
+      setConfirming("archive");
     }
   }
 
   return (
-    <ListHeader
-      name={list.name}
-      description={list.description}
-      subtitle={recipientLabel(list)}
-      // Creation is when the keeper has the fewest gifts in mind; the temptation
-      // arrives over the following weeks, so this line stays put rather than
-      // being a dismissible alert. Owner-only — a viewer never sees it.
-      footnote={
-        isKeptForAbsentPerson(list)
-          ? `You can't see or make claims on ${recipientNameOf(list)}'s list. ` +
-            "Leave off anything you're buying them yourself."
-          : undefined
-      }
-      isArchived={list.is_archived}
-      sharing={
-        <SharingSummary listId={listId} onChange={onChangeSharing} />
-      }
-      actions={
-        <HeaderMenu
-          ariaLabel="List actions"
-          pending={archiveMutation.isPending || deleteMutation.isPending}
-          items={[
-            { label: ADD_TO_FOLDER, onClick: onAddToFolder },
-            { label: "Edit", onClick: onEdit },
-            { label: list.is_archived ? "Unarchive" : "Archive", onClick: handleArchiveToggle },
-            { label: "Delete", onClick: handleDelete, danger: true, separatorBefore: true },
-          ]}
-        />
-      }
-    />
+    <>
+      <ListHeader
+        name={list.name}
+        description={list.description}
+        subtitle={recipientLabel(list)}
+        // Creation is when the keeper has the fewest gifts in mind; the temptation
+        // arrives over the following weeks, so this line stays put rather than
+        // being a dismissible alert. Owner-only — a viewer never sees it.
+        footnote={
+          isKeptForAbsentPerson(list)
+            ? `You can't see or make claims on ${recipientNameOf(list)}'s list. ` +
+              "Leave off anything you're buying them yourself."
+            : undefined
+        }
+        isArchived={list.is_archived}
+        sharing={
+          <SharingSummary listId={listId} onChange={onChangeSharing} />
+        }
+        actions={
+          <HeaderMenu
+            ariaLabel="List actions"
+            pending={archiveMutation.isPending || deleteMutation.isPending}
+            items={[
+              { label: ADD_TO_FOLDER, onClick: onAddToFolder },
+              { label: "Edit", onClick: onEdit },
+              { label: list.is_archived ? "Unarchive" : "Archive", onClick: handleArchiveToggle },
+              { label: "Delete", onClick: () => setConfirming("delete"), danger: true, separatorBefore: true },
+            ]}
+          />
+        }
+      />
+      <ConfirmDialog
+        open={confirming !== null}
+        title={confirming === "delete" ? "Delete this list?" : "Archive this list?"}
+        body={confirming === "delete" ? "This cannot be undone." : undefined}
+        actions={confirming === "delete" ? DELETE_ACTIONS : ARCHIVE_ACTIONS}
+        onResolve={(id) => {
+          if (id === "delete") deleteMutation.mutate();
+          else if (id === "archive") archiveMutation.mutate();
+          setConfirming(null);
+        }}
+      />
+    </>
   );
 }
 
@@ -212,6 +223,9 @@ function OwnerHeader({
  * point a viewer has.
  */
 const ADD_TO_FOLDER = "Add to a folder…";
+
+const ARCHIVE_ACTIONS: ConfirmAction[] = [{ id: "archive", label: "Archive", tone: "danger" }];
+const DELETE_ACTIONS: ConfirmAction[] = [{ id: "delete", label: "Delete", tone: "danger" }];
 
 function ViewerHeader({
   list,

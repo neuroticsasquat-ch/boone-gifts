@@ -6,11 +6,16 @@ import { useTitle } from "../hooks/useTitle";
 import toast from "react-hot-toast";
 import { Spinner } from "../components/Spinner";
 import { FolderOpenIcon } from "../components/Icons";
+import { ConfirmDialog, type ConfirmAction } from "../components/ConfirmDialog";
+
+const DELETE_ACTIONS: ConfirmAction[] = [{ id: "delete", label: "Delete", tone: "danger" }];
 
 export function Folders() {
   useTitle("Folders");
   const queryClient = useQueryClient();
   const [showArchived, setShowArchived] = useState(false);
+  // The confirmation is per row, so it holds the folder it is asking about.
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const folders = useQuery({
     queryKey: ["folders", { archived: showArchived }],
@@ -24,12 +29,6 @@ export function Folders() {
     },
     onError: () => toast.error("Failed to delete folder."),
   });
-
-  function handleDelete(id: number) {
-    if (window.confirm("Delete this folder?")) {
-      deleteMutation.mutate(id);
-    }
-  }
 
   if (folders.isPending) return (
     <div className="space-y-8">
@@ -76,7 +75,7 @@ export function Folders() {
                 </Link>
                 {!showArchived && (
                   <button
-                    onClick={() => handleDelete(folder.id)}
+                    onClick={() => setDeletingId(folder.id)}
                     disabled={deleteMutation.isPending}
                     className="ml-4 shrink-0 rounded bg-red-600 px-3 py-1 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
                   >
@@ -88,6 +87,16 @@ export function Folders() {
           </ul>
         )}
       </section>
+
+      <ConfirmDialog
+        open={deletingId !== null}
+        title="Delete this folder?"
+        actions={DELETE_ACTIONS}
+        onResolve={(id) => {
+          if (id === "delete" && deletingId !== null) deleteMutation.mutate(deletingId);
+          setDeletingId(null);
+        }}
+      />
     </div>
   );
 }

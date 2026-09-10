@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router";
@@ -140,7 +140,7 @@ describe("FamilyDetail", () => {
     });
   });
 
-  it("delete: click Delete Family then Confirm Delete → navigates to /people", async () => {
+  it("delete: click Delete Family then confirm in the dialog → navigates to /people", async () => {
     server.use(
       http.get(`${API}/families/1`, () => HttpResponse.json(sampleFamily)),
       http.delete(`${API}/families/1`, () => new HttpResponse(null, { status: 204 })),
@@ -153,8 +153,48 @@ describe("FamilyDetail", () => {
     });
 
     await userEvent.click(screen.getByRole("button", { name: "Delete Family" }));
-    await userEvent.click(screen.getByRole("button", { name: "Confirm Delete" }));
+    // The trigger and the dialog's action share a label, so the second click is
+    // scoped to the dialog.
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Delete Family" }));
 
+    await waitFor(() => {
+      expect(screen.getByText("People Page")).toBeInTheDocument();
+    });
+  });
+
+  it("delete: the dialog stays open with every button disabled while deleting", async () => {
+    let release: () => void = () => {};
+    const inFlight = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    server.use(
+      http.get(`${API}/families/1`, () => HttpResponse.json(sampleFamily)),
+      http.delete(`${API}/families/1`, async () => {
+        await inFlight;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+
+    renderFamilyDetail(organizerToken);
+
+    await waitFor(() => {
+      expect(screen.getByText("The Boones")).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Delete Family" }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Delete Family" }));
+
+    // The two-step this replaced stayed up with its confirm button disabled;
+    // the dialog does the same rather than vanishing mid-request.
+    await waitFor(() => {
+      expect(within(dialog).getByRole("button", { name: "Delete Family" })).toBeDisabled();
+    });
+    expect(within(dialog).getByRole("button", { name: "Cancel" })).toBeDisabled();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    release();
     await waitFor(() => {
       expect(screen.getByText("People Page")).toBeInTheDocument();
     });

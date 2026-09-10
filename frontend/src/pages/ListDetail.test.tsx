@@ -545,7 +545,30 @@ describe("ListDetail — header actions menu", () => {
         return HttpResponse.json({ ...ownerListDetail, is_archived: true });
       }),
     );
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    renderListDetail(ownerToken);
+
+    await screen.findByText("My Wishlist");
+    await userEvent.click(screen.getByRole("button", { name: "List actions" }));
+    await userEvent.click(screen.getByRole("button", { name: "Archive" }));
+
+    // The menu item and the dialog's action share a label, so the confirming
+    // click is scoped to the dialog.
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveAccessibleName("Archive this list?");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Archive" }));
+
+    await waitFor(() => expect(archived).toBe(true));
+  });
+
+  it("archives nothing when the confirmation is cancelled", async () => {
+    serveOwnerList();
+    let archived: unknown = null;
+    server.use(
+      http.put(`${API}/lists/1`, async ({ request }) => {
+        archived = ((await request.json()) as { is_archived?: boolean }).is_archived;
+        return HttpResponse.json({ ...ownerListDetail, is_archived: true });
+      }),
+    );
 
     renderListDetail(ownerToken);
 
@@ -553,7 +576,29 @@ describe("ListDetail — header actions menu", () => {
     await userEvent.click(screen.getByRole("button", { name: "List actions" }));
     await userEvent.click(screen.getByRole("button", { name: "Archive" }));
 
-    await waitFor(() => expect(archived).toBe(true));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(archived).toBeNull();
+  });
+
+  it("returns focus to the actions menu when the confirmation is dismissed", async () => {
+    serveOwnerList();
+
+    renderListDetail(ownerToken);
+
+    await screen.findByText("My Wishlist");
+    const menu = screen.getByRole("button", { name: "List actions" });
+    await userEvent.click(menu);
+    await userEvent.click(screen.getByRole("button", { name: "Archive" }));
+
+    await screen.findByRole("dialog");
+    await userEvent.keyboard("{Escape}");
+
+    // The menu item that opened the dialog is gone by the time it closes, so
+    // focus lands on the `⋯` button it hung off rather than on the document.
+    await waitFor(() => expect(menu).toHaveFocus());
   });
 
   it("deletes from the menu once confirmed", async () => {
@@ -565,13 +610,16 @@ describe("ListDetail — header actions menu", () => {
         return new HttpResponse(null, { status: 204 });
       }),
     );
-    vi.spyOn(window, "confirm").mockReturnValue(true);
-
     renderListDetail(ownerToken);
 
     await screen.findByText("My Wishlist");
     await userEvent.click(screen.getByRole("button", { name: "List actions" }));
     await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveAccessibleName("Delete this list?");
+    expect(within(dialog).getByText("This cannot be undone.")).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
 
     await waitFor(() => expect(deleted).toBe(true));
   });

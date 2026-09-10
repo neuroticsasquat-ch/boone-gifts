@@ -13,6 +13,7 @@ import { HeaderMenu } from "../components/HeaderMenu";
 import { ListAttributionLine, RecipientLine } from "../components/ListAttribution";
 import { MyShopping } from "../components/MyShopping";
 import { TabBar } from "../components/TabBar";
+import { ConfirmDialog, type ConfirmAction } from "../components/ConfirmDialog";
 import type { Occasion } from "../types";
 
 /**
@@ -118,6 +119,8 @@ function OccasionPage({ occasion }: { occasion: Occasion }) {
   );
 }
 
+const ARCHIVE_ACTIONS: ConfirmAction[] = [{ id: "archive", label: "Archive", tone: "danger" }];
+
 /**
  * The occasion's name, whether it is archived, and the organizer's controls.
  *
@@ -130,6 +133,7 @@ function OccasionHeader({ occasion, isOrganizer }: { occasion: Occasion; isOrgan
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState(occasion.name);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [confirmingArchive, setConfirmingArchive] = useState(false);
 
   // The page's own copy, and the family page's list it was reached from —
   // prefix match on the latter, so the active and archived lists both refetch.
@@ -183,8 +187,8 @@ function OccasionHeader({ occasion, isOrganizer }: { occasion: Occasion; isOrgan
   function handleArchiveToggle() {
     if (occasion.is_archived) {
       setArchivedMutation.mutate(false);
-    } else if (window.confirm("Archive this occasion? Lists already shared to it stay shared.")) {
-      setArchivedMutation.mutate(true);
+    } else {
+      setConfirmingArchive(true);
     }
   }
 
@@ -253,6 +257,17 @@ function OccasionHeader({ occasion, isOrganizer }: { occasion: Occasion; isOrgan
       )}
 
       {actionError && <p className="mt-3 text-sm text-red-600">{actionError}</p>}
+
+      <ConfirmDialog
+        open={confirmingArchive}
+        title="Archive this occasion?"
+        body="Lists already shared to it stay shared."
+        actions={ARCHIVE_ACTIONS}
+        onResolve={(id) => {
+          if (id === "archive") setArchivedMutation.mutate(true);
+          setConfirmingArchive(false);
+        }}
+      />
     </div>
   );
 }

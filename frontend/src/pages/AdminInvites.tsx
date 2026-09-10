@@ -4,6 +4,7 @@ import { getInvites, createInvite, deleteInvite } from "../api/invites";
 import { useTitle } from "../hooks/useTitle";
 import { useTimeout } from "../hooks/useTimeout";
 import type { Invite } from "../types";
+import { ConfirmDialog, type ConfirmAction } from "../components/ConfirmDialog";
 import toast from "react-hot-toast";
 
 const STATUS_STYLES: Record<Invite["status"], string> = {
@@ -12,10 +13,14 @@ const STATUS_STYLES: Record<Invite["status"], string> = {
   expired: "bg-gray-100 text-gray-600",
 };
 
+const REVOKE_ACTIONS: ConfirmAction[] = [{ id: "revoke", label: "Revoke", tone: "danger" }];
+
 export function AdminInvites() {
   useTitle("Invites");
   const queryClient = useQueryClient();
   const [copiedId, setCopiedId] = useState<number | null>(null);
+  // The confirmation is per row, so it holds the invite it is asking about.
+  const [revokingId, setRevokingId] = useState<number | null>(null);
   const copiedTimeout = useTimeout();
 
   const invites = useQuery({ queryKey: ["invites"], queryFn: getInvites });
@@ -29,9 +34,7 @@ export function AdminInvites() {
   });
 
   function handleRevoke(id: number) {
-    if (window.confirm("Revoke this invite?")) {
-      deleteMutation.mutate(id);
-    }
+    setRevokingId(id);
   }
 
   async function handleCopyLink(id: number, token: string) {
@@ -143,6 +146,16 @@ export function AdminInvites() {
           </>
         )}
       </section>
+
+      <ConfirmDialog
+        open={revokingId !== null}
+        title="Revoke this invite?"
+        actions={REVOKE_ACTIONS}
+        onResolve={(id) => {
+          if (id === "revoke" && revokingId !== null) deleteMutation.mutate(revokingId);
+          setRevokingId(null);
+        }}
+      />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router";
@@ -252,7 +252,6 @@ describe("OccasionDetail", () => {
 
   it("archives the occasion once the organizer confirms", async () => {
     const archived = vi.fn();
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     renderOccasion();
     server.use(
       http.put(`${API}/occasions/3`, async ({ request }) => {
@@ -264,12 +263,18 @@ describe("OccasionDetail", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Occasion actions" }));
     await userEvent.click(screen.getByRole("button", { name: "Archive" }));
 
+    // The menu item and the dialog's action share a label, so the confirming
+    // click is scoped to the dialog.
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveAccessibleName("Archive this occasion?");
+    expect(within(dialog).getByText("Lists already shared to it stay shared.")).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Archive" }));
+
     await waitFor(() => expect(archived).toHaveBeenCalledWith({ is_archived: true }));
   });
 
   it("does not archive when the organizer cancels the confirm", async () => {
     const archived = vi.fn();
-    vi.spyOn(window, "confirm").mockReturnValue(false);
     renderOccasion();
     server.use(
       http.put(`${API}/occasions/3`, async ({ request }) => {
@@ -281,6 +286,10 @@ describe("OccasionDetail", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Occasion actions" }));
     await userEvent.click(screen.getByRole("button", { name: "Archive" }));
 
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(archived).not.toHaveBeenCalled();
   });
 
