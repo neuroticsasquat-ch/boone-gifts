@@ -14,8 +14,9 @@ interface OccasionsSectionProps {
 }
 
 /**
- * Warn, never block: a family may hold several active occasions (project spec
- * §5.3), so this only names the ones it already has and asks again.
+ * Warn, never block: a family may hold several active occasions
+ * (shopping-lists project spec §5.3), so this only names the ones it already
+ * has and asks again.
  *
  * The active list is already on the page, so the *pre*-create warning is built
  * from it rather than from the create response's `has_other_active` — that
@@ -30,7 +31,13 @@ function alreadyActiveWarning(familyName: string, active: Occasion[]): string {
 }
 
 /**
- * The family's occasions, on the family page (project spec §9.6).
+ * The family's occasions, on the family page — management only
+ * (occasions-and-navigation project spec §5.6, §9.5).
+ *
+ * This is no longer the way *in* to an occasion; the strip on /lists is
+ * (NEU-1298). The name still links, because an occasion is a destination
+ * (ADR 0007) — but nobody has to come here to find one. What stays here is
+ * what only belongs here: create, rename, archive, view archive.
  *
  * The family's **active** occasions and nothing else. Archived ones live behind
  * the "View archive" link, on their own page (NEU-1278) — this section has no
@@ -57,7 +64,7 @@ export function OccasionsSection({ familyId, familyName, isOrganizer }: Occasion
 
   // The family's *active* occasions and nothing else. The archived ones have
   // their own page now, so this section no longer has a state that can show
-  // them (NEU-1278, project spec §9.5).
+  // them (NEU-1278, shopping-lists project spec §9.5).
   const occasions = useQuery({
     queryKey: ["occasions", familyId, { archived: false }],
     queryFn: () => getFamilyOccasions(familyId, false),

@@ -1,40 +1,12 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, beforeEach } from "vitest";
-import { MemoryRouter, Route, Routes } from "react-router";
-import toast, { Toaster } from "react-hot-toast";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import toast from "react-hot-toast";
 import { http, HttpResponse } from "msw";
 import { server } from "../../test/mocks/server";
-import { AuthProvider } from "../../contexts/AuthContext";
-import { NumericId } from "../../components/NumericId";
-import { FamilyDetail } from "../FamilyDetail";
+import { memberToken, organizerToken, renderFamilyDetail } from "./harness";
 
 const API = "https://boone-gifts-api.localhost";
-
-// JWT for user id=1 (organizer)
-const organizerToken = [
-  btoa(JSON.stringify({ alg: "HS256", typ: "JWT" })),
-  btoa(JSON.stringify({ sub: "1", email: "organizer@test.com", name: "Alice", role: "member", exp: 9999999999 })),
-  "fake-signature",
-].join(".");
-
-// JWT for user id=2 (plain member)
-const memberToken = [
-  btoa(JSON.stringify({ alg: "HS256", typ: "JWT" })),
-  btoa(JSON.stringify({ sub: "2", email: "member@test.com", name: "Bob", role: "member", exp: 9999999999 })),
-  "fake-signature",
-].join(".");
-
-const sampleFamily = {
-  id: 1,
-  name: "Boone Family",
-  created_by_id: 1,
-  members: [
-    { user_id: 1, name: "Alice", role: "organizer" },
-    { user_id: 2, name: "Bob", role: "member" },
-  ],
-};
 
 function occasion(id: number, name: string, isArchived = false) {
   return {
@@ -54,37 +26,6 @@ function serveOccasions(active: ReturnType<typeof occasion>[], archived: ReturnT
     const wantsArchived = new URL(request.url).searchParams.get("archived") === "true";
     return HttpResponse.json(wantsArchived ? archived : active);
   });
-}
-
-function renderFamilyDetail(token: string) {
-  server.use(
-    http.post(`${API}/auth/refresh`, () =>
-      HttpResponse.json({ access_token: token, token_type: "bearer" })
-    ),
-    http.get(`${API}/families/1`, () => HttpResponse.json(sampleFamily)),
-  );
-
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <MemoryRouter initialEntries={["/people/families/1"]}>
-          <Routes>
-            <Route
-              path="/people/families/:id"
-              element={
-                <NumericId back="/people">
-                  <FamilyDetail />
-                </NumericId>
-              }
-            />
-            <Route path="/people" element={<div>People Page</div>} />
-          </Routes>
-          <Toaster />
-        </MemoryRouter>
-      </AuthProvider>
-    </QueryClientProvider>
-  );
 }
 
 /** The <li> for one occasion, so per-row controls can be queried unambiguously. */
