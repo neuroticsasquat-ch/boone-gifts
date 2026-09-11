@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, it, expect } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -24,6 +24,12 @@ import { ConnectionProfile } from "../pages/ConnectionProfile";
  * question of its own and became a cut of the same shared scope `/lists`
  * paints, drawn through the same row component — so it is now a page this test
  * has to hold to the line.
+ *
+ * The folder page's **Add a List** picker is the fourth since NEU-1318. It was a
+ * `<select>` rendering a bare name, and the alternative to making it rows was to
+ * compose its option text from `attributionFor()` — a second place turning a
+ * share route into words, which is the drift this test exists to catch. It is a
+ * call site now, so it is held to the same line.
  *
  * The fixture is deliberately the hard case: a list that reached the viewer
  * **both** ways. Every page-local shortcut that ever produced a wrong label —
@@ -59,6 +65,16 @@ const BOTH_WAYS = {
     },
     { kind: "direct", person: { id: 4, name: "Carol Boone" } },
   ],
+};
+
+/** The picker excludes every list already in the folder, and `BOTH_WAYS` is
+ *  inside it — so covering the picker needs a second list the folder does not
+ *  hold. Both-ways for the same reason the first one is: it is the case where
+ *  every page-local shortcut gives a different answer from "direct wins". */
+const BOTH_WAYS_OFFERED = {
+  ...BOTH_WAYS,
+  id: 2,
+  name: "Gran's Other List",
 };
 
 /** Connection 5 is the list's owner. The ids differ on purpose — `/people/5`
@@ -100,7 +116,7 @@ function serveTheList() {
     ),
     http.get(`${API}/lists`, ({ request }) => {
       const filter = new URL(request.url).searchParams.get("filter");
-      return HttpResponse.json(filter === "shared" ? [BOTH_WAYS] : []);
+      return HttpResponse.json(filter === "shared" ? [BOTH_WAYS, BOTH_WAYS_OFFERED] : []);
     }),
     http.get(`${API}/folders/1`, () => HttpResponse.json(FOLDER)),
     http.get(`${API}/connections`, () => HttpResponse.json([GRAN])),
@@ -121,8 +137,10 @@ function client() {
  * nothing at all on the folder page — and fail the comparison rather than
  * quietly passing it.
  */
-async function attributionLineOn(name: string) {
-  const heading = await screen.findByText(name);
+async function attributionLineOn(name: string, scope: HTMLElement | null = null) {
+  const heading = scope
+    ? await within(scope).findByText(name)
+    : await screen.findByText(name);
   const row = heading.parentElement as HTMLElement;
   const lines = [...row.querySelectorAll("p")]
     .map((line) => line.textContent?.trim())
@@ -144,25 +162,41 @@ describe("ListAttribution — the same list on /lists, a folder page and a perso
       </QueryClientProvider>,
     );
     const onListsPage = await attributionLineOn("Carol's Wishlist");
+    // The second list, read here while `/lists` is still mounted: it is what the
+    // folder's picker is compared against below.
+    const otherOnListsPage = await attributionLineOn("Gran's Other List");
     onLists.unmount();
 
+    // Wrapped in the provider the other two already carry: the folder page's
+    // rows and its picker both pair `RecipientLine` against
+    // `ListAttributionLine` on who owns the list, so they need a viewer to
+    // compare against.
     const onFolder = render(
       <QueryClientProvider client={client()}>
-        <MemoryRouter initialEntries={["/folders/1"]}>
-          <Routes>
-            <Route
-              path="/folders/:id"
-              element={
-                <NumericId back="/lists">
-                  <FolderDetail />
-                </NumericId>
-              }
-            />
-          </Routes>
-        </MemoryRouter>
+        <AuthProvider>
+          <MemoryRouter initialEntries={["/folders/1"]}>
+            <Routes>
+              <Route
+                path="/folders/:id"
+                element={
+                  <NumericId back="/lists">
+                    <FolderDetail />
+                  </NumericId>
+                }
+              />
+            </Routes>
+          </MemoryRouter>
+        </AuthProvider>
       </QueryClientProvider>,
     );
     const onFolderPage = await attributionLineOn("Carol's Wishlist");
+    // The picker, on the one page that draws two row lists at once. Scoped to
+    // its own region: an unscoped `findByText` would match the folder's row and
+    // the picker's row for one name and fail as ambiguous.
+    const onPicker = await attributionLineOn(
+      "Gran's Other List",
+      await screen.findByRole("region", { name: "Add a List" }),
+    );
     onFolder.unmount();
 
     render(
@@ -186,9 +220,15 @@ describe("ListAttribution — the same list on /lists, a folder page and a perso
     // The same line, from every call site — the whole claim NEU-1286 makes.
     expect(onFolderPage).toBe(onListsPage);
     expect(onPersonPage).toBe(onListsPage);
+    // The picker's is the same line over the same routes, on the second list
+    // `/lists` also renders — so it is compared against that list's line there.
+    expect(onPicker).toBe(otherOnListsPage);
     // And the right line: the direct share wins over the occasion one, so it
     // reads neither "from Gran Boone" (the owner, which is what the folder page
     // used to say) nor the bare "Boone Family".
     expect(onListsPage).toBe("from Carol Boone");
+    // Pinned at both ends, so a picker that rendered no line at all fails on the
+    // literal rather than passing against a comparison that also went empty.
+    expect(otherOnListsPage).toBe("from Carol Boone");
   });
 });

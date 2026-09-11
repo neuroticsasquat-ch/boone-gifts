@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect } from "vitest";
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-router";
@@ -26,6 +26,64 @@ const sampleFolder = {
   created_at: "2026-01-01",
   updated_at: "2026-01-01",
 };
+
+/** A list, in the shape `GET /lists` sends: routes always an array, never null. */
+function list(fields: Record<string, unknown>) {
+  return {
+    description: null,
+    recipient_name: null,
+    account_person_id: null,
+    account_person_name: null,
+    is_archived: false,
+    gift_count: 0,
+    claimed_count: 0,
+    created_at: "2026-01-01",
+    updated_at: "2026-01-01",
+    shared_via: [],
+    ...fields,
+  };
+}
+
+/** The viewer's own, for nobody in particular: no second line at all. */
+const OWN_BIRTHDAY = list({ id: 20, name: "Birthday List", owner_id: 1, owner_name: "Tom Boone" });
+
+/** The viewer's own, kept for someone with no account: "for Beth" and nothing
+ *  about where it came from — it came from them. */
+const OWN_FOR_BETH = list({
+  id: 21, name: "Beth's Birthday", owner_id: 1, owner_name: "Tom Boone", recipient_name: "Beth",
+});
+
+/** Reached the viewer through a family's occasion and no other way — the case
+ *  the ticket was written about, and the one that would have failed before
+ *  NEU-1290 widened the unfiltered scope to include the occasion term. */
+const VIA_OCCASION = list({
+  id: 30, name: "Gran's List", owner_id: 2, owner_name: "Gran Boone",
+  shared_via: [
+    { kind: "occasion", occasion: { id: 3, name: "Christmas 2026" }, family: { id: 1, name: "Boone Family" } },
+  ],
+});
+
+/** Shared straight at the viewer by its owner. */
+const VIA_DIRECT = list({
+  id: 31, name: "Carol's Wishlist", owner_id: 4, owner_name: "Carol Boone",
+  shared_via: [{ kind: "direct", person: { id: 4, name: "Carol Boone" } }],
+});
+
+/** `GET /lists` answering the picker's two queries apart. A handler that ignored
+ *  `filter` would let a page that asked only one question still look right. */
+function serveLists({ owned = [], shared = [] }: { owned?: unknown[]; shared?: unknown[] } = {}) {
+  return http.get(`${API}/lists`, ({ request }) => {
+    const filter = new URL(request.url).searchParams.get("filter");
+    return HttpResponse.json(filter === "shared" ? shared : owned);
+  });
+}
+
+/** The picker's own subtree. Both sections draw rows of the same shape over
+ *  overlapping names, so every picker assertion is scoped to this rather than to
+ *  the page. */
+async function picker() {
+  return within(await screen.findByRole("region", { name: "Add a List" }));
+}
 
 /** The address the tab is held in, plus a Back button. */
 function Address() {
@@ -148,27 +206,22 @@ describe("FolderDetail", () => {
 
   it("adds a list to folder", async () => {
     const emptyFolder = { ...sampleFolder, lists: [] };
+    let added: unknown = null;
 
     server.use(
       http.get(`${API}/folders/1`, () => HttpResponse.json(emptyFolder)),
-      http.get(`${API}/lists`, () =>
-        HttpResponse.json([
-          { id: 20, name: "Birthday List", description: null, owner_id: 1, owner_name: "Me", created_at: "2026-01-01", updated_at: "2026-01-01" },
-        ])
-      ),
-      http.post(`${API}/folders/1/items`, () =>
-        new HttpResponse(null, { status: 201 })
-      ),
+      serveLists({ owned: [OWN_BIRTHDAY] }),
+      http.post(`${API}/folders/1/items`, async ({ request }) => {
+        added = await request.json();
+        return new HttpResponse(null, { status: 201 });
+      }),
     );
 
     renderFolderDetail();
 
-    await waitFor(() => {
-      expect(screen.getByText("Add")).toBeInTheDocument();
-    });
+    await userEvent.click(await screen.findByRole("button", { name: "Add Birthday List" }));
 
-    await userEvent.selectOptions(screen.getByRole("combobox"), "20");
-    await userEvent.click(screen.getByText("Add"));
+    await waitFor(() => expect(added).toEqual({ list_id: 20 }));
   });
 
   it("shows empty state for lists", async () => {
@@ -293,6 +346,7 @@ describe("FolderDetail", () => {
           ],
         })
       ),
+      serveLists(),
     );
 
     renderFolderDetail();
@@ -301,6 +355,165 @@ describe("FolderDetail", () => {
       expect(screen.getByText("for Beth · kept by Tom")).toBeInTheDocument();
     });
     expect(screen.getByText("from Alice")).toBeInTheDocument();
+  });
+});
+
+/**
+ * The picker had no coverage at all, over a population that already included
+ * shared lists: `FolderDetail` has called `getLists()` unfiltered since
+ * NEU-1259, and M1's NEU-1290 widened that scope to the occasion term. Two of
+ * this story's three acceptance criteria passed on nothing but a backend test
+ * two milestones away that names neither folders nor pickers. These name it.
+ */
+describe("FolderDetail — the Add a List picker", () => {
+  const emptyFolder = { ...sampleFolder, lists: [] };
+
+  function serveFolder(folder: object, lists: ReturnType<typeof serveLists>) {
+    server.use(http.get(`${API}/folders/1`, () => HttpResponse.json(folder)), lists);
+  }
+
+  it("offers a list shared with the viewer through an occasion only", async () => {
+    serveFolder(emptyFolder, serveLists({ shared: [VIA_OCCASION] }));
+
+    renderFolderDetail();
+
+    expect(await (await picker()).findByText("Gran's List")).toBeInTheDocument();
+  });
+
+  it("offers a list shared with the viewer directly", async () => {
+    serveFolder(emptyFolder, serveLists({ shared: [VIA_DIRECT] }));
+
+    renderFolderDetail();
+
+    expect(await (await picker()).findByText("Carol's Wishlist")).toBeInTheDocument();
+  });
+
+  // `sampleFolder` already holds list 10, which is also in the owned scope.
+  it("does not offer a list the folder already holds", async () => {
+    serveFolder(sampleFolder, serveLists({
+      owned: [list({ id: 10, name: "My Wishlist", owner_id: 1, owner_name: "Tom Boone" }), OWN_BIRTHDAY],
+    }));
+
+    renderFolderDetail();
+
+    const offered = await picker();
+    expect(await offered.findByText("Birthday List")).toBeInTheDocument();
+    expect(offered.queryByText("My Wishlist")).not.toBeInTheDocument();
+    // Still on the page, though — it is in the folder, which is the whole reason
+    // it is not on offer.
+    expect(screen.getByText("My Wishlist")).toBeInTheDocument();
+  });
+
+  it("adds the shared list whose own Add was pressed", async () => {
+    let added: unknown = null;
+    serveFolder(emptyFolder, serveLists({ owned: [OWN_BIRTHDAY], shared: [VIA_OCCASION] }));
+    server.use(
+      http.post(`${API}/folders/1/items`, async ({ request }) => {
+        added = await request.json();
+        return new HttpResponse(null, { status: 201 });
+      }),
+    );
+
+    renderFolderDetail();
+
+    await userEvent.click(await (await picker()).findByRole("button", { name: "Add Gran's List" }));
+
+    await waitFor(() => expect(added).toEqual({ list_id: 30 }));
+  });
+
+  /**
+   * `attributionFor` falls through to the owner's name on a list carrying no
+   * route, so `ListAttributionLine` on a row the viewer owns would read "from
+   * Tom Boone" to Tom. Ownership here is which of the two queries the row
+   * arrived in, and the pairing is `/lists`' own.
+   */
+  it("attributes a row someone else owns, and says only 'for' on the viewer's own", async () => {
+    serveFolder(emptyFolder, serveLists({
+      owned: [OWN_BIRTHDAY, OWN_FOR_BETH],
+      shared: [VIA_OCCASION],
+    }));
+
+    renderFolderDetail();
+
+    const rows = await picker();
+    // Someone else's: the family behind the occasion it came through.
+    expect(await rows.findByText("Boone Family")).toBeInTheDocument();
+    // The viewer's own, kept for someone: "for Beth", never "from Tom Boone".
+    expect(rows.getByText("for Beth")).toBeInTheDocument();
+    expect(rows.queryByText("from Tom Boone")).not.toBeInTheDocument();
+    // And the viewer's own for nobody carries no second line at all.
+    const own = rows.getByText("Birthday List").parentElement as HTMLElement;
+    expect(own.querySelectorAll("p")).toHaveLength(1);
+  });
+
+  /**
+   * The sharp version of the old `allLists.data ?? []`: a failed *shared* query
+   * beside a healthy owned one would offer owned lists only — this ticket's
+   * exact defect, produced by a network error instead of a query param.
+   */
+  it("renders a failure and no rows when only the shared half fails", async () => {
+    serveFolder(emptyFolder, http.get(`${API}/lists`, ({ request }) => {
+      const filter = new URL(request.url).searchParams.get("filter");
+      if (filter === "shared") return new HttpResponse(null, { status: 500 });
+      return HttpResponse.json([OWN_BIRTHDAY]);
+    }));
+
+    renderFolderDetail();
+
+    const failed = await picker();
+    expect(await failed.findByText("Failed to load your lists.")).toBeInTheDocument();
+    expect(failed.queryByText("Birthday List")).not.toBeInTheDocument();
+    expect(failed.queryByRole("button", { name: /^Add / })).not.toBeInTheDocument();
+  });
+
+  // Two different absences. `if (length === 0) return null` said both by
+  // deleting the heading and the control together.
+  it("offers a way to make a list when the viewer can see none", async () => {
+    serveFolder(emptyFolder, serveLists());
+
+    renderFolderDetail();
+
+    const empty = await picker();
+    expect(await empty.findByText(/You can't see any lists yet\./)).toBeInTheDocument();
+    expect(empty.getByRole("link", { name: "Create a list" })).toHaveAttribute("href", "/lists/new");
+  });
+
+  it("says so when every list the viewer can see is already here", async () => {
+    serveFolder(sampleFolder, serveLists({
+      owned: [list({ id: 10, name: "My Wishlist", owner_id: 1, owner_name: "Tom Boone" })],
+    }));
+
+    renderFolderDetail();
+
+    const complete = await picker();
+    expect(
+      await complete.findByText("Every list you can see is already in this folder."),
+    ).toBeInTheDocument();
+    expect(complete.queryByRole("button", { name: /^Add / })).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * The folder's own rows take the same pairing, for the same reason: left alone,
+ * this page would ship rows and a picker that disagree about one list — the
+ * defect class NEU-1286 was opened on, one section apart on one page.
+ */
+describe("FolderDetail — the folder's own rows", () => {
+  it("does not attribute a list the viewer owns to the viewer", async () => {
+    server.use(
+      http.get(`${API}/folders/1`, () =>
+        HttpResponse.json({
+          ...sampleFolder,
+          lists: [list({ id: 10, name: "My Wishlist", owner_id: 1, owner_name: "Tom Boone" })],
+        }),
+      ),
+      serveLists(),
+    );
+
+    renderFolderDetail();
+
+    expect(await screen.findByText("My Wishlist")).toBeInTheDocument();
+    expect(screen.queryByText("from Tom Boone")).not.toBeInTheDocument();
   });
 });
 
