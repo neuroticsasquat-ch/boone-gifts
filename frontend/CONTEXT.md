@@ -8,12 +8,13 @@ architecture live in [`AGENTS.md`](AGENTS.md); this file is only about what the 
 | UI word | Means | Rendered by |
 |---|---|---|
 | **My lists** | Lists this account owns | `pages/Lists.tsx` |
-| **Shared with me** | Every list someone else has made visible to me, **however it reached me** — a direct share, or an occasion of a family I belong to. One section, never two destinations | `pages/Lists.tsx` |
+| **Shared with me** | Every list someone else has made visible to me, **however it reached me** — a direct share, or an occasion of a family I belong to. One section, never two destinations | `pages/Lists.tsx`, `components/SharedListRows.tsx` |
 | **from Jane** / **Boone Family** | The source label on a shared row. A list may have arrived several ways at once, and **direct wins**: a row that also came through an occasion still reads "from Jane", because the direct share is the grant that survives the viewer leaving the family. An occasion-only row is labelled with its **family** — the occasion is how the share was made, the family is who the viewer recognises — and with every distinct family, comma-joined, when more than one carried it | `components/ListAttribution.tsx`, `lib/attribution.ts` |
 | **Share route** | One way a list reached me: a direct share, or an occasion of a family I belong to. A list can have several; `shared_via` is the array of all of them | `lib/attribution.ts`, `lib/list-grouping.ts` |
 | **for Beth** | This list is kept for a person with no account | `components/ListAttribution.tsx`, `lib/attribution.ts` |
 | **Group by** | How I ask *Shared with me* to subdivide — by occasion, person, or folder. Off by default; every grouping keeps a "Not in a …" bucket so nothing vanishes; held in the URL as `?group=`, so it survives a round trip and can be shared | `pages/Lists.tsx`, `lib/list-grouping.ts` |
 | **People** | Connections and families together — everyone I share with | `pages/People.tsx` |
+| **A person's page** | Every list that person owns which I can see, **however it reached me**. Derived from the shared scope rather than fetched as its own index; it lists no occasions, and it is a label's destination rather than a second index | `pages/ConnectionProfile.tsx` |
 | **Family** | A named group of people. A list reaches one **through an occasion of that family**, never the family itself. Its page administers the family — members, occasions, settings — and is **not** the way in to an occasion | `pages/FamilyDetail.tsx` |
 | **Folder** | My saved grouping of lists — "Christmas 2026". Was called a *collection*, then an *occasion*. Has a page (`/folders/:id`) but no index | `pages/FolderDetail.tsx` |
 | **Occasion** | A family's shared gifting occasion — "Christmas 2026". The unit a list is shared *to*, and the only thing that makes a family shareable | `pages/OccasionDetail.tsx`, `pages/lists/OccasionStrip.tsx` (finding one), `pages/family-detail/OccasionsSection.tsx` (managing one), `lib/occasion-choice.ts` |
@@ -57,9 +58,17 @@ behaviour).
    viewer is rendered on the row. It never becomes a filter-by-default. It may become a *heading* —
    but only inside **Shared with me**, and only because the viewer switched Group by on.
 
+   A person's page and Group by → Person are keyed **differently, on purpose**: the page holds every
+   list that person **owns**, while the grouping buckets only the lists a **direct route** of theirs
+   carried, leaving an occasion-only one in "Not shared directly by a person". So the page is the
+   **wider** of the two, and nothing the grouping files under a person is missing from their page.
+   Re-keying the grouping on ownership was rejected: every shared list has an owner, so that bucket
+   could never fill again, and a bucket whose name is a lie is worse than the asymmetry.
+
    A heading links when its destination carries something the grouping does not: `/occasions/:id`
    has a budget and a shopping tab, `/folders/:id` has membership management. `/people/:id` does
-   not — it is the same lists, filtered the same way — so a person heading leads nowhere
+   not — it is a filtered cut of the same shared scope, carrying no fact the reader could not get by
+   ungrouping — so a person heading leads nowhere
    ([`docs/adr/0007-occasions-are-a-destination.md`](docs/adr/0007-occasions-are-a-destination.md),
    amending [ADR 0005](docs/adr/0005-grouping-returns-as-an-opt-in.md)). An occasion heading names
    its family as an unlinked prefix, because the occasion name alone does not identify one occasion.

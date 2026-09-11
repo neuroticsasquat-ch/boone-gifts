@@ -1,5 +1,5 @@
 import { apiClient } from "./client";
-import type { Connection, GiftList } from "../types";
+import type { Connection } from "../types";
 
 export async function getConnections(): Promise<Connection[]> {
   const response = await apiClient.get<Connection[]>("/connections");
@@ -23,9 +23,4 @@ export async function acceptConnection(id: number): Promise<Connection> {
 
 export async function deleteConnection(id: number): Promise<void> {
   await apiClient.delete(`/connections/${id}`);
-}
-
-export async function getConnectionLists(connectionId: number): Promise<GiftList[]> {
-  const response = await apiClient.get<GiftList[]>(`/connections/${connectionId}/lists`);
-  return response.data;
 }
