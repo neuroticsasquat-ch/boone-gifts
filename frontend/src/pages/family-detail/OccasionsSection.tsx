@@ -4,8 +4,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 import toast from "react-hot-toast";
 import { createOccasion, getFamilyOccasions, updateOccasion } from "../../api/occasions";
+import { useAuth } from "../../hooks/useAuth";
 import { Spinner } from "../../components/Spinner";
 import type { Occasion } from "../../types";
+
+// The same pair `OccasionDetail` carries, because the backend gates the two
+// fields separately (NEU-1294 decision 4). One rule with two answers in the
+// codebase is one answer that will be wrong to whoever finds it second.
+const RENAME_ONLY = "Only an organizer can rename an occasion.";
+const ARCHIVE_ONLY =
+  "Only an organizer or the person who created this occasion can archive it.";
 
 interface OccasionsSectionProps {
   familyId: number;
@@ -45,15 +53,18 @@ function alreadyActiveWarning(familyName: string, active: Occasion[]): string {
  *
  * Creating is open to **any member** — nobody should be blocked waiting on an
  * absent organizer, because a family with no active occasion cannot be shared
- * to at all. Renaming and archiving are organizer-only, gated the same way the
- * member controls above are. The backend enforces both regardless.
+ * to at all. Renaming is the **organizer's**; archiving is the organizer's *or*
+ * the occasion creator's, matching the per-field backend gate. The `isOrganizer`
+ * prop stays the family's answer, and the creator check is the occasion's — so
+ * the two are derived per row rather than for the section.
  *
  * Archive is still not a one-way door: **unarchiving** is on the occasion's own
- * page, which the archive links to and which already gates it to organizers.
+ * page, which the archive links to and which gates it the same way.
  * A second copy of that mutation here would be a second thing to keep honest.
  */
 export function OccasionsSection({ familyId, familyName, isOrganizer }: OccasionsSectionProps) {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   const [newName, setNewName] = useState("");
   const [pendingName, setPendingName] = useState<string | null>(null);
@@ -109,7 +120,7 @@ export function OccasionsSection({ familyId, familyName, isOrganizer }: Occasion
     },
     onError: (err: unknown) => {
       if (isAxiosError(err) && err.response?.status === 403) {
-        setActionError("Only an organizer can rename or archive an occasion.");
+        setActionError(RENAME_ONLY);
       } else {
         toast.error("Failed to rename the occasion.");
       }
@@ -125,7 +136,7 @@ export function OccasionsSection({ familyId, familyName, isOrganizer }: Occasion
     },
     onError: (err: unknown) => {
       if (isAxiosError(err) && err.response?.status === 403) {
-        setActionError("Only an organizer can rename or archive an occasion.");
+        setActionError(ARCHIVE_ONLY);
       } else {
         toast.error("Failed to archive the occasion.");
       }
@@ -217,17 +228,24 @@ export function OccasionsSection({ familyId, familyName, isOrganizer }: Occasion
                   >
                     {occasion.name}
                   </Link>
-                  {isOrganizer && (
+                  {/* Two gates, not one: the family's answer covers renaming,
+                      and archiving also belongs to whoever created the
+                      occasion. A member who created one is now routinely asked
+                      to archive it by the banner (NEU-1315), so the control has
+                      to be here for them too. */}
+                  {(isOrganizer || occasion.created_by_id === user?.id) && (
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => {
-                          setRenamingId(occasion.id);
-                          setRenameValue(occasion.name);
-                        }}
-                        className="rounded bg-blue-100 px-3 py-1 text-sm font-medium text-blue-700 hover:bg-blue-200"
-                      >
-                        Rename
-                      </button>
+                      {isOrganizer && (
+                        <button
+                          onClick={() => {
+                            setRenamingId(occasion.id);
+                            setRenameValue(occasion.name);
+                          }}
+                          className="rounded bg-blue-100 px-3 py-1 text-sm font-medium text-blue-700 hover:bg-blue-200"
+                        >
+                          Rename
+                        </button>
+                      )}
                       <button
                         onClick={() => archiveMutation.mutate(occasion.id)}
                         disabled={archiveMutation.isPending}

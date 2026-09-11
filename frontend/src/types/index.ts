@@ -305,6 +305,24 @@ export interface OccasionSummary extends Occasion {
   last_activity_at: string;
 }
 
+/**
+ * One standing question about an occasion that has gone quiet: archive it, or
+ * not yet. Asked of the occasion's creator or an organizer of its family.
+ *
+ * Four fields, built from scratch rather than off `Occasion` so there is no
+ * field here that could ever carry claim state (NEU-1294 decision 9). Staleness
+ * reads no claim by anyone, the caller included, so nothing on a prompt row is
+ * inferable about who is shopping (`CONTEXT.md` rule 2).
+ *
+ * `id` is the **occasion's** id — what archive and dismiss both take.
+ */
+export interface ArchivePrompt {
+  id: number;
+  name: string;
+  family_id: number;
+  family_name: string;
+}
+
 // Shared Users
 // URL Metadata
 export interface UrlMeta {

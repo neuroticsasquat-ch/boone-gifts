@@ -31,6 +31,11 @@ export const handlers = [
   http.get("https://boone-gifts-api.localhost/families/invites", () => {
     return HttpResponse.json([]);
   }),
+  // Default handler: nothing to be nudged about (ActionableBanner asks on every
+  // Lists and People render, same as the invites above)
+  http.get("https://boone-gifts-api.localhost/occasions/archive-prompts", () => {
+    return HttpResponse.json([]);
+  }),
   // Default handler: no folders (the Lists page's folder filter fetches these
   // on every render)
   http.get("https://boone-gifts-api.localhost/folders", () => {

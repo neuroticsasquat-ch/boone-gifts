@@ -8,13 +8,13 @@ import { memberToken, organizerToken, renderFamilyDetail } from "./harness";
 
 const API = "https://boone-gifts-api.localhost";
 
-function occasion(id: number, name: string, isArchived = false) {
+function occasion(id: number, name: string, isArchived = false, createdById = 1) {
   return {
     id,
     family_id: 1,
     name,
     is_archived: isArchived,
-    created_by_id: 1,
+    created_by_id: createdById,
     created_at: "2026-09-01T00:00:00Z",
     updated_at: "2026-09-01T00:00:00Z",
   };
@@ -261,6 +261,52 @@ describe("OccasionsSection", () => {
     });
   });
 
+  // Archiving is gated per field by the backend (NEU-1294 decision 4), so the
+  // member who created an occasion keeps the control the nudge will send them to
+  // — and still cannot rename it.
+  it("a member who created an occasion sees Archive on it and not Rename", async () => {
+    server.use(serveOccasions([occasion(3, "Christmas 2026", false, 2), occasion(4, "Gran's 80th")]));
+
+    renderFamilyDetail(memberToken);
+
+    await waitFor(() => {
+      expect(screen.getByText("Christmas 2026")).toBeInTheDocument();
+    });
+
+    const ownRow = within(rowFor("Christmas 2026"));
+    expect(ownRow.getByRole("button", { name: "Archive" })).toBeInTheDocument();
+    expect(ownRow.queryByRole("button", { name: "Rename" })).not.toBeInTheDocument();
+
+    // Somebody else's occasion in the same family is unchanged.
+    const otherRow = within(rowFor("Gran's 80th"));
+    expect(otherRow.queryByRole("button", { name: "Archive" })).not.toBeInTheDocument();
+  });
+
+  it("a 403 on archive names the archive rule, which the rename rule no longer covers", async () => {
+    server.use(
+      serveOccasions([occasion(3, "Christmas 2026")]),
+      http.put(`${API}/occasions/3`, () =>
+        HttpResponse.json({ detail: "Forbidden" }, { status: 403 })
+      ),
+    );
+
+    renderFamilyDetail(organizerToken);
+
+    await waitFor(() => {
+      expect(screen.getByText("Christmas 2026")).toBeInTheDocument();
+    });
+
+    await userEvent.click(within(rowFor("Christmas 2026")).getByRole("button", { name: "Archive" }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          "Only an organizer or the person who created this occasion can archive it.",
+        )
+      ).toBeInTheDocument();
+    });
+  });
+
   it("a 403 on rename says the control was organizer-only after all", async () => {
     server.use(
       serveOccasions([occasion(3, "Christmas 2026")]),
@@ -281,7 +327,7 @@ describe("OccasionsSection", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText("Only an organizer can rename or archive an occasion.")
+        screen.getByText("Only an organizer can rename an occasion.")
       ).toBeInTheDocument();
     });
   });

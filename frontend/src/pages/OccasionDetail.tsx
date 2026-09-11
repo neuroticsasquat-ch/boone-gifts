@@ -35,7 +35,12 @@ type TabKey = (typeof TABS)[number]["key"];
 
 const TAB_KEYS = TABS.map((tab) => tab.key);
 
-const ORGANIZER_ONLY = "Only an organizer can rename or archive an occasion.";
+// One message per field, because the backend gates per field (NEU-1294
+// decision 4): a member who created an occasion may archive it and may not
+// rename it, and a single sentence covering both is now false by half.
+const RENAME_ONLY = "Only an organizer can rename an occasion.";
+const ARCHIVE_ONLY =
+  "Only an organizer or the person who created this occasion can archive it.";
 
 /** An open modal is a place you can be, so `?share=open` is the whole state and
  *  a shut one leaves no trace: setting the fallback writes `null`. The path
@@ -161,11 +166,18 @@ function OccasionPage({ occasion }: { occasion: Occasion }) {
   const isOrganizer =
     family.data?.members.find((m) => m.user_id === user?.id)?.role === "organizer";
 
+  // Renaming is the family's business; archiving is also the occasion's, and
+  // the person who created it already had the authority to make it. The archive
+  // nudge (NEU-1315) routinely sends a plain member here, so organizer-only
+  // would be an invitation followed by a 403.
+  const canRename = isOrganizer;
+  const canArchive = isOrganizer || occasion.created_by_id === user?.id;
+
   return (
     <div className="space-y-6">
       <BackControl fallback={backToFamily(occasion.family_id, family.data?.name)} />
 
-      <OccasionHeader occasion={occasion} isOrganizer={isOrganizer} />
+      <OccasionHeader occasion={occasion} canRename={canRename} canArchive={canArchive} />
 
       <TabBar tabs={TABS} active={tab} onSelect={setTab} label="Occasion sections" />
 
@@ -192,13 +204,23 @@ function OccasionPage({ occasion }: { occasion: Occasion }) {
 const ARCHIVE_ACTIONS: ConfirmAction[] = [{ id: "archive", label: "Archive", tone: "danger" }];
 
 /**
- * The occasion's name, whether it is archived, and the organizer's controls.
+ * The occasion's name, whether it is archived, and the controls for changing
+ * either.
  *
- * Rename and archive are **organizer-only**, gated the same way the family
- * page's member controls are — and enforced by the backend regardless, which is
- * why a 403 still has a message to show.
+ * The two controls are gated **separately**, because the backend gates the
+ * fields separately: renaming is an organizer's, archiving is an organizer's or
+ * the creator's. Both are enforced server-side regardless, which is why a 403
+ * still has a message to show — one message each, now that the answers differ.
  */
-function OccasionHeader({ occasion, isOrganizer }: { occasion: Occasion; isOrganizer: boolean }) {
+function OccasionHeader({
+  occasion,
+  canRename,
+  canArchive,
+}: {
+  occasion: Occasion;
+  canRename: boolean;
+  canArchive: boolean;
+}) {
   const queryClient = useQueryClient();
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState(occasion.name);
@@ -219,9 +241,11 @@ function OccasionHeader({ occasion, isOrganizer }: { occasion: Occasion; isOrgan
     queryClient.invalidateQueries({ queryKey: ["share-targets"] });
   };
 
-  function handleError(err: unknown, fallback: string) {
+  // The 403 message names the rule for *this* field — the two rules differ, and
+  // a viewer refused a rename has not been refused an archive.
+  function handleError(err: unknown, forbidden: string, fallback: string) {
     if (isAxiosError(err) && err.response?.status === 403) {
-      setActionError(ORGANIZER_ONLY);
+      setActionError(forbidden);
     } else {
       toast.error(fallback);
     }
@@ -234,7 +258,7 @@ function OccasionHeader({ occasion, isOrganizer }: { occasion: Occasion; isOrgan
       setRenaming(false);
       setActionError(null);
     },
-    onError: (err) => handleError(err, "Failed to rename the occasion."),
+    onError: (err) => handleError(err, RENAME_ONLY, "Failed to rename the occasion."),
   });
 
   const setArchivedMutation = useMutation({
@@ -244,7 +268,7 @@ function OccasionHeader({ occasion, isOrganizer }: { occasion: Occasion; isOrgan
       setActionError(null);
       toast.success(isArchived ? "Occasion archived." : "Occasion unarchived.");
     },
-    onError: (err) => handleError(err, "Failed to archive the occasion."),
+    onError: (err) => handleError(err, ARCHIVE_ONLY, "Failed to archive the occasion."),
   });
 
   function handleRename(e: FormEvent) {
@@ -307,22 +331,33 @@ function OccasionHeader({ occasion, isOrganizer }: { occasion: Occasion; isOrgan
               </span>
             )}
           </div>
-          {isOrganizer && (
+          {/* The menu itself appears for anyone who can do *something* with it,
+              and carries only what they can do — a creator who is not an
+              organizer gets Archive alone rather than a Rename that 403s. */}
+          {(canRename || canArchive) && (
             <HeaderMenu
               ariaLabel="Occasion actions"
               pending={renameMutation.isPending || setArchivedMutation.isPending}
               items={[
-                {
-                  label: "Rename",
-                  onClick: () => {
-                    setName(occasion.name);
-                    setRenaming(true);
-                  },
-                },
-                {
-                  label: occasion.is_archived ? "Unarchive" : "Archive",
-                  onClick: handleArchiveToggle,
-                },
+                ...(canRename
+                  ? [
+                      {
+                        label: "Rename",
+                        onClick: () => {
+                          setName(occasion.name);
+                          setRenaming(true);
+                        },
+                      },
+                    ]
+                  : []),
+                ...(canArchive
+                  ? [
+                      {
+                        label: occasion.is_archived ? "Unarchive" : "Archive",
+                        onClick: handleArchiveToggle,
+                      },
+                    ]
+                  : []),
               ]}
             />
           )}

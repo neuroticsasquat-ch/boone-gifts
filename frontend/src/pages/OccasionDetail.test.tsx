@@ -366,6 +366,49 @@ describe("OccasionDetail", () => {
     expect(screen.queryByRole("button", { name: "Occasion actions" })).not.toBeInTheDocument();
   });
 
+  // The backend gates the two fields separately (NEU-1294 decision 4), and the
+  // archive nudge routinely sends a member who created an occasion here.
+  it("offers a non-organizer creator Archive and not Rename", async () => {
+    renderOccasion({
+      userId: 2,
+      occasionResponse: HttpResponse.json({ ...occasion, created_by_id: 2 }),
+    });
+
+    await userEvent.click(await screen.findByRole("button", { name: "Occasion actions" }));
+
+    expect(screen.getByRole("button", { name: "Archive" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Rename" })).not.toBeInTheDocument();
+  });
+
+  it("names the archive rule, not the rename rule, on a 403 from archiving", async () => {
+    renderOccasion();
+    server.use(http.put(`${API}/occasions/3`, () => new HttpResponse(null, { status: 403 })));
+
+    await userEvent.click(await screen.findByRole("button", { name: "Occasion actions" }));
+    await userEvent.click(screen.getByRole("button", { name: "Archive" }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Archive" }));
+
+    expect(
+      await screen.findByText(
+        "Only an organizer or the person who created this occasion can archive it.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("names the rename rule, not the archive rule, on a 403 from renaming", async () => {
+    renderOccasion();
+    server.use(http.put(`${API}/occasions/3`, () => new HttpResponse(null, { status: 403 })));
+
+    await userEvent.click(await screen.findByRole("button", { name: "Occasion actions" }));
+    await userEvent.click(screen.getByRole("button", { name: "Rename" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(
+      await screen.findByText("Only an organizer can rename an occasion."),
+    ).toBeInTheDocument();
+  });
+
   it("renders an archived occasion normally, offering Unarchive", async () => {
     renderOccasion({ occasionResponse: HttpResponse.json({ ...occasion, is_archived: true }) });
 

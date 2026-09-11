@@ -20,6 +20,7 @@ architecture live in [`AGENTS.md`](AGENTS.md); this file is only about what the 
 | **Who can see this list** | The owner's one sharing surface — families and connections in a single dialog, with one filter box across both sections and a line saying what is ticked. Over a list that exists it sits behind the header's **Change** control and every tick is a write; **New List mounts the same dialog** behind `Choose…`, holding its ticks until the list is created and starting from **nothing ticked**. Its open-ness is the address: `?share=open` | `components/SharingModal.tsx` (the rows), `ListSharingModal.tsx` / `DraftSharingModal.tsx` (the two modes) |
 | **Share a list** | The **other** sharing direction: the occasion is fixed and the *list* is chosen, from lists I own. The same dialog chrome, a different population and a different write — one `PUT` per tick, add-only, and a list already here is ticked and dead. Offered from the occasion page's Lists tab in both its states, and from an empty card in the occasion strip | `components/OccasionSharingModal.tsx` (the rows), `ShareIntoOccasionButton.tsx` (the control), `SharingShell.tsx` (the chrome both modes wear) |
 | **Occasion strip** | The row of occasion cards at the top of `/lists`: every non-archived occasion in every family I belong to, most recently active first, four at a time. Absent entirely when I have none. Carries no money | `pages/lists/OccasionStrip.tsx` |
+| **Archive prompt** | A standing question about one occasion that has gone quiet: archive it, or not yet. Asked of the occasion's creator or an organizer of its family, in the banner that already carries connection requests and family invites. Names the occasion and its family and nothing else. "Not yet" is a dated snooze, not a permanent dismissal | `components/ActionableBanner.tsx` |
 | **Claim** / "I'll get this" | My private intent to buy a gift. Never visible to the list's owner | `pages/list-detail/GiftsTab.tsx` |
 | **My shopping** | Everything *I* have claimed within one occasion or one folder — what I still have to buy, what I bought, and what I paid. Never anyone else's, in any aggregate | `components/MyShopping.tsx` |
 | **Account person** | A named person on a shared login; a list can be marked as being for one | `components/ListForFields.tsx` |
@@ -81,7 +82,9 @@ behaviour).
 6. **A share points at an occasion, not a family.** A family with no active occasion is listed and
    disabled with the reason, never hidden; a family with several is not shared to until one is
    chosen. Archiving an occasion blocks new shares and nothing else — it never withdraws one, so an
-   existing grant stays visible and revokable.
+   existing grant stays visible and revokable. An occasion nobody has shared into for a long time is
+   prompted for archiving rather than archived — the flag is only trustworthy because a person sets
+   it. Archiving is an organizer's, or the occasion creator's; a rename stays the organizer's alone.
    The same "listed, disabled, reason given" shape covers a **person an active occasion share
    already reaches**: their box is dead because ticking it would change nothing, and the row names
    every family that covers them. It applies only to an *unticked* box — a direct share already

@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { Link } from "react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { isAxiosError } from "axios";
@@ -8,23 +9,55 @@ import {
   acceptFamilyInvite,
   declineFamilyInvite,
 } from "../api/families";
+import { dismissArchivePrompt, getArchivePrompts, updateOccasion } from "../api/occasions";
+import { ConfirmDialog, type ConfirmAction } from "./ConfirmDialog";
+import type { ArchivePrompt } from "../types";
+
+const ARCHIVE_ACTIONS: ConfirmAction[] = [{ id: "archive", label: "Archive", tone: "danger" }];
 
 /**
- * Everything waiting on the user's decision — incoming connection requests and
- * family invites — with accept/decline inline.
+ * Longer than `OccasionDetail`'s, deliberately. Someone there went looking for
+ * the control and has the occasion's lists on screen; someone here was
+ * interrupted by a question they did not ask, on a page about something else,
+ * so the reassurance has to travel with the question.
+ */
+const ARCHIVE_BODY =
+  "Lists already shared to it stay shared — archiving only stops new ones. Your shopping for it stays where it is.";
+
+/**
+ * Everything waiting on the user's decision — incoming connection requests,
+ * family invites, and occasions the app is asking them to close out — with the
+ * answers inline.
  *
  * Mounted above the lists on /lists and on /people. It is the single
  * implementation of the accept/decline behaviour: /people mounts the same
- * component rather than keeping its own copy.
+ * component rather than keeping its own copy. The archive nudge mounts with it
+ * everywhere and takes **no prop** — one component that renders one thing is
+ * the property the nudge was put here for, rather than a second banner.
  *
  * Renders nothing at all when nothing is pending — no empty card, no heading.
  */
 export function ActionableBanner() {
   const queryClient = useQueryClient();
 
+  const [confirming, setConfirming] = useState<ArchivePrompt | null>(null);
+
   const requests = useQuery({ queryKey: ["connectionRequests"], queryFn: getConnectionRequests });
   const invites = useQuery({ queryKey: ["familyInvites"], queryFn: getIncomingFamilyInvites });
+  // A literal segment inside the ["occasions"] prefix, the convention the
+  // occasion strip's key already set: clear of the per-family
+  // ["occasions", familyId] entries, while one sweep of the bare prefix still
+  // reaches it. That is what makes every existing archive call site clear this
+  // banner without learning the query exists.
+  const prompts = useQuery({
+    queryKey: ["occasions", "archive-prompts"],
+    queryFn: getArchivePrompts,
+  });
 
+  // `prompts.isError` is deliberately **not** here. A request or an invite
+  // failing means somebody is waiting on you and you cannot see them. A nudge is
+  // the app's own housekeeping: nothing is lost if it never arrives, nobody was
+  // promised it, and the /lists strip below already toasts for the same backend.
   const loadFailed = requests.isError || invites.isError;
   useEffect(() => {
     if (loadFailed) toast.error("Failed to load pending requests and invites.");
@@ -85,6 +118,34 @@ export function ActionableBanner() {
     onError: (err) => handleInviteError(err, "decline"),
   });
 
+  const archivePrompt = useMutation({
+    mutationFn: (occasionId: number) => updateOccasion(occasionId, { is_archived: true }),
+    onSuccess: () => {
+      // The same pair `OccasionDetail`'s header fires, for the same reasons: the
+      // bare prefix moves the /lists strip's card and this banner's row alike,
+      // and archiving changes whether the occasion can be shared to at all.
+      queryClient.invalidateQueries({ queryKey: ["occasions"] });
+      queryClient.invalidateQueries({ queryKey: ["share-targets"] });
+    },
+    onError: () => toast.error("Failed to archive the occasion."),
+    // The dialog closes when the mutation settles rather than on the click, so
+    // it can stay open with every button disabled while the archive is in
+    // flight instead of vanishing mid-mutation (ADR 0008).
+    onSettled: () => setConfirming(null),
+  });
+
+  const dismissPrompt = useMutation({
+    mutationFn: dismissArchivePrompt,
+    // This one key and no other. A snooze changes one row's visibility to one
+    // user: no occasion moved, no share target changed, no card re-sorted.
+    // Sweeping the bare prefix would refetch the strip and every family's
+    // occasion list to hide one banner row.
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["occasions", "archive-prompts"] });
+    },
+    onError: () => toast.error("Failed to dismiss the prompt."),
+  });
+
   // Only the row being acted on is disabled, and both of its buttons are: the
   // guard is against answering one item twice, not against answering a second
   // item while the first is in flight.
@@ -98,10 +159,24 @@ export function ActionableBanner() {
     : declineInvite.isPending
       ? declineInvite.variables
       : null;
+  const busyPromptId = archivePrompt.isPending
+    ? archivePrompt.variables
+    : dismissPrompt.isPending
+      ? dismissPrompt.variables
+      : null;
 
   const pendingRequests = requests.data ?? [];
   const pendingInvites = invites.data ?? [];
-  if (pendingRequests.length === 0 && pendingInvites.length === 0) return null;
+  // A failed prompts query is an empty array here, which is the whole of its
+  // error handling: no rows, and nothing said.
+  const pendingPrompts = prompts.data ?? [];
+  if (
+    pendingRequests.length === 0 &&
+    pendingInvites.length === 0 &&
+    pendingPrompts.length === 0
+  ) {
+    return null;
+  }
 
   return (
     <section aria-label="Waiting on you">
@@ -138,7 +213,54 @@ export function ActionableBanner() {
             />
           </li>
         ))}
+        {/* Last, and not set apart. Requests and invites are other people
+            waiting on you; the app's own housekeeping outranks neither, and a
+            sub-heading over what is usually one row would be chrome. */}
+        {pendingPrompts.map((prompt) => (
+          <li key={`prompt-${prompt.id}`} className="flex items-center justify-between px-4 py-3">
+            <div>
+              <p className="text-gray-900">
+                {/* The occasion links because "Archive this?" is not answerable
+                    from the row — the page carries the lists, the budget and
+                    the shopping tab that answer it (CONTEXT.md rule 3). The
+                    family is an unlinked prefix: the occasion name alone does
+                    not identify one occasion. */}
+                <Link
+                  to={`/occasions/${prompt.id}`}
+                  className="font-medium text-blue-600 hover:underline"
+                >
+                  {prompt.name}
+                </Link>{" "}
+                · {prompt.family_name} has been quiet for a while
+              </p>
+            </div>
+            <ArchiveActions
+              onArchive={() => setConfirming(prompt)}
+              onNotYet={() => dismissPrompt.mutate(prompt.id)}
+              disabled={busyPromptId === prompt.id}
+              describes={`${prompt.name} in ${prompt.family_name}`}
+            />
+          </li>
+        ))}
       </ul>
+
+      {/* One dialog for the whole banner, not one per row — which is why the
+          state is the prompt being confirmed rather than a boolean: the title
+          needs its name and the mutation needs its id. */}
+      <ConfirmDialog
+        open={confirming !== null}
+        title={confirming ? `Archive ${confirming.name}?` : ""}
+        body={ARCHIVE_BODY}
+        actions={ARCHIVE_ACTIONS}
+        pending={archivePrompt.isPending}
+        onResolve={(id) => {
+          if (id === "archive" && confirming) {
+            archivePrompt.mutate(confirming.id);
+            return;
+          }
+          setConfirming(null);
+        }}
+      />
     </section>
   );
 }
@@ -171,6 +293,53 @@ function ActionButtons({
         className="rounded bg-gray-200 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-300 disabled:opacity-50"
       >
         Decline
+      </button>
+    </div>
+  );
+}
+
+/**
+ * The nudge's button pair, borrowing `ActionButtons`' geometry and per-row
+ * `disabled` guard.
+ *
+ * Both buttons are neutral grey. **Archive is not a green Accept**, and it is
+ * not a red danger either: this row exists to say the action is mild — archiving
+ * blocks new shares, withdraws none, and leaves the viewer's shopping alone —
+ * and a red button would argue the opposite before the confirm body got to deny
+ * it. The dialog behind it carries the danger tone, where the action is real.
+ *
+ * A separate component rather than props on `ActionButtons`: two fixed pairs
+ * exist, and four props to express them would leave a component whose name
+ * stops saying what it does.
+ */
+function ArchiveActions({
+  onArchive,
+  onNotYet,
+  disabled,
+  describes,
+}: {
+  onArchive: () => void;
+  onNotYet: () => void;
+  disabled: boolean;
+  describes: string;
+}) {
+  return (
+    <div className="flex shrink-0 gap-2">
+      <button
+        onClick={onArchive}
+        disabled={disabled}
+        aria-label={`Archive ${describes}`}
+        className="rounded bg-gray-200 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-300 disabled:opacity-50"
+      >
+        Archive
+      </button>
+      <button
+        onClick={onNotYet}
+        disabled={disabled}
+        aria-label={`Dismiss the prompt to archive ${describes}`}
+        className="rounded bg-gray-200 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-300 disabled:opacity-50"
+      >
+        Not yet
       </button>
     </div>
   );
