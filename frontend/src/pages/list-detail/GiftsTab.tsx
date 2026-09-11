@@ -7,8 +7,19 @@ import { fetchUrlMeta } from "../../api/meta";
 import type { ClaimOccasion, GiftListDetailOwner, GiftListDetailViewer, GiftOwnerView, Gift } from "../../types";
 import { formatMoney } from "../../lib/money";
 import { useTimeout } from "../../hooks/useTimeout";
+import { useEnumSearchParam } from "../../hooks/useSearchParamState";
 import { ConfirmDialog, type ConfirmAction } from "../../components/ConfirmDialog";
 import toast from "react-hot-toast";
+
+/** The gift sort, shared by the owner and viewer branches under one `sort` key:
+ *  `GiftsTab` renders exactly one of them, so the two are never live at once
+ *  and the key has one meaning per rendered page (spec Decision 7). */
+const GIFT_SORTS = ["added", "price_asc", "price_desc"] as const;
+type GiftSort = (typeof GIFT_SORTS)[number];
+
+/** The viewer branch's filter. No owner equivalent — an owner sees no claims. */
+const GIFT_FILTERS = ["all", "available", "mine"] as const;
+type GiftFilter = (typeof GIFT_FILTERS)[number];
 
 interface GiftsTabProps {
   list: GiftListDetailOwner | GiftListDetailViewer;
@@ -36,7 +47,13 @@ function OwnerGifts({
   listId: number;
   queryClient: ReturnType<typeof useQueryClient>;
 }) {
-  const [giftSort, setGiftSort] = useState<"added" | "price_asc" | "price_desc">("added");
+  // A sort is a **preference about a page you are already on**, so it replaces:
+  // one Back press leaves a list you glanced at (spec §6.3).
+  const [giftSort, setGiftSort] = useEnumSearchParam<GiftSort>("sort", {
+    mode: "replace",
+    values: GIFT_SORTS,
+    fallback: "added",
+  });
 
   const sortedGifts = useMemo(() => {
     if (giftSort === "added") return list.gifts;
@@ -60,7 +77,7 @@ function OwnerGifts({
           <div className="flex justify-end">
             <select
               value={giftSort}
-              onChange={(e) => setGiftSort(e.target.value as "added" | "price_asc" | "price_desc")}
+              onChange={(e) => setGiftSort(e.target.value as GiftSort)}
               className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600"
             >
               <option value="added">As added</option>
@@ -92,8 +109,16 @@ function ViewerGifts({
   queryClient: ReturnType<typeof useQueryClient>;
   userId: number;
 }) {
-  const [giftFilter, setGiftFilter] = useState<"all" | "available" | "mine">("all");
-  const [giftSort, setGiftSort] = useState<"added" | "price_asc" | "price_desc">("added");
+  const [giftFilter, setGiftFilter] = useEnumSearchParam<GiftFilter>("filter", {
+    mode: "replace",
+    values: GIFT_FILTERS,
+    fallback: "all",
+  });
+  const [giftSort, setGiftSort] = useEnumSearchParam<GiftSort>("sort", {
+    mode: "replace",
+    values: GIFT_SORTS,
+    fallback: "added",
+  });
 
   const filteredGifts = useMemo(() => {
     let gifts = list.gifts;
@@ -131,7 +156,7 @@ function ViewerGifts({
           <div className="flex gap-2 flex-wrap">
             <select
               value={giftFilter}
-              onChange={(e) => setGiftFilter(e.target.value as "all" | "available" | "mine")}
+              onChange={(e) => setGiftFilter(e.target.value as GiftFilter)}
               className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600"
             >
               <option value="all">All gifts</option>
@@ -140,7 +165,7 @@ function ViewerGifts({
             </select>
             <select
               value={giftSort}
-              onChange={(e) => setGiftSort(e.target.value as "added" | "price_asc" | "price_desc")}
+              onChange={(e) => setGiftSort(e.target.value as GiftSort)}
               className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600"
             >
               <option value="added">As added</option>

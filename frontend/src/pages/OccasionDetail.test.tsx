@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { MemoryRouter, Route, Routes } from "react-router";
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-router";
 import { Toaster } from "react-hot-toast";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
@@ -91,16 +91,31 @@ const noBudget = {
   unpriced_count: 0,
 };
 
+/** The address the tab is held in, plus a Back button — a tab is a place, and
+ *  neither its link nor Back is visible through the page's own markup. */
+function Address() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  return (
+    <>
+      <p>{`address: ${location.pathname}${location.search}`}</p>
+      <button onClick={() => navigate(-1)}>go back</button>
+    </>
+  );
+}
+
 function renderOccasion({
   userId = 1,
   occasionResponse = HttpResponse.json(occasion),
   lists = [list()],
   shopping = [],
+  entries = ["/occasions/3"],
 }: {
   userId?: number;
   occasionResponse?: Response;
   lists?: ReturnType<typeof list>[];
   shopping?: Record<string, unknown>[];
+  entries?: string[];
 } = {}) {
   server.use(
     http.post(`${API}/auth/refresh`, () =>
@@ -118,7 +133,7 @@ function renderOccasion({
   return render(
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <MemoryRouter initialEntries={["/occasions/3"]}>
+        <MemoryRouter initialEntries={entries} initialIndex={entries.length - 1}>
           <Routes>
             <Route
               path="/occasions/:id"
@@ -131,6 +146,7 @@ function renderOccasion({
             <Route path="/people/families/:id" element={<div>Family Page</div>} />
           </Routes>
           <Toaster />
+          <Address />
         </MemoryRouter>
       </AuthProvider>
     </QueryClientProvider>
@@ -321,5 +337,51 @@ describe("OccasionDetail", () => {
       await screen.findByText("This occasion doesn't exist, or it belongs to a family you're not in.")
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+  });
+});
+
+describe("OccasionDetail — the tab is a place", () => {
+  // Criterion 4: "My shopping for Christmas 2026" has an address, and it works.
+  it("renders My shopping on load at ?tab=shopping", async () => {
+    renderOccasion({ entries: ["/occasions/3?tab=shopping"] });
+
+    expect(await screen.findByRole("tab", { name: "My shopping", selected: true })).toBeInTheDocument();
+  });
+
+  // Criterion 3: a tab change grows history by one, and Back returns to it.
+  it("pushes on a tab change — Back returns to the Lists tab", async () => {
+    renderOccasion();
+
+    await userEvent.click(await screen.findByRole("tab", { name: "My shopping" }));
+    expect(await screen.findByText("address: /occasions/3?tab=shopping")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "go back" }));
+    expect(await screen.findByRole("tab", { name: "Lists", selected: true })).toBeInTheDocument();
+  });
+
+  // Criterion 5: the bar fires onSelect on every click, the active tab included.
+  // An entry per click would cost three Back presses to leave the page.
+  it("navigates nowhere when the already-active tab is clicked", async () => {
+    renderOccasion({ entries: ["/people", "/occasions/3?tab=shopping"] });
+
+    const active = await screen.findByRole("tab", { name: "My shopping" });
+    await userEvent.click(active);
+    await userEvent.click(active);
+
+    await userEvent.click(screen.getByRole("button", { name: "go back" }));
+    expect(await screen.findByText("address: /people")).toBeInTheDocument();
+  });
+
+  // Criterion 6: a bogus tab heals by *replacing*, in push mode too. A pushed
+  // heal would leave ?tab=bogus behind the viewer, where Back would reach it,
+  // heal it, and push again — a page Back cannot leave.
+  it("scrubs an unrecognised ?tab= without stranding the viewer", async () => {
+    renderOccasion({ entries: ["/people", "/occasions/3?tab=bogus"] });
+
+    expect(await screen.findByRole("tab", { name: "Lists", selected: true })).toBeInTheDocument();
+    expect(await screen.findByText("address: /occasions/3")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "go back" }));
+    expect(await screen.findByText("address: /people")).toBeInTheDocument();
   });
 });

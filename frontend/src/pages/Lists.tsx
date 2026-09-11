@@ -1,9 +1,10 @@
-import { useState, useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { Link } from "react-router";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { getLists } from "../api/lists";
 import { getFolder, getFolders } from "../api/folders";
 import { useTitle } from "../hooks/useTitle";
+import { useEnumSearchParam, useSearchParamState } from "../hooks/useSearchParamState";
 import { Spinner } from "../components/Spinner";
 import { ClipboardIcon, HandshakeIcon } from "../components/Icons";
 import type { GiftList } from "../types";
@@ -12,11 +13,26 @@ import { ListAttributionLine, RecipientLine } from "../components/ListAttributio
 import { ActionableBanner } from "../components/ActionableBanner";
 import { OccasionStrip } from "./lists/OccasionStrip";
 
-type SortBy = "updated" | "name" | "created";
+const SORTS = ["updated", "name", "created"] as const;
+type SortBy = (typeof SORTS)[number];
+
+const GROUPINGS = ["none", "occasion", "person", "folder"] as const;
 
 /** The filter's "no folder chosen" value. `<select>` values are strings, so the
  *  folder ids alongside it are stringified too. */
 const ALL_LISTS = "all";
+
+/** `?folder=` read as an id, or null when it is not one syntactically.
+ *
+ *  A folder id is a positive integer or it is not an id at all — the same rule
+ *  `NumericId` applies to a route id (ADR 0006), applied to a param. `abc`,
+ *  `-1`, `0` and `1.5` are all treated as absent. Whether a well-formed id names
+ *  a folder the *viewer owns* cannot be known until `getFolders()` resolves, and
+ *  is the second stage, below. */
+function parseFolderParam(raw: string | null): number | null {
+  if (raw === null || !/^[1-9][0-9]*$/.test(raw)) return null;
+  return Number(raw);
+}
 
 function sortLists(lists: GiftList[], sortBy: SortBy) {
   return [...lists].sort((a, b) => {
@@ -90,11 +106,26 @@ function SharedRows({ lists }: { lists: GiftList[] }) {
 
 export function Lists() {
   useTitle("Lists");
-  const [sortBy, setSortBy] = useState<SortBy>("updated");
-  const [folderId, setFolderId] = useState<number | null>(null);
+  // Every one of these three is a **preference about a page you are already
+  // on**, so all three replace: setting a sort and then pressing Back leaves
+  // /lists rather than undoing the dropdown (project spec §6.3).
+  const [sortBy, setSortBy] = useEnumSearchParam<SortBy>("sort", {
+    mode: "replace",
+    values: SORTS,
+    fallback: "updated",
+  });
   // Off by default, so the shipped flat page is what a viewer who asks for
   // nothing still gets (project spec §9.1).
-  const [groupBy, setGroupBy] = useState<GroupBy>("none");
+  const [groupBy, setGroupBy] = useEnumSearchParam<GroupBy>("group", {
+    mode: "replace",
+    values: GROUPINGS,
+    fallback: "none",
+  });
+  // `folder` is the odd one out — a number, whose valid values are not known
+  // until the folder list resolves — so it carries its own two-stage check
+  // rather than going through `useEnumSearchParam`.
+  const [folderParam, setFolderParam] = useSearchParamState("folder", { mode: "replace" });
+  const parsedFolderId = parseFolderParam(folderParam);
 
   // Active only, always. Nothing archived appears in a default view — the
   // archive is `/lists/archive` and nothing else (NEU-1278, project spec §9.5).
@@ -113,10 +144,36 @@ export function Lists() {
     queryKey: ["folders", { archived: false }],
     queryFn: () => getFolders(),
   });
+  // Stage two: an id the viewer does not own is not a filter. It falls back to
+  // All lists rather than being fetched — `GET /folders/999` would 404, and
+  // `selectedFolder` has no error arm, so the page would sit with `filtering`
+  // true and `folderListIds` null forever: both sections empty, no explanation
+  // (CONTEXT.md rule 3). False while the folders are still loading, which keeps
+  // the id and leaves the page in its existing `sectionsPending` arm rather
+  // than briefly showing everything.
+  const folderDisowned =
+    parsedFolderId !== null
+    && folders.data !== undefined
+    && !folders.data.some((folder) => folder.id === parsedFolderId);
+  const folderId = folderDisowned ? null : parsedFolderId;
+
+  // A key the page is ignoring does not stay in the address: a viewer who
+  // bookmarked or re-shared `?folder=999` would otherwise propagate it onward,
+  // and the next reader could not tell it was already being ignored.
+  useEffect(() => {
+    if (folderParam === null) return;
+    if (parsedFolderId === null || folderDisowned) setFolderParam(null);
+  }, [folderParam, parsedFolderId, folderDisowned, setFolderParam]);
+
   const selectedFolder = useQuery({
     queryKey: ["folder", folderId],
     queryFn: () => getFolder(folderId as number),
-    enabled: folderId !== null,
+    // Held until the folder list has settled, so a `?folder=` the viewer does
+    // not own is never fetched at all — stage two disowns it in the same render
+    // the list arrives in. Gated on the folder list *settling* rather than on
+    // its data: if that read fails there is nothing to judge the id against,
+    // and asking the server directly beats spinning forever.
+    enabled: folderId !== null && !folders.isPending,
   });
 
   // Grouping by folder needs every folder's membership, not just the selected
@@ -219,7 +276,7 @@ export function Lists() {
               <select
                 value={folderId === null ? ALL_LISTS : String(folderId)}
                 onChange={(e) =>
-                  setFolderId(e.target.value === ALL_LISTS ? null : Number(e.target.value))
+                  setFolderParam(e.target.value === ALL_LISTS ? null : e.target.value)
                 }
                 className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600"
               >

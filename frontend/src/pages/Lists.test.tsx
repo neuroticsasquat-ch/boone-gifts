@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, it, expect } from "vitest";
-import { MemoryRouter } from "react-router";
+import { describe, it, expect, onTestFinished } from "vitest";
+import { MemoryRouter, useLocation, useNavigate } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { server } from "../test/mocks/server";
@@ -91,7 +91,21 @@ function lists({ owned = [], shared = [] }: { owned?: unknown[]; shared?: unknow
   );
 }
 
-function renderLists() {
+/** The address this page's view state is held in, plus a Back button. The
+ *  whole point of the conversion is what the URL says and what Back does, and
+ *  neither is visible through the page's own markup. */
+function Address() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  return (
+    <>
+      <p>{`address: ${location.pathname}${location.search}`}</p>
+      <button onClick={() => navigate(-1)}>go back</button>
+    </>
+  );
+}
+
+function renderLists({ entries = ["/lists"] }: { entries?: string[] } = {}) {
   server.use(
     http.post(`${API}/auth/refresh`, () =>
       HttpResponse.json({ access_token: authToken, token_type: "bearer" })
@@ -104,8 +118,9 @@ function renderLists() {
   return { queryClient, ...render(
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={entries} initialIndex={entries.length - 1}>
           <Lists />
+          <Address />
         </MemoryRouter>
       </AuthProvider>
     </QueryClientProvider>
@@ -770,5 +785,143 @@ describe("Lists — to-buy badge", () => {
 
     expect(await screen.findByText("Tom's Wishlist")).toBeInTheDocument();
     expect(screen.queryByText(/to buy/)).not.toBeInTheDocument();
+  });
+});
+
+describe("Lists — view state lives in the URL", () => {
+  // Criterion 1: filter, sort or group, open a list, come back, and the view is
+  // the one you left — which requires the view to be in the address at all.
+  it("writes the sort to the URL", async () => {
+    noLists();
+
+    renderLists();
+
+    await userEvent.selectOptions(await screen.findByLabelText("Sort"), "name");
+
+    expect(await screen.findByText("address: /lists?sort=name")).toBeInTheDocument();
+  });
+
+  // Criterion 2: a preference about a page you are already on does not grow the
+  // history stack, so one Back press leaves a page you glanced at.
+  it("does not grow history when the sort changes — Back leaves the page", async () => {
+    noLists();
+
+    renderLists({ entries: ["/start", "/lists"] });
+
+    await userEvent.selectOptions(await screen.findByLabelText("Sort"), "name");
+    await screen.findByText("address: /lists?sort=name");
+
+    await userEvent.click(screen.getByRole("button", { name: "go back" }));
+
+    expect(await screen.findByText("address: /start")).toBeInTheDocument();
+  });
+
+  // Criterion 4: a URL carrying a grouping renders that view with no interaction.
+  it("renders ?group=occasion on load", async () => {
+    lists({
+      shared: [
+        sharedList({ id: 1, name: "Carol's Wishlist", owner_name: "Carol Boone", shared_via: [{
+          kind: "occasion", occasion: { id: 3, name: "Christmas 2026" },
+          family: { id: 1, name: "Boone Family" },
+        }] }),
+      ],
+    });
+
+    renderLists({ entries: ["/lists?group=occasion"] });
+
+    expect(await screen.findByRole("heading", { name: "Boone Family · Christmas 2026" })).toBeInTheDocument();
+    expect(await screen.findByLabelText("Group by")).toHaveValue("occasion");
+  });
+
+  it("renders ?sort=name on load", async () => {
+    lists({
+      owned: [
+        ownedList({ id: 1, name: "Zebra list", created_at: "2026-01-01T00:00:00Z" }),
+        ownedList({ id: 2, name: "Apple list", created_at: "2026-02-01T00:00:00Z" }),
+      ],
+    });
+
+    renderLists({ entries: ["/lists?sort=name"] });
+
+    expect(await screen.findByLabelText("Sort")).toHaveValue("name");
+    const rows = within(screen.getByRole("heading", { name: /My Lists/ }).closest("section") as HTMLElement)
+      .getAllByRole("listitem");
+    expect(rows[0]).toHaveTextContent("Apple list");
+  });
+
+  it("narrows both sections when ?folder= names a folder the viewer owns", async () => {
+    lists({
+      owned: [ownedList({ id: 1, name: "Tom's Wishlist" }), ownedList({ id: 2, name: "Beth's List" })],
+      shared: [
+        sharedList({ id: 3, name: "Jane's Wishlist", shared_via: [{ kind: "direct", person: { id: 2, name: "Jane Boone" } }] }),
+        sharedList({ id: 4, name: "Carol's Wishlist", shared_via: [{ kind: "direct", person: { id: 2, name: "Jane Boone" } }] }),
+      ],
+    });
+    folders([{ id: 5, name: "Christmas 2026", lists: [{ id: 1 }, { id: 3 }] }]);
+
+    renderLists({ entries: ["/lists?folder=5"] });
+
+    expect(await screen.findByText("Tom's Wishlist")).toBeInTheDocument();
+    expect(screen.getByText("Jane's Wishlist")).toBeInTheDocument();
+    expect(screen.queryByText("Beth's List")).not.toBeInTheDocument();
+    expect(screen.queryByText("Carol's Wishlist")).not.toBeInTheDocument();
+    expect(await screen.findByLabelText("Folder")).toHaveValue("5");
+  });
+
+  // Criterion 7: the id is well-formed but names no folder of the viewer's.
+  // Fetching it would 404 into an arm this page does not have, leaving both
+  // sections empty with no explanation.
+  it("falls back to All lists and scrubs a ?folder= the viewer does not own", async () => {
+    lists({
+      owned: [ownedList({ id: 1, name: "Tom's Wishlist" })],
+      shared: [sharedList({ id: 3, name: "Jane's Wishlist", shared_via: [{ kind: "direct", person: { id: 2, name: "Jane Boone" } }] })],
+    });
+    folders([{ id: 5, name: "Christmas 2026", lists: [{ id: 1 }] }]);
+    const asked: string[] = [];
+    const record = ({ request }: { request: Request }) => asked.push(new URL(request.url).pathname);
+    server.events.on("request:start", record);
+    onTestFinished(() => server.events.removeListener("request:start", record));
+
+    renderLists({ entries: ["/lists?folder=999"] });
+
+    expect(await screen.findByText("Tom's Wishlist")).toBeInTheDocument();
+    expect(screen.getByText("Jane's Wishlist")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Folder")).toHaveValue("all");
+    expect(await screen.findByText("address: /lists")).toBeInTheDocument();
+    // Never asked for — a 404 here has no arm on this page, so the id is judged
+    // against the folder list rather than against the server.
+    expect(asked).not.toContain("/folders/999");
+  });
+
+  it("treats a ?folder= that is not a positive integer as absent", async () => {
+    lists({ owned: [ownedList({ id: 1, name: "Tom's Wishlist" })] });
+    folders([{ id: 5, name: "Christmas 2026", lists: [] }]);
+
+    renderLists({ entries: ["/lists?folder=abc"] });
+
+    // Not filtered, not spun on, and not left in the address.
+    expect(await screen.findByText("Tom's Wishlist")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Folder")).toHaveValue("all");
+    expect(await screen.findByText("address: /lists")).toBeInTheDocument();
+  });
+
+  // Criterion 6: an unrecognised value renders the default and leaves no trace.
+  it("renders the default sort for ?sort=bogus and scrubs the key", async () => {
+    noLists();
+
+    renderLists({ entries: ["/lists?sort=bogus"] });
+
+    expect(await screen.findByLabelText("Sort")).toHaveValue("updated");
+    expect(await screen.findByText("address: /lists")).toBeInTheDocument();
+  });
+
+  // Criterion 8/9: the strip's shipped key is not this ticket's business, and
+  // the two keys share a page without touching each other.
+  it("leaves ?occasions=all alone while scrubbing a bogus sort", async () => {
+    noLists();
+
+    renderLists({ entries: ["/lists?occasions=all&sort=bogus"] });
+
+    expect(await screen.findByText("address: /lists?occasions=all")).toBeInTheDocument();
   });
 });

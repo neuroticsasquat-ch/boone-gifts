@@ -18,6 +18,7 @@ import { useNumericId } from "../components/NumericId";
 import { ListAttributionLine } from "../components/ListAttribution";
 import { MyShopping } from "../components/MyShopping";
 import { TabBar } from "../components/TabBar";
+import { useEnumSearchParam } from "../hooks/useSearchParamState";
 
 /**
  * The folder page's tabs — the same two the occasion page carries
@@ -33,11 +34,19 @@ const TABS = [
 
 type TabKey = (typeof TABS)[number]["key"];
 
+const TAB_KEYS = TABS.map((tab) => tab.key);
+
 export function FolderDetail() {
   const folderId = useNumericId();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<TabKey>(TABS[0].key);
+  // Pushed, like the occasion page's: the same two tabs mean the same thing on
+  // both, and a tab is a place (spec §6.3).
+  const [tab, setTab] = useEnumSearchParam<TabKey>("tab", {
+    mode: "push",
+    values: TAB_KEYS,
+    fallback: TABS[0].key,
+  });
 
   const { data: folder, isLoading, error, refetch } = useQuery({
     queryKey: ["folder", folderId],

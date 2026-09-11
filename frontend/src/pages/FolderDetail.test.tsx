@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect } from "vitest";
-import { MemoryRouter, Route, Routes } from "react-router";
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { server } from "../test/mocks/server";
@@ -24,13 +24,25 @@ const sampleFolder = {
   updated_at: "2026-01-01",
 };
 
-function renderFolderDetail(id = "1") {
+/** The address the tab is held in, plus a Back button. */
+function Address() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  return (
+    <>
+      <p>{`address: ${location.pathname}${location.search}`}</p>
+      <button onClick={() => navigate(-1)}>go back</button>
+    </>
+  );
+}
+
+function renderFolderDetail(id = "1", { entries = [`/folders/${id}`] }: { entries?: string[] } = {}) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={[`/folders/${id}`]}>
+      <MemoryRouter initialEntries={entries} initialIndex={entries.length - 1}>
         <Routes>
           <Route
             path="/folders/:id"
@@ -42,6 +54,7 @@ function renderFolderDetail(id = "1") {
           />
           <Route path="/lists" element={<div>Lists</div>} />
         </Routes>
+        <Address />
       </MemoryRouter>
     </QueryClientProvider>
   );
@@ -241,5 +254,65 @@ describe("FolderDetail", () => {
       expect(screen.getByText("for Beth · kept by Tom")).toBeInTheDocument();
     });
     expect(screen.getByText("from Alice")).toBeInTheDocument();
+  });
+});
+
+describe("FolderDetail — the tab is a place", () => {
+  function serveFolder() {
+    server.use(
+      http.get(`${API}/folders/1`, () => HttpResponse.json(sampleFolder)),
+      http.get(`${API}/lists`, () => HttpResponse.json([])),
+      http.get(`${API}/folders/1/shopping`, () =>
+        HttpResponse.json({
+          budget: { amount: null, spent: "0.00", remaining: null, bought_count: 0, total_count: 0, unpriced_count: 0 },
+          items: [],
+        })
+      ),
+    );
+  }
+
+  it("renders My shopping on load at ?tab=shopping", async () => {
+    serveFolder();
+
+    renderFolderDetail("1", { entries: ["/folders/1?tab=shopping"] });
+
+    expect(await screen.findByRole("tab", { name: "My shopping", selected: true })).toBeInTheDocument();
+  });
+
+  it("pushes on a tab change — Back returns to the Lists tab", async () => {
+    serveFolder();
+
+    renderFolderDetail();
+
+    await userEvent.click(await screen.findByRole("tab", { name: "My shopping" }));
+    expect(await screen.findByText("address: /folders/1?tab=shopping")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "go back" }));
+    expect(await screen.findByRole("tab", { name: "Lists", selected: true })).toBeInTheDocument();
+  });
+
+  it("navigates nowhere when the already-active tab is clicked", async () => {
+    serveFolder();
+
+    renderFolderDetail("1", { entries: ["/lists", "/folders/1?tab=shopping"] });
+
+    const active = await screen.findByRole("tab", { name: "My shopping" });
+    await userEvent.click(active);
+    await userEvent.click(active);
+
+    await userEvent.click(screen.getByRole("button", { name: "go back" }));
+    expect(await screen.findByText("address: /lists")).toBeInTheDocument();
+  });
+
+  it("scrubs an unrecognised ?tab= without stranding the viewer", async () => {
+    serveFolder();
+
+    renderFolderDetail("1", { entries: ["/lists", "/folders/1?tab=bogus"] });
+
+    expect(await screen.findByRole("tab", { name: "Lists", selected: true })).toBeInTheDocument();
+    expect(await screen.findByText("address: /folders/1")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "go back" }));
+    expect(await screen.findByText("address: /lists")).toBeInTheDocument();
   });
 });

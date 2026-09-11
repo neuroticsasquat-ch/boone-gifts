@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { MemoryRouter, Route, Routes } from "react-router";
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { server } from "../test/mocks/server";
@@ -53,7 +53,19 @@ const viewerListDetail = {
   updated_at: "2026-01-01",
 };
 
-function renderListDetail(token: string) {
+/** The address the gift filter and sort are held in, plus a Back button. */
+function Address() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  return (
+    <>
+      <p>{`address: ${location.pathname}${location.search}`}</p>
+      <button onClick={() => navigate(-1)}>go back</button>
+    </>
+  );
+}
+
+function renderListDetail(token: string, { entries = ["/lists/1"] }: { entries?: string[] } = {}) {
   // Mock the silent refresh to return the token, which sets up the auth user
   server.use(
     http.post(`${API}/auth/refresh`, () =>
@@ -67,7 +79,7 @@ function renderListDetail(token: string) {
   return render(
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <MemoryRouter initialEntries={["/lists/1"]}>
+        <MemoryRouter initialEntries={entries} initialIndex={entries.length - 1}>
           <Routes>
             <Route
               path="/lists/:id"
@@ -77,7 +89,9 @@ function renderListDetail(token: string) {
                 </NumericId>
               }
             />
+            <Route path="*" element={null} />
           </Routes>
+          <Address />
         </MemoryRouter>
       </AuthProvider>
     </QueryClientProvider>
@@ -1507,5 +1521,74 @@ describe("ListDetail — filing a claim under an occasion", () => {
     // The refetched candidates now make the row ask, which is the way through.
     await userEvent.click(await screen.findByRole("button", { name: "I'll get this" }));
     expect(await screen.findByLabelText("Which occasion is this for?")).toBeInTheDocument();
+  });
+});
+
+describe("ListDetail — the gift filter and sort live in the URL", () => {
+  const priced = (overrides: Record<string, unknown>) => ({
+    id: 10, name: "A gift", description: null, url: null, price: "10.00", claimed_by_id: null, ...overrides,
+  });
+
+  function serveList(list: Record<string, unknown>) {
+    server.use(
+      http.get(`${API}/lists/1`, () => HttpResponse.json(list)),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => HttpResponse.json([])),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
+    );
+  }
+
+  // Criterion 4, viewer branch.
+  it("hides claimed gifts on load at ?filter=available", async () => {
+    serveList({
+      ...viewerListDetail,
+      gifts: [
+        priced({ id: 10, name: "Still free" }),
+        priced({ id: 11, name: "Already taken", claimed_by_id: 3 }),
+      ],
+    });
+
+    renderListDetail(viewerToken, { entries: ["/lists/1?filter=available"] });
+
+    expect(await screen.findByText("Still free")).toBeInTheDocument();
+    expect(screen.queryByText("Already taken")).not.toBeInTheDocument();
+  });
+
+  // Criterion 4, owner branch — and Decision 7: the two branches share `sort`,
+  // while `filter` belongs to the viewer's alone.
+  it("orders the owner's gifts on load at ?sort=price_asc, with no filter control", async () => {
+    serveList({
+      ...ownerListDetail,
+      gifts: [
+        { id: 10, name: "Dear thing", description: null, url: null, price: "90.00" },
+        { id: 11, name: "Cheap thing", description: null, url: null, price: "5.00" },
+      ],
+    });
+
+    renderListDetail(ownerToken, { entries: ["/lists/1?sort=price_asc"] });
+
+    const rows = await screen.findAllByRole("listitem");
+    expect(rows[0]).toHaveTextContent("Cheap thing");
+    expect(screen.queryByRole("option", { name: "Still available" })).not.toBeInTheDocument();
+  });
+
+  // Criterion 2: a sort is a preference, so Back leaves the list rather than
+  // undoing the dropdown.
+  it("does not grow history when the gift sort changes", async () => {
+    serveList({
+      ...ownerListDetail,
+      gifts: [priced({ id: 10, name: "A gift" })],
+    });
+
+    renderListDetail(ownerToken, { entries: ["/lists", "/lists/1"] });
+
+    const sort = await screen.findByRole("combobox");
+    await userEvent.selectOptions(sort, "price_desc");
+    expect(await screen.findByText("address: /lists/1?sort=price_desc")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "go back" }));
+    expect(await screen.findByText("address: /lists")).toBeInTheDocument();
   });
 });

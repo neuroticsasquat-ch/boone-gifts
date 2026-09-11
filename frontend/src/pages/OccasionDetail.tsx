@@ -13,6 +13,7 @@ import { HeaderMenu } from "../components/HeaderMenu";
 import { ListAttributionLine, RecipientLine } from "../components/ListAttribution";
 import { MyShopping } from "../components/MyShopping";
 import { TabBar } from "../components/TabBar";
+import { useEnumSearchParam } from "../hooks/useSearchParamState";
 import { ConfirmDialog, type ConfirmAction } from "../components/ConfirmDialog";
 import type { Occasion } from "../types";
 
@@ -27,6 +28,8 @@ const TABS = [
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
+
+const TAB_KEYS = TABS.map((tab) => tab.key);
 
 const ORGANIZER_ONLY = "Only an organizer can rename or archive an occasion.";
 
@@ -84,7 +87,13 @@ export function OccasionDetail() {
 
 function OccasionPage({ occasion }: { occasion: Occasion }) {
   const { user } = useAuth();
-  const [tab, setTab] = useState<TabKey>(TABS[0].key);
+  // A tab is a **place**, so it pushes: "My shopping for Christmas 2026" has an
+  // address, and Back closes it rather than undoing a dropdown (spec §6.3).
+  const [tab, setTab] = useEnumSearchParam<TabKey>("tab", {
+    mode: "push",
+    values: TAB_KEYS,
+    fallback: TABS[0].key,
+  });
 
   // The family behind the occasion: its name for the header and the back link,
   // and its members for the organizer gate. Keyed as the family page keys it,

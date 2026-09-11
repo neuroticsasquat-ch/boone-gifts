@@ -69,7 +69,9 @@ src/
                      # a recorded amount without re-stamping the purchase
     connections.ts, shares.ts, folders.ts, invites.ts, users.ts, meta.ts
   contexts/AuthContext.tsx   # Access token in memory, silent refresh on mount
-  hooks/             # useAuth, useTitle, useTimeout (a setTimeout that clears on unmount)
+  hooks/             # useAuth, useTitle, useTimeout (a setTimeout that clears on unmount),
+                     # useSearchParamState / useEnumSearchParam — view state in the URL,
+                     # `mode` required at every call site (CONTEXT.md rule 8)
   components/
     Layout.tsx            # App shell: one tab set (Lists · People) + outlet, badge queries
     ProtectedRoute.tsx    # Auth guard        AdminRoute.tsx — admin guard for /admin/*
@@ -130,16 +132,16 @@ src/
 | `/reset-password` | `ResetPassword` | Public |
 | `/family-invites/:token` | `AcceptFamilyInvite` | Authenticated, outside `Layout` |
 | `/` | — | Redirects to `/lists`; the app's entry point, not a page |
-| `/lists` | `Lists` | My lists + everything shared with me, under the actionable banner. Header controls: folder filter, sort, group by. **Active only** — the archive is its own page, linked at the foot |
+| `/lists` | `Lists` | My lists + everything shared with me, under the actionable banner. Header controls: folder filter, sort, group by — held in the URL as `?folder=` · `?sort=` · `?group=`, all `replace` (plus the strip's `?occasions=all`). **Active only** — the archive is its own page, linked at the foot |
 | `/lists/archive` | `ListsArchive` | Archived lists (owned and shared) and archived folders. Read-only: rows link to the detail pages that own unarchive |
 | `/lists/new` | `CreateList` | Also shows "Share with families" checkboxes |
-| `/lists/:id` | `ListDetail` | Owner view or viewer/claimer view. No tab bar: header, then the gifts. Owner header carries the sharing summary line (+ **Change**) and a `⋯` menu holding Add to a folder…, Edit, Archive and Delete; a viewer gets the same menu holding the folder action alone |
+| `/lists/:id` | `ListDetail` | Owner view or viewer/claimer view. No tab bar: header, then the gifts. Gift `?sort=` (both views) and `?filter=` (viewer only) are `replace`. Owner header carries the sharing summary line (+ **Change**) and a `⋯` menu holding Add to a folder…, Edit, Archive and Delete; a viewer gets the same menu holding the folder action alone |
 | `/people` | `People` | The People tab: families, then individuals, under the actionable banner |
 | `/people/:id` | `ConnectionProfile` | |
 | `/people/families/:id` | `FamilyDetail` | Members, **active** occasions, invites, rename, delete, leave |
 | `/people/families/:id/archive` | `FamilyArchive` | That family's archived occasions, each linking to `/occasions/:id`. Any member may look |
-| `/occasions/:id` | `OccasionDetail` | A family occasion: header, tab bar (**Lists · My shopping**), and the lists shared to it. The `⋯` menu's rename and archive are organizer-only |
-| `/folders/:id` | `FolderDetail` | One user's folder, with the same two tabs. There is no `/folders` index — `Folders.tsx` stays unrouted; a **Group by: Folder** heading on `/lists` is the one link here |
+| `/occasions/:id` | `OccasionDetail` | A family occasion: header, tab bar (**Lists · My shopping**) held in the URL as `?tab=`, `push` — so a tab is linkable and Back closes it — and the lists shared to it. The `⋯` menu's rename and archive are organizer-only |
+| `/folders/:id` | `FolderDetail` | One user's folder, with the same two tabs, under the same `?tab=` (`push`). There is no `/folders` index — `Folders.tsx` stays unrouted; a **Group by: Folder** heading on `/lists` is the one link here |
 | `/account` | `Account` | Via the user menu |
 | `/admin/invites`, `/admin/users` | `AdminInvites`, `AdminUsers` | Admin-only |
 

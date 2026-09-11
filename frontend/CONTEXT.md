@@ -12,7 +12,7 @@ architecture live in [`AGENTS.md`](AGENTS.md); this file is only about what the 
 | **from Jane** / **Boone Family** | The source label on a shared row. A list may have arrived several ways at once, and **direct wins**: a row that also came through an occasion still reads "from Jane", because the direct share is the grant that survives the viewer leaving the family. An occasion-only row is labelled with its **family** — the occasion is how the share was made, the family is who the viewer recognises — and with every distinct family, comma-joined, when more than one carried it | `components/ListAttribution.tsx`, `lib/attribution.ts` |
 | **Share route** | One way a list reached me: a direct share, or an occasion of a family I belong to. A list can have several; `shared_via` is the array of all of them | `lib/attribution.ts`, `lib/list-grouping.ts` |
 | **for Beth** | This list is kept for a person with no account | `components/ListAttribution.tsx`, `lib/attribution.ts` |
-| **Group by** | How I ask *Shared with me* to subdivide — by occasion, person, or folder. Off by default; every grouping keeps a "Not in a …" bucket so nothing vanishes | `pages/Lists.tsx`, `lib/list-grouping.ts` |
+| **Group by** | How I ask *Shared with me* to subdivide — by occasion, person, or folder. Off by default; every grouping keeps a "Not in a …" bucket so nothing vanishes; held in the URL as `?group=`, so it survives a round trip and can be shared | `pages/Lists.tsx`, `lib/list-grouping.ts` |
 | **People** | Connections and families together — everyone I share with | `pages/People.tsx` |
 | **Family** | A named group of people. A list reaches one **through an occasion of that family**, never the family itself. Its page administers the family — members, occasions, settings — and is **not** the way in to an occasion | `pages/FamilyDetail.tsx` |
 | **Folder** | My saved grouping of lists — "Christmas 2026". Was called a *collection*, then an *occasion*. Has a page (`/folders/:id`) but no index | `pages/FolderDetail.tsx` |
@@ -93,3 +93,12 @@ behaviour).
    [`docs/adr/0006-route-ids-are-validated-at-the-route.md`](docs/adr/0006-route-ids-are-validated-at-the-route.md)).
    Distinct from a *reachability* failure: a valid id the viewer may not see stays the backend's
    answer, and keeps its own arm.
+
+8. **View state lives in the URL, and its mode says what kind of state it is.** A filter, a sort, a
+   grouping and an expansion are *preferences about a page you are already on*: they **replace**, so
+   one Back press leaves a page you glanced at. A tab and an open modal are *places you can be*:
+   they **push**, so they are linkable and Back closes them. Every call site states which — the mode
+   is required and never defaulted, because the wrong answer is felt only through the Back button,
+   where nobody looks. A value the URL carries but the app does not recognise is replaced by the
+   default and removed from the address, so what the link says and what the page shows never
+   disagree.
