@@ -1,11 +1,13 @@
-import { useState, useEffect, type FormEvent } from "react";
-import { useNavigate, Link } from "react-router";
+import { useState, useEffect, useCallback, type FormEvent } from "react";
+import { useNavigate, useSearchParams, Link } from "react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getList, updateList, deleteList } from "../api/lists";
 import { getConnections } from "../api/connections";
 import { getAccount } from "../api/account";
 import { useAuth } from "../hooks/useAuth";
 import { useTitle } from "../hooks/useTitle";
+import { useEnumSearchParam } from "../hooks/useSearchParamState";
+import { useNavigationDepth } from "../contexts/NavigationDepthContext";
 import type { GiftListDetailOwner, GiftListDetailViewer } from "../types";
 import { isAxiosError } from "axios";
 import toast from "react-hot-toast";
@@ -14,8 +16,8 @@ import { useNumericId } from "../components/NumericId";
 import { BackControl, BACK_TO_LISTS } from "../components/BackControl";
 import { HeaderMenu } from "../components/HeaderMenu";
 import { ConfirmDialog, type ConfirmAction } from "../components/ConfirmDialog";
+import { SharingModal } from "../components/SharingModal";
 import { GiftsTab } from "./list-detail/GiftsTab";
-import { SharingPanel } from "./list-detail/SharingPanel";
 import { SharingSummary } from "./list-detail/SharingSummary";
 import { FolderPicker } from "./list-detail/FolderPicker";
 import { attributionFor, isKeptForAbsentPerson, recipientLabel, recipientNameOf } from "../lib/attribution";
@@ -31,18 +33,59 @@ function isOwnerView(list: GiftListDetailOwner | GiftListDetailViewer, userId: n
   return list.owner_id === userId;
 }
 
+/** An open modal is a place you can be, so `?share=open` is the whole state and
+ *  a shut one leaves no trace: setting the fallback writes `null`. */
+const SHARE_VALUES = ["open", "closed"] as const;
+
 export function ListDetail() {
   const listId = useNumericId();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const [editing, setEditing] = useState(false);
-  // One header panel at a time — both open in the same slot under the header,
-  // and two of them stacked there would bury the gifts.
-  const [panel, setPanel] = useState<"sharing" | "folders" | null>(null);
+  // Sharing and folders no longer know about each other. "One header panel at a
+  // time" existed because both opened in the same slot under the header; once
+  // sharing is a modal it is not in that slot, and opening it over an open
+  // folder panel is harmless — the modal covers it, and closing returns the
+  // viewer exactly where they were.
+  const [foldersOpen, setFoldersOpen] = useState(false);
+  // An open modal is a *place*, so it pushes: it is linkable, and the mobile
+  // back gesture closes it rather than navigating away (CONTEXT.md rule 8).
+  // Read as an enum so `?share=banana` heals away through the wrapper's
+  // mount-time scrub instead of sitting in the address with the modal shut.
+  const [share, setShare] = useEnumSearchParam("share", {
+    mode: "push",
+    values: SHARE_VALUES,
+    fallback: "closed",
+  });
+  const depth = useNavigationDepth();
+  const [, setSearchParams] = useSearchParams();
 
-  function togglePanel(next: "sharing" | "folders") {
-    setPanel((open) => (open === next ? null : next));
+  // Strip `?share` without navigating: the address and the page must agree
+  // (CONTEXT.md rule 8), and this is a correction to the entry the viewer is
+  // already standing on rather than a place of its own.
+  const stripShare = useCallback(() => {
+    setSearchParams(
+      (current) => {
+        const params = new URLSearchParams(current);
+        params.delete("share");
+        return params;
+      },
+      { replace: true },
+    );
+  }, [setSearchParams]);
+
+  // One close path, depth-aware, mirroring `BackControl` (CONTEXT.md rule 9).
+  // The app pushed the open entry, so popping lands exactly where the viewer
+  // was — writing `closed` through the push-mode hook would add *another*
+  // entry, and Back after Done would reopen the modal rather than leave the
+  // page. At depth 0 — a deep link straight to `/lists/1?share=open` — there is
+  // nothing of ours behind us, so strip instead. Always replace-stripping is
+  // the other wrong answer: it duplicates the pre-open entry, so the first Back
+  // after closing visibly does nothing.
+  function closeSharing() {
+    if (depth > 0) navigate(-1);
+    else stripShare();
   }
 
   const { data: list, isLoading, error, refetch } = useQuery({
@@ -57,6 +100,15 @@ export function ListDetail() {
       queryClient.invalidateQueries({ queryKey: ["unseen-shares"] });
     }
   }, [list, user, queryClient]);
+
+  // The modal is owner-only, but `/lists/1?share=open` can be pasted by anyone,
+  // and ownership is not known until the list query resolves. Once it does and
+  // the viewer is not the owner, strip the param so the address and the page
+  // agree. A non-owner never mounts the modal — only this.
+  const notOwner = list !== undefined && user !== null && list.owner_id !== user.id;
+  useEffect(() => {
+    if (share === "open" && notOwner) stripShare();
+  }, [share, notOwner, stripShare]);
 
   if (isLoading) return <Spinner />;
   if (error || !list) return (
@@ -82,38 +134,37 @@ export function ListDetail() {
             queryClient={queryClient}
             navigate={navigate}
             onEdit={() => setEditing(true)}
-            onChangeSharing={() => togglePanel("sharing")}
-            onAddToFolder={() => togglePanel("folders")}
+            onChangeSharing={() => setShare("open")}
+            onAddToFolder={() => setFoldersOpen(true)}
           />
         )
       ) : (
         <ViewerHeader
           list={list as GiftListDetailViewer}
-          onAddToFolder={() => togglePanel("folders")}
+          onAddToFolder={() => setFoldersOpen(true)}
         />
       )}
 
-      {/* Sharing panel — the only way to reach the people and family controls now
-          that the tab bar is gone. */}
-      {isOwner && panel === "sharing" && (
-        <SharingPanel
-          listId={listId}
-          queryClient={queryClient}
-          onClose={() => setPanel(null)}
-        />
-      )}
-
-      {/* Folders — likewise the only way in, for owner and viewer alike. */}
-      {panel === "folders" && (
+      {/* Folders — the only way in, for owner and viewer alike. Deliberately
+          still inline: it is reached by viewers too, and would want its own
+          `?folder=open` decision and its own filter question. No ticket asks. */}
+      {foldersOpen && (
         <FolderPicker
           listId={listId}
           queryClient={queryClient}
-          onClose={() => setPanel(null)}
+          onClose={() => setFoldersOpen(false)}
         />
       )}
 
       {/* The gifts are the page. */}
       <GiftsTab list={list} listId={listId} isOwner={isOwner} userId={user!.id} queryClient={queryClient} />
+
+      {/* Sharing is over the page, not above the gifts: as an inline region it
+          pushed the list's own content down, and at M3's ~50 connections and
+          ~8 families that is unusable. */}
+      {isOwner && share === "open" && (
+        <SharingModal listId={listId} queryClient={queryClient} onClose={closeSharing} />
+      )}
     </div>
   );
 }

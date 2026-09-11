@@ -112,18 +112,18 @@ function renderListDetail(
   );
 }
 
-describe("ListDetail sharing panel", () => {
+describe("ListDetail sharing modal", () => {
   // The tab bar is gone: sharing is reached from the header's Change control,
   // and that is the only way in.
-  async function openSharingPanel() {
+  async function openSharingModal() {
     await waitFor(() => {
       expect(screen.getByText("My Wishlist")).toBeInTheDocument();
     });
     await userEvent.click(await screen.findByRole("button", { name: "Change" }));
-    return screen.getByRole("region", { name: "Who can see this list" });
+    return screen.findByRole("dialog", { name: "Who can see this list" });
   }
 
-  it("puts people and families in one panel for the owner", async () => {
+  it("puts people and families in one dialog for the owner", async () => {
     server.use(
       http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
       http.get(`${API}/connections`, () =>
@@ -147,7 +147,7 @@ describe("ListDetail sharing panel", () => {
     );
 
     renderListDetail(ownerToken);
-    const panel = await openSharingPanel();
+    const panel = await openSharingModal();
 
     expect(
       await within(panel).findByRole("checkbox", { name: /share with alice/i })
@@ -169,7 +169,7 @@ describe("ListDetail sharing panel", () => {
       expect(screen.getByText("My Wishlist")).toBeInTheDocument();
     });
     expect(screen.queryByRole("button", { name: "Change" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "Who can see this list" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Who can see this list" })).not.toBeInTheDocument();
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
 });
@@ -727,7 +727,10 @@ describe("ListDetail — add to a folder", () => {
     expect(await within(panel).findByRole("checkbox", { name: /christmas 2026/i })).toBeInTheDocument();
   });
 
-  it("shows the sharing panel and the picker one at a time", async () => {
+  // Sharing left the header's panel slot when it became a modal, so the
+  // invariant that kept the two apart has no reason left: the modal simply
+  // covers the picker, and closing returns the viewer where they were.
+  it("leaves the picker standing under the sharing modal", async () => {
     server.use(
       http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
@@ -738,12 +741,13 @@ describe("ListDetail — add to a folder", () => {
 
     renderListDetail(ownerToken);
 
-    await screen.findByText("My Wishlist");
-    await userEvent.click(await screen.findByRole("button", { name: "Change" }));
-    expect(screen.getByRole("region", { name: "Who can see this list" })).toBeInTheDocument();
-
     await openFromMenu();
-    expect(screen.queryByRole("region", { name: "Who can see this list" })).not.toBeInTheDocument();
+    await userEvent.click(await screen.findByRole("button", { name: "Change" }));
+
+    expect(
+      await screen.findByRole("dialog", { name: "Who can see this list" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Add to a folder" })).toBeInTheDocument();
   });
 });
 
@@ -1650,5 +1654,115 @@ describe("ListDetail back control", () => {
     await userEvent.click(await screen.findByRole("button", { name: "\u2190 Back" }));
 
     expect(await screen.findByText("address: /folders/5")).toBeInTheDocument();
+  });
+});
+
+describe("ListDetail — the sharing modal lives at ?share=open", () => {
+  function serveSharing(list: Record<string, unknown> = ownerListDetail) {
+    server.use(
+      http.get(`${API}/lists/1`, () => HttpResponse.json(list)),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/families`, () =>
+        HttpResponse.json([
+          {
+            id: 7,
+            name: "The Boones",
+            member_ids: [1],
+            occasions: [{ id: 10, name: "Christmas 2026", is_archived: false, shared: true }],
+          },
+        ])
+      ),
+    );
+  }
+
+  const sharingModal = () => screen.queryByRole("dialog", { name: "Who can see this list" });
+
+  // Criterion 2. An open modal is a place you can be, so it is linkable and
+  // Back closes it (CONTEXT.md rule 8).
+  it("pushes ?share=open when Change is pressed, and Back closes it", async () => {
+    serveSharing();
+
+    renderListDetail(ownerToken, { entries: ["/lists", "/lists/1"] });
+
+    await screen.findByText("My Wishlist");
+    await userEvent.click(screen.getByRole("button", { name: "Change" }));
+
+    expect(await screen.findByText("address: /lists/1?share=open")).toBeInTheDocument();
+    expect(sharingModal()).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "go back" }));
+
+    expect(await screen.findByText("address: /lists/1")).toBeInTheDocument();
+    expect(sharingModal()).not.toBeInTheDocument();
+  });
+
+  it("opens straight from a deep link", async () => {
+    serveSharing();
+
+    renderListDetail(ownerToken, { entries: ["/lists/1?share=open"] });
+
+    expect(
+      await screen.findByRole("dialog", { name: "Who can see this list" }),
+    ).toBeInTheDocument();
+  });
+
+  // Criterion 3, depth > 0. Done pops the entry the app pushed, so the next
+  // Back leaves the page rather than reopening the modal — which is what a
+  // close written through the push-mode hook would have done.
+  it("pops on Done, and the next Back leaves the page", async () => {
+    serveSharing();
+
+    renderListDetail(ownerToken, { arriveFrom: "/folders/5" });
+    await userEvent.click(screen.getByRole("button", { name: "arrive" }));
+
+    await screen.findByText("My Wishlist");
+    await userEvent.click(screen.getByRole("button", { name: "Change" }));
+    await screen.findByText("address: /lists/1?share=open");
+
+    await userEvent.click(screen.getByRole("button", { name: /^done$/i }));
+    expect(await screen.findByText("address: /lists/1")).toBeInTheDocument();
+    expect(sharingModal()).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "go back" }));
+    expect(await screen.findByText("address: /folders/5")).toBeInTheDocument();
+  });
+
+  // Criterion 3, depth 0. Nothing of ours is behind a deep link, so closing
+  // replace-strips instead — and the entry before it is untouched.
+  it("strips ?share without navigating when nothing was pushed", async () => {
+    serveSharing();
+
+    renderListDetail(ownerToken, { entries: ["/lists", "/lists/1?share=open"] });
+
+    await screen.findByText("My Wishlist");
+    await userEvent.click(await screen.findByRole("button", { name: /^done$/i }));
+
+    expect(await screen.findByText("address: /lists/1")).toBeInTheDocument();
+    expect(sharingModal()).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "go back" }));
+    expect(await screen.findByText("address: /lists")).toBeInTheDocument();
+  });
+
+  it("heals a value it does not recognise out of the address", async () => {
+    serveSharing();
+
+    renderListDetail(ownerToken, { entries: ["/lists/1?share=banana"] });
+
+    expect(await screen.findByText("address: /lists/1")).toBeInTheDocument();
+    expect(sharingModal()).not.toBeInTheDocument();
+  });
+
+  // The modal is owner-only, but the address can be pasted by anyone — and
+  // ownership is not known until the list resolves.
+  it("strips a non-owner's ?share=open and mounts no dialog", async () => {
+    serveSharing(viewerListDetail);
+
+    renderListDetail(viewerToken, { entries: ["/lists/1?share=open"] });
+
+    await screen.findByText("My Wishlist");
+    expect(await screen.findByText("address: /lists/1")).toBeInTheDocument();
+    expect(sharingModal()).not.toBeInTheDocument();
   });
 });

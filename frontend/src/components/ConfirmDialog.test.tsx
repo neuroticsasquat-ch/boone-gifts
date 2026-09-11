@@ -192,4 +192,25 @@ describe("ConfirmDialog", () => {
 
     expect(onResolve).not.toHaveBeenCalled();
   });
+
+  // The one behaviour the `Modal` shell added in NEU-1306: the backdrop is the
+  // peer of the Escape this dialog already had, and is stopped by the same
+  // `pending` guard rather than becoming a second way out mid-mutation.
+  it("resolves null on a backdrop click", async () => {
+    const user = userEvent.setup();
+    const { onResolve } = renderDialog();
+
+    await user.click(screen.getByRole("dialog").parentElement!);
+
+    expect(onResolve).toHaveBeenCalledExactlyOnceWith(null);
+  });
+
+  it("does not resolve on a backdrop click while pending", async () => {
+    const user = userEvent.setup();
+    const { onResolve } = renderDialog({ pending: true });
+
+    await user.click(screen.getByRole("dialog").parentElement!);
+
+    expect(onResolve).not.toHaveBeenCalled();
+  });
 });

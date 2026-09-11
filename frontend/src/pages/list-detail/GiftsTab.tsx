@@ -731,7 +731,7 @@ function ViewerGiftRow({
 
 /** How an occasion reads when two families both have one called "Christmas
  * 2026" — family first, matching the sharing summary line. An archived occasion
- * says so, the way an archived share target does on the sharing panel. */
+ * says so, the way an archived share target does on the sharing modal. */
 function claimOccasionLabel(occasion: ClaimOccasion): string {
   const base = `${occasion.family.name} · ${occasion.name}`;
   return occasion.is_archived ? `${base} — archived` : base;

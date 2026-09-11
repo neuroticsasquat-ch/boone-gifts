@@ -17,6 +17,7 @@ architecture live in [`AGENTS.md`](AGENTS.md); this file is only about what the 
 | **Family** | A named group of people. A list reaches one **through an occasion of that family**, never the family itself. Its page administers the family — members, occasions, settings — and is **not** the way in to an occasion | `pages/FamilyDetail.tsx` |
 | **Folder** | My saved grouping of lists — "Christmas 2026". Was called a *collection*, then an *occasion*. Has a page (`/folders/:id`) but no index | `pages/FolderDetail.tsx` |
 | **Occasion** | A family's shared gifting occasion — "Christmas 2026". The unit a list is shared *to*, and the only thing that makes a family shareable | `pages/OccasionDetail.tsx`, `pages/lists/OccasionStrip.tsx` (finding one), `pages/family-detail/OccasionsSection.tsx` (managing one), `lib/occasion-choice.ts` |
+| **Who can see this list** | The owner's one sharing surface — families and connections in a single dialog over the list, behind the header's **Change** control, with one filter box across both sections and a line saying what is ticked. Its open-ness is the address: `?share=open` | `components/SharingModal.tsx` |
 | **Occasion strip** | The row of occasion cards at the top of `/lists`: every non-archived occasion in every family I belong to, most recently active first, four at a time. Absent entirely when I have none. Carries no money | `pages/lists/OccasionStrip.tsx` |
 | **Claim** / "I'll get this" | My private intent to buy a gift. Never visible to the list's owner | `pages/list-detail/GiftsTab.tsx` |
 | **My shopping** | Everything *I* have claimed within one occasion or one folder — what I still have to buy, what I bought, and what I paid. Never anyone else's, in any aggregate | `components/MyShopping.tsx` |
@@ -38,7 +39,7 @@ behaviour).
 1. **The backend is always the gate.** Hidden or read-only controls are a courtesy, never a
    permission. Anything the UI hides is also refused server-side — *unless the control is disabled
    because the grant would be redundant rather than forbidden*. The one such case is a person the
-   sharing panel disables because a family occasion already reaches them (rule 6): the API still
+   sharing modal disables because a family occasion already reaches them (rule 6): the API still
    accepts that direct share, because a direct share is the grant that survives the person leaving
    the family or the occasion share being revoked.
 
@@ -103,7 +104,13 @@ behaviour).
    is required and never defaulted, because the wrong answer is felt only through the Back button,
    where nobody looks. A value the URL carries but the app does not recognise is replaced by the
    default and removed from the address, so what the link says and what the page shows never
-   disagree.
+   disagree. **The rule stops at the dialog edge**: a modal's own open-ness is URL-held view state,
+   but scratch input *inside* it — the sharing modal's filter box — is component state, because
+   nobody links to a half-typed filter and one write per keystroke can reach Safari's `replaceState`
+   throttle. **Closing a pushed modal pops rather than writing the default**: the app pushed that
+   entry, so `navigate(-1)` undoes it, and writing through the push-mode setter would add a second
+   entry, leaving Back to reopen what was just closed. With nothing of ours behind the page — a deep
+   link straight into the open modal — closing replace-strips the key instead.
 
 9. **Back follows how you arrived, and says so when it can't.** A page's back control returns you to
    the page you came from when the app knows you came from one, and renders as a plain `← Back`.

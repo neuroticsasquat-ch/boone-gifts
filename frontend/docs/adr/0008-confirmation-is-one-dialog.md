@@ -115,7 +115,49 @@ in place when those land is the one the app keeps.
   body in the codebase — the thing this ticket exists to remove — and because a shell primitive
   designed against one caller is a guess. If M3's sharing modal wants one, it can be extracted then,
   with two callers to shape it.
+  **Superseded — this deferral came due; see the NEU-1306 amendment below.**
 
 - **Migrating only the five sites the ticket names.** Would leave `window.confirm` live in
   `Folders`, `OccasionDetail`, `GiftsTab` and the two admin pages, so the lint rule would need an
   exemption list — and an exemption list is how the fourth pattern gets born.
+
+## Amendment — NEU-1306 (2026-09-11)
+
+**The deferred `<Modal>` shell came due.** The `<Modal>` shell listed under *Alternatives rejected*
+above was rejected *for now*, on the grounds that "a shell primitive designed against one caller is a guess," and said where the second
+caller would come from: "If M3's sharing modal wants one, it can be extracted then, with two callers
+to shape it." It does, and there are.
+
+[NEU-1306](https://linear.app/neuroticsasquatch/issue/NEU-1306) turns the sharing panel into a modal.
+Hand-rolling a second backdrop and trap inside it would have recreated precisely the duplication this
+ADR exists to remove, and [NEU-1308](https://linear.app/neuroticsasquatch/issue/NEU-1308) and
+[NEU-1309](https://linear.app/neuroticsasquatch/issue/NEU-1309) would have inherited it. So:
+
+- **`components/Modal.tsx`** owns the backdrop, the z-index, `role="dialog"`/`aria-modal`, the focus
+  trap, Escape, the backdrop click and focus return — the ~60 lines listed under "Bad, and accepted"
+  above, now owned once instead of once per dialog.
+- **`ConfirmDialog` composes it** and keeps everything this ADR decided: its `actions`/`pending`/
+  `onResolve` API, Cancel always rendered and never listed, open-while-pending, and its `max-w-md`
+  shape. Its test file is unchanged and is the regression guard for the refactor. The one behaviour
+  it gains from the shell is closing on a backdrop click — the peer of the Escape it already had,
+  and stopped by the same `pending` guard.
+- **`SharingModal` composes the shell directly**, which is what the rejected alternative described.
+  A `size` prop is what lets one shell serve both: `md` is content-sized and pads itself, `lg` is
+  capped at the viewport with a fixed header and footer around a scrolling middle.
+
+**Stacking is resolved topmost-only.** Two modals are mounted at once whenever a revoke needs
+confirming over the sharing modal, and the implementation this ADR accepted got that wrong both ways:
+each dialog attached its own `document` `keydown` listener, so **Escape resolved both**; and the Tab
+trap's check — "is focus inside my panel?" — sees focus sitting in the *inner* dialog, calls that a
+stray, and **yanks it back to the outer modal's first tabbable**. A module-level stack in `Modal.tsx`
+fixes both: each open modal pushes a token on mount and removes it on unmount, and both handlers
+return early unless their token is last. Every future stacking pair inherits it.
+
+Widening `ConfirmDialog` itself instead — a rich `body` with the action row suppressed — was
+rejected: it would make a confirmation component the app's general modal, and "Cancel is always
+rendered and never listed here" would stop being true.
+
+**What is unchanged:** hand-rolled rather than native `<dialog>`, for the jsdom reason above; the
+`no-alert` lint guard; the declarative API; and the two thin wrappers keeping their wording's
+rationale next to the wording. The "No real top layer" and "not truly `inert`" consequences also
+stand, and are now stated in one place rather than two.
