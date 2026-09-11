@@ -11,6 +11,7 @@ import { isAxiosError } from "axios";
 import toast from "react-hot-toast";
 import { Spinner } from "../components/Spinner";
 import { useNumericId } from "../components/NumericId";
+import { BackControl, BACK_TO_LISTS } from "../components/BackControl";
 import { HeaderMenu } from "../components/HeaderMenu";
 import { ConfirmDialog, type ConfirmAction } from "../components/ConfirmDialog";
 import { GiftsTab } from "./list-detail/GiftsTab";
@@ -68,7 +69,7 @@ export function ListDetail() {
   const isOwner = user !== null && isOwnerView(list, user.id);
   return (
     <div className="space-y-6">
-      <Link to="/lists" className="text-sm text-blue-600 hover:underline">&larr; Back to lists</Link>
+      <BackControl fallback={BACK_TO_LISTS} />
 
       {/* Header */}
       {isOwner ? (

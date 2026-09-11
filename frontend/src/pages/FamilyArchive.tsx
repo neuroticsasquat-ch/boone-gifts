@@ -6,6 +6,7 @@ import { useTitle } from "../hooks/useTitle";
 import { Spinner } from "../components/Spinner";
 import { useNumericId } from "../components/NumericId";
 import { ArchiveIcon } from "../components/Icons";
+import { BackControl, backToFamily } from "../components/BackControl";
 
 /**
  * A family's archived occasions (`/people/families/:id/archive`, project spec
@@ -46,9 +47,7 @@ export function FamilyArchive() {
   return (
     <div className="space-y-8">
       <header>
-        <Link to={`/people/families/${familyId}`} className="text-sm text-blue-600 hover:underline">
-          ← {family.data?.name ?? "Family"}
-        </Link>
+        <BackControl fallback={backToFamily(familyId, family.data?.name)} />
         {family.isError && (
           <p className="mt-1 text-sm text-red-600">
             This family&apos;s name couldn&apos;t be loaded. The archived occasions below are

@@ -10,6 +10,7 @@ import { useNumericId } from "../components/NumericId";
 import { useTitle } from "../hooks/useTitle";
 import { Spinner } from "../components/Spinner";
 import { HeaderMenu } from "../components/HeaderMenu";
+import { BackControl, BACK_TO_PEOPLE, backToFamily } from "../components/BackControl";
 import { ListAttributionLine, RecipientLine } from "../components/ListAttribution";
 import { MyShopping } from "../components/MyShopping";
 import { TabBar } from "../components/TabBar";
@@ -67,9 +68,7 @@ export function OccasionDetail() {
             : "Failed to load occasion."}
         </p>
         {unreachable ? (
-          <Link to="/people" className="mt-2 inline-block text-sm text-blue-600 hover:underline">
-            Back to People
-          </Link>
+          <BackControl fallback={BACK_TO_PEOPLE} className="mt-2 inline-block" />
         ) : (
           <button
             onClick={() => occasion.refetch()}
@@ -108,12 +107,7 @@ function OccasionPage({ occasion }: { occasion: Occasion }) {
 
   return (
     <div className="space-y-6">
-      <Link
-        to={`/people/families/${occasion.family_id}`}
-        className="text-sm text-blue-600 hover:underline"
-      >
-        &larr; {family.data?.name ?? "Back to family"}
-      </Link>
+      <BackControl fallback={backToFamily(occasion.family_id, family.data?.name)} />
 
       <OccasionHeader occasion={occasion} isOrganizer={isOrganizer} />
 

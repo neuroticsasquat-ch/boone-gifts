@@ -324,7 +324,7 @@ function FamiliesGroup({ listId, queryClient }: { listId: number; queryClient: Q
       <Group title="Families">
         <Hint>
           You don't belong to any families yet.{" "}
-          <Link to="/people" className="text-blue-600 hover:underline">Manage families</Link>
+          <Link to="/people" className="text-blue-600 hover:underline">Go to People</Link>
         </Hint>
       </Group>
     );

@@ -6,6 +6,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { server } from "../test/mocks/server";
 import { AuthProvider } from "../contexts/AuthContext";
+import { NavigationDepthProvider } from "../contexts/NavigationDepthContext";
+import { ArrivedFrom } from "../test/arrived-from";
 import { NumericId } from "../components/NumericId";
 import { ListDetail } from "./ListDetail";
 
@@ -65,7 +67,13 @@ function Address() {
   );
 }
 
-function renderListDetail(token: string, { entries = ["/lists/1"] }: { entries?: string[] } = {}) {
+/** `arriveFrom` starts the session on another page and pushes into the list from
+ *  it, so the back control is at depth > 0. A deeper `entries` would not do:
+ *  that is still an entry location, and still depth 0 (NEU-1302). */
+function renderListDetail(
+  token: string,
+  { entries = ["/lists/1"], arriveFrom }: { entries?: string[]; arriveFrom?: string } = {},
+) {
   // Mock the silent refresh to return the token, which sets up the auth user
   server.use(
     http.post(`${API}/auth/refresh`, () =>
@@ -79,18 +87,24 @@ function renderListDetail(token: string, { entries = ["/lists/1"] }: { entries?:
   return render(
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <MemoryRouter initialEntries={entries} initialIndex={entries.length - 1}>
-          <Routes>
-            <Route
-              path="/lists/:id"
-              element={
-                <NumericId back="/lists">
-                  <ListDetail />
-                </NumericId>
-              }
-            />
-            <Route path="*" element={null} />
-          </Routes>
+        <MemoryRouter
+          initialEntries={arriveFrom ? [arriveFrom] : entries}
+          initialIndex={arriveFrom ? 0 : entries.length - 1}
+        >
+          <NavigationDepthProvider>
+            <Routes>
+              <Route
+                path="/lists/:id"
+                element={
+                  <NumericId back="/lists">
+                    <ListDetail />
+                  </NumericId>
+                }
+              />
+              <Route path="/folders/:id" element={<ArrivedFrom to="/lists/1" />} />
+              <Route path="*" element={null} />
+            </Routes>
+          </NavigationDepthProvider>
           <Address />
         </MemoryRouter>
       </AuthProvider>
@@ -1590,5 +1604,51 @@ describe("ListDetail — the gift filter and sort live in the URL", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "go back" }));
     expect(await screen.findByText("address: /lists")).toBeInTheDocument();
+  });
+
+  // Criterion 5. The counter ignores REPLACE, and a sort is a replace — so a
+  // viewer who reorders a list they were deep-linked into still gets the named
+  // parent, not a `← Back` pointing at an entry that was never pushed.
+  it("leaves the back control alone, since the sort pushed nothing", async () => {
+    serveList({
+      ...ownerListDetail,
+      gifts: [priced({ id: 10, name: "A gift" })],
+    });
+
+    renderListDetail(ownerToken);
+
+    const sort = await screen.findByRole("combobox");
+    await userEvent.selectOptions(sort, "price_desc");
+    expect(await screen.findByText("address: /lists/1?sort=price_desc")).toBeInTheDocument();
+
+    expect(screen.getByRole("link", { name: "\u2190 Back to Lists" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "\u2190 Back" })).not.toBeInTheDocument();
+  });
+});
+
+describe("ListDetail back control", () => {
+  // Deep-linked — from an email, a new tab, a reload — so there is nothing
+  // behind the page and the control says where it actually goes.
+  it("names the lists when nothing is behind the page", async () => {
+    server.use(http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)));
+
+    renderListDetail(ownerToken);
+
+    expect(await screen.findByRole("link", { name: "\u2190 Back to Lists" })).toHaveAttribute(
+      "href",
+      "/lists",
+    );
+  });
+
+  // Opened from a folder: `/lists` would be a lie, so Back means the folder.
+  it("returns to the folder it was opened from, and says only Back", async () => {
+    server.use(http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)));
+
+    renderListDetail(ownerToken, { arriveFrom: "/folders/5" });
+    await userEvent.click(screen.getByRole("button", { name: "arrive" }));
+
+    await userEvent.click(await screen.findByRole("button", { name: "\u2190 Back" }));
+
+    expect(await screen.findByText("address: /folders/5")).toBeInTheDocument();
   });
 });

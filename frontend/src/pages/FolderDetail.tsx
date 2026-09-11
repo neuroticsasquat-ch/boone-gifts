@@ -15,6 +15,7 @@ import toast from "react-hot-toast";
 import { Spinner } from "../components/Spinner";
 import { ConfirmDialog, type ConfirmAction } from "../components/ConfirmDialog";
 import { useNumericId } from "../components/NumericId";
+import { BackControl, BACK_TO_LISTS } from "../components/BackControl";
 import { ListAttributionLine } from "../components/ListAttribution";
 import { MyShopping } from "../components/MyShopping";
 import { TabBar } from "../components/TabBar";
@@ -67,7 +68,7 @@ export function FolderDetail() {
     <div className="space-y-6">
       {/* Folders have no index page — the folder filter on /lists is where a
           user meets the concept — so back means the lists, not a folder list. */}
-      <Link to="/lists" className="text-sm text-blue-600 hover:underline">&larr; Lists</Link>
+      <BackControl fallback={BACK_TO_LISTS} />
       <FolderHeader
         folder={folder}
         folderId={folderId}

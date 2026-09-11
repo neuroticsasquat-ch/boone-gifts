@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { useNavigate } from "react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getFamily, removeMember } from "../api/families";
 import { useAuth } from "../hooks/useAuth";
 import { useTitle } from "../hooks/useTitle";
 import { Spinner } from "../components/Spinner";
 import { useNumericId } from "../components/NumericId";
+import { BackControl, BACK_TO_PEOPLE } from "../components/BackControl";
 import { MembersSection } from "./family-detail/MembersSection";
 import { OccasionsSection } from "./family-detail/OccasionsSection";
 import { FamilySettingsSection } from "./family-detail/FamilySettingsSection";
@@ -69,9 +70,7 @@ export function FamilyDetail() {
     return (
       <div className="text-center py-12">
         <p className="text-red-600">Family not found.</p>
-        <Link to="/people" className="mt-2 text-sm text-blue-600 hover:underline">
-          &larr; Back to People
-        </Link>
+        <BackControl fallback={BACK_TO_PEOPLE} className="mt-2 inline-block" />
       </div>
     );
   }
@@ -80,9 +79,7 @@ export function FamilyDetail() {
 
   return (
     <div className="space-y-6">
-      <Link to="/people" className="text-sm text-blue-600 hover:underline">
-        &larr; Back to People
-      </Link>
+      <BackControl fallback={BACK_TO_PEOPLE} />
 
       <h1 className="text-2xl font-bold text-gray-900">{f.name}</h1>
 

@@ -8,6 +8,7 @@ import {
   memberToken,
   organizerToken,
   renderFamilyDetail,
+  sampleFamily,
 } from "./family-detail/harness";
 
 const API = "https://boone-gifts-api.localhost";
@@ -102,9 +103,9 @@ describe("FamilyDetail", () => {
     });
   });
 
-  it("the not-found arm reads Back to People too, and points at /people", async () => {
-    // The other half of criterion 8. The arm's own copy is the only thing this
-    // ticket touches in it.
+  // A reachability failure keeps its own arm (CONTEXT.md rule 7), but the arm
+  // still needs a way back, and it gets the same one the page has.
+  it("the not-found arm names People too, and points at /people", async () => {
     renderFamilyDetail(organizerToken, "9", () =>
       HttpResponse.json({ detail: "Not found" }, { status: 404 })
     );
@@ -118,7 +119,9 @@ describe("FamilyDetail", () => {
     expect(backLink).toHaveAttribute("href", "/people");
   });
 
-  it("shows a back link reading Back to People, pointing at /people", async () => {
+  // Deep-linked: nothing behind it, so it is a real link to the named parent —
+  // one a viewer can cmd-click like any other.
+  it("names People when it was deep-linked into", async () => {
     renderFamilyDetail(organizerToken);
 
     await waitFor(() => {
@@ -128,5 +131,23 @@ describe("FamilyDetail", () => {
     const backLink = screen.getByRole("link", { name: /Back to People/i });
     expect(backLink).toHaveTextContent("\u2190 Back to People");
     expect(backLink).toHaveAttribute("href", "/people");
+  });
+
+  // Arrived from a list rather than from /people: a button, because there is no
+  // address to put in a status bar, and Back means the list.
+  it("returns to the page it was opened from, and says only Back", async () => {
+    renderFamilyDetail(organizerToken, "1", () => HttpResponse.json(sampleFamily), {
+      arriveFrom: "/lists/1",
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "arrive" }));
+    await waitFor(() => {
+      expect(screen.getByText("Boone Family")).toBeInTheDocument();
+    });
+    expect(screen.queryByRole("link", { name: /Back to People/i })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "\u2190 Back" }));
+
+    expect(screen.getByRole("button", { name: "arrive" })).toBeInTheDocument();
   });
 });

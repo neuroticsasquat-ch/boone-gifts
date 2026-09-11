@@ -4,6 +4,7 @@ import { getConnections, getConnectionLists } from "../api/connections";
 import { useTitle } from "../hooks/useTitle";
 import { Spinner } from "../components/Spinner";
 import { useNumericId } from "../components/NumericId";
+import { BackControl, BACK_TO_PEOPLE } from "../components/BackControl";
 import { HandshakeIcon } from "../components/Icons";
 
 export function ConnectionProfile() {
@@ -24,13 +25,13 @@ export function ConnectionProfile() {
   if (!connection) return (
     <div className="text-center py-12">
       <p className="text-red-600">Connection not found.</p>
-      <Link to="/people" className="mt-2 text-sm text-blue-600 hover:underline">Back to connections</Link>
+      <BackControl fallback={BACK_TO_PEOPLE} className="mt-2 inline-block" />
     </div>
   );
 
   return (
     <div className="space-y-6">
-      <Link to="/people" className="text-sm text-blue-600 hover:underline">&larr; Back to connections</Link>
+      <BackControl fallback={BACK_TO_PEOPLE} />
 
       <div>
         <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900">

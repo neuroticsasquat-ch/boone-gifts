@@ -27,7 +27,9 @@ Words the UI must **not** use: "collection" (rejected outright — it reads too 
 "occasion" for a folder (the word is reserved for a family's shared occasion — see
 [`docs/adr/0002-occasion-and-folder.md`](docs/adr/0002-occasion-and-folder.md)), "family list" (a list shared via a family
 is just a shared list, labelled with the family), "family grant" / "family share" as a thing
-pointing at a family (it points at an occasion — project spec §4), "connect"/"collect" as navigation labels, "they use
+pointing at a family (it points at an occasion — project spec §4), "connect"/"collect" as navigation labels,
+"connections" and "families" as navigation labels (both name a *section* of `/people` rather than the page — the same
+fault, retired in NEU-1302; the destinations are **Lists**, **People**, or a family's own name), "they use
 this app", "simple mode" (retired in NEU-1261 — the full-mode behaviour is the only
 behaviour).
 
@@ -102,3 +104,11 @@ behaviour).
    where nobody looks. A value the URL carries but the app does not recognise is replaced by the
    default and removed from the address, so what the link says and what the page shows never
    disagree.
+
+9. **Back follows how you arrived, and says so when it can't.** A page's back control returns you to
+   the page you came from when the app knows you came from one, and renders as a plain `← Back`.
+   When it doesn't — a deep link, a new tab, a reload — it goes to that page's one named parent and
+   says its name. A generic label that is always true beats a specific one that is sometimes a lie,
+   and the control never takes the viewer off the site. Every destination has one word: **Lists**,
+   **People**, or the family's own name. A *wrong address* keeps its own fixed way back (rule 7) and
+   is not history-aware, because the page it names was never asked for.

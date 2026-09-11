@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { server } from "../../test/mocks/server";
 import { AuthProvider } from "../../contexts/AuthContext";
+import { NavigationDepthProvider } from "../../contexts/NavigationDepthContext";
+import { ArrivedFrom } from "../../test/arrived-from";
 import { NumericId } from "../../components/NumericId";
 import { FamilyDetail } from "../FamilyDetail";
 import type { FamilyDetail as FamilyRecord } from "../../types";
@@ -55,11 +57,17 @@ export const sampleFamily: FamilyRecord = {
  * 404 for the not-found arm. It is a parameter rather than a `server.use()` in
  * the calling test because this handler goes up at render time and would win
  * over a runtime override the test registered before it.
+ *
+ * `arriveFrom` starts the session on another page instead, so that pushing into
+ * the family page from it is a real in-app push and the back control is at
+ * depth > 0. A deeper `initialEntries` would not do: that is still an entry
+ * location, and still depth 0 (NEU-1302).
  */
 export function renderFamilyDetail(
   token: string,
   id = "1",
   respondWith: () => Response = () => HttpResponse.json(sampleFamily),
+  { arriveFrom }: { arriveFrom?: string } = {},
 ) {
   server.use(
     http.post(`${API}/auth/refresh`, () =>
@@ -72,18 +80,21 @@ export function renderFamilyDetail(
   return render(
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <MemoryRouter initialEntries={[`/people/families/${id}`]}>
-          <Routes>
-            <Route
-              path="/people/families/:id"
-              element={
-                <NumericId back="/people">
-                  <FamilyDetail />
-                </NumericId>
-              }
-            />
-            <Route path="/people" element={<div>People Page</div>} />
-          </Routes>
+        <MemoryRouter initialEntries={[arriveFrom ?? `/people/families/${id}`]}>
+          <NavigationDepthProvider>
+            <Routes>
+              <Route
+                path="/people/families/:id"
+                element={
+                  <NumericId back="/people">
+                    <FamilyDetail />
+                  </NumericId>
+                }
+              />
+              <Route path="/people" element={<div>People Page</div>} />
+              <Route path="*" element={<ArrivedFrom to={`/people/families/${id}`} />} />
+            </Routes>
+          </NavigationDepthProvider>
           <Toaster />
         </MemoryRouter>
       </AuthProvider>

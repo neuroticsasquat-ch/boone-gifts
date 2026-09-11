@@ -41,7 +41,7 @@ Dev web on `http://localhost:5173`, API on `http://localhost:8000`, Mailpit on `
 
 **The query cache is dropped whenever the viewer changes** — an effect in `AuthProvider` keyed on `user?.id`, covering logout, an account switch, and a token-expiry re-login alike. This is *why* no `queryKey` carries a user id: don't "fix" the keys by adding one. A viewer *departing* triggers `queryClient.clear()`; a viewer *arriving* removes only unobserved entries (`removeQueries({ type: "inactive" })`), because a mutation can write its response in after the departure clear, while clearing an in-flight query would leave its observer pending forever. It is a **`useLayoutEffect`** and must stay one — a passive effect runs after paint, and after a mounting screen's own passive effect has claimed the stale entry and made it active, which spares it from the sweep. Keyed on the id, not the user object, so `updateProfile` renaming someone is not a change of viewer. `AuthProvider` therefore requires a `QueryClientProvider` above it — `App.tsx` and every test that renders it must supply one. See [ADR 0004](docs/adr/0004-the-query-cache-is-cleared-at-the-identity-boundary.md).
 
-**Routing**: `routes.tsx` — public paths, then `ProtectedRoute` → `Layout` (nav shell) for authenticated pages. Every numeric `:id` route is wrapped in `<NumericId back="…">` (`components/NumericId.tsx`), which validates the id before the page mounts and renders a bad-address arm when it doesn't parse — so pages read the id with `useNumericId()` as a plain `number` and carry no `enabled:` id guard. `family-invites/:token` is deliberately unwrapped. `routes.test.tsx` walks the array and fails on an unwrapped `:id` route. See [ADR 0006](docs/adr/0006-route-ids-are-validated-at-the-route.md).
+**Routing**: `routes.tsx` — one pathless root route mounting `NavigationDepthProvider` (see "Navigation"), then public paths, then `ProtectedRoute` → `Layout` (nav shell) for authenticated pages. Every numeric `:id` route is wrapped in `<NumericId back="…">` (`components/NumericId.tsx`), which validates the id before the page mounts and renders a bad-address arm when it doesn't parse — so pages read the id with `useNumericId()` as a plain `number` and carry no `enabled:` id guard. `family-invites/:token` is deliberately unwrapped. `routes.test.tsx` walks the array and fails on an unwrapped `:id` route. See [ADR 0006](docs/adr/0006-route-ids-are-validated-at-the-route.md).
 
 ```
 Dockerfile           # node:22-slim, npm ci, idles
@@ -69,6 +69,9 @@ src/
                      # a recorded amount without re-stamping the purchase
     connections.ts, shares.ts, folders.ts, invites.ts, users.ts, meta.ts
   contexts/AuthContext.tsx   # Access token in memory, silent refresh on mount
+  contexts/NavigationDepthContext.tsx
+                     # Counts in-app pushes for the session, so a back control
+                     # knows whether `navigate(-1)` lands on a page of ours
   hooks/             # useAuth, useTitle, useTimeout (a setTimeout that clears on unmount),
                      # useSearchParamState / useEnumSearchParam — view state in the URL,
                      # `mode` required at every call site (CONTEXT.md rule 8)
@@ -79,6 +82,9 @@ src/
     HeaderMenu.tsx        # The `⋯` menu a page header hangs its actions off —
                           # list detail's owner and viewer menus, and the
                           # occasion page's organizer-only one
+    BackControl.tsx       # The one page-level way back — `← Back` when the app
+                          # pushed you here, the page's named parent when it
+                          # didn't. Owns the BACK_TO_* destinations
     Icons.tsx, Spinner.tsx
     ActionableBanner.tsx  # Pending connection requests + family invites, accept/decline
                           # inline. The one implementation; renders nothing when empty
@@ -153,6 +159,31 @@ Account Settings and the admin links; it never duplicates a nav destination.
 
 `ActionableBanner` is mounted on `/lists` above the lists as well as on `/people`, so a pending
 connection request or family invite is reachable from either.
+
+**One back control, not seven back links** (NEU-1302, CONTEXT.md rule 9). `components/BackControl.tsx`
+is the only page-level way back. `contexts/NavigationDepthContext.tsx` counts in-app pushes for the
+session — `PUSH` +1, `POP` −1 clamped at 0, `REPLACE` ignored, reset to 0 whenever `user?.id` changes
+— because React Router will not say whether a history entry is in-app. Above 0 the control is a
+`<button>` reading `← Back` that calls `navigate(-1)`; at 0 — a deep link, a new tab, a reload — it is
+a `<Link>` to the page's named parent, so it cmd-clicks and its status bar tells the truth. A
+generic label that is always true beats a specific one that is sometimes a lie. The provider is a
+pathless root route in `routes.tsx`, above `Layout` so that `family-invites/:token` counts too;
+`useNavigationDepth()` outside it is 0 rather than a throw, which is why existing page tests render
+in a bare `MemoryRouter` and still assert the named link.
+
+| Page | Fallback at depth 0 | Label |
+|---|---|---|
+| `ListDetail`, `FolderDetail`, `ListsArchive` | `/lists` | `← Back to Lists` |
+| `FamilyDetail`, `ConnectionProfile` | `/people` | `← Back to People` |
+| `OccasionDetail`, `FamilyArchive` | that family | `← Boone Family`, or `← Family` until the name loads |
+
+The error and not-found arms take the same control as their page (`FamilyDetail`, `ConnectionProfile`,
+and `OccasionDetail` — whose failure arm has no family id, so it falls back to People). `NumericId`'s
+invalid-id arm is **not** history-aware and keeps its own fixed way back: a wrong address is not a
+reachability failure, and the page it names was never asked for (CONTEXT.md rule 7, ADR 0006). A hard
+reload resets the counter, so the control reads its named parent — specified, not accidental, and
+guarded by a test. `src/test/back-labels-retired.test.ts` is the standing grep that the seven retired
+phrasings do not creep back.
 
 ## Families
 

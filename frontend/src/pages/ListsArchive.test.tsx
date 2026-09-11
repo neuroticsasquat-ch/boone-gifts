@@ -1,10 +1,13 @@
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, it, expect } from "vitest";
-import { MemoryRouter } from "react-router";
+import { MemoryRouter, Route, Routes } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { server } from "../test/mocks/server";
 import { AuthProvider } from "../contexts/AuthContext";
+import { NavigationDepthProvider } from "../contexts/NavigationDepthContext";
+import { ArrivedFrom } from "../test/arrived-from";
 import { ListsArchive } from "./ListsArchive";
 
 const API = "https://boone-gifts-api.localhost";
@@ -66,7 +69,9 @@ function archive({
   );
 }
 
-function renderArchive() {
+/** `arriveFrom` starts the session on another page, so that pushing into the
+ *  archive from it is a real in-app push and the back control is at depth > 0. */
+function renderArchive({ arriveFrom }: { arriveFrom?: string } = {}) {
   server.use(
     http.post(`${API}/auth/refresh`, () =>
       HttpResponse.json({ access_token: authToken, token_type: "bearer" })
@@ -77,8 +82,13 @@ function renderArchive() {
   return render(
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <MemoryRouter>
-          <ListsArchive />
+        <MemoryRouter initialEntries={[arriveFrom ?? "/lists/archive"]}>
+          <NavigationDepthProvider>
+            <Routes>
+              <Route path="/lists/archive" element={<ListsArchive />} />
+              <Route path="*" element={<ArrivedFrom to="/lists/archive" />} />
+            </Routes>
+          </NavigationDepthProvider>
         </MemoryRouter>
       </AuthProvider>
     </QueryClientProvider>
@@ -121,12 +131,28 @@ describe("ListsArchive", () => {
     expect(screen.queryByRole("button", { name: "Unarchive" })).not.toBeInTheDocument();
   });
 
-  it("goes back to the lists dashboard", async () => {
+  it("names the lists dashboard when it was deep-linked into", async () => {
     archive();
 
     renderArchive();
 
-    expect(await screen.findByRole("link", { name: "← Lists" })).toHaveAttribute("href", "/lists");
+    expect(await screen.findByRole("link", { name: "← Back to Lists" })).toHaveAttribute(
+      "href",
+      "/lists",
+    );
+  });
+
+  // Arrived from a list rather than from the dashboard: Back is where the viewer
+  // came from, and the control stops claiming otherwise.
+  it("returns to the page it was opened from, and says only Back", async () => {
+    archive();
+
+    renderArchive({ arriveFrom: "/lists/1" });
+    await userEvent.click(screen.getByRole("button", { name: "arrive" }));
+
+    await userEvent.click(await screen.findByRole("button", { name: "← Back" }));
+
+    expect(screen.getByRole("button", { name: "arrive" })).toBeInTheDocument();
   });
 
   // One line rather than three "No archived …" ones, since an empty archive is

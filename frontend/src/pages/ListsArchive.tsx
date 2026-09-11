@@ -6,6 +6,7 @@ import { getFolders } from "../api/folders";
 import { useTitle } from "../hooks/useTitle";
 import { Spinner } from "../components/Spinner";
 import { ArchiveIcon } from "../components/Icons";
+import { BackControl, BACK_TO_LISTS } from "../components/BackControl";
 import { ListAttributionLine, RecipientLine } from "../components/ListAttribution";
 
 /**
@@ -53,9 +54,7 @@ export function ListsArchive() {
   return (
     <div className="space-y-8">
       <header>
-        <Link to="/lists" className="text-sm text-blue-600 hover:underline">
-          ← Lists
-        </Link>
+        <BackControl fallback={BACK_TO_LISTS} />
         <h1 className="mt-1 flex items-center gap-2 text-2xl font-bold text-gray-900">
           <ArchiveIcon className="h-6 w-6" /> Archive
         </h1>

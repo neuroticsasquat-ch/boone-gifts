@@ -5,6 +5,9 @@ import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-rou
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { server } from "../test/mocks/server";
+import { AuthContext, type AuthContextType } from "../contexts/AuthContext";
+import { NavigationDepthProvider } from "../contexts/NavigationDepthContext";
+import { ArrivedFrom } from "../test/arrived-from";
 import { NumericId } from "../components/NumericId";
 import { FolderDetail } from "./FolderDetail";
 
@@ -36,26 +39,52 @@ function Address() {
   );
 }
 
-function renderFolderDetail(id = "1", { entries = [`/folders/${id}`] }: { entries?: string[] } = {}) {
+/** Supplied directly rather than through `AuthProvider`, so the session costs no
+ *  `/auth/refresh`. The depth counter reads it to reset on a change of viewer. */
+const AUTHENTICATED: AuthContextType = {
+  user: { id: 1, email: "user@test.com", name: "Tom Boone", role: "member" },
+  isLoading: false,
+  login: async () => {},
+  logout: async () => {},
+  register: async () => {},
+  changePassword: async () => {},
+  updateProfile: async () => {},
+};
+
+/** `arriveFrom` starts the session on another page and pushes into the folder
+ *  from it, so the back control is at depth > 0. A deeper `entries` would not
+ *  do: that is still an entry location, and still depth 0 (NEU-1302). */
+function renderFolderDetail(
+  id = "1",
+  { entries = [`/folders/${id}`], arriveFrom }: { entries?: string[]; arriveFrom?: string } = {},
+) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={entries} initialIndex={entries.length - 1}>
-        <Routes>
-          <Route
-            path="/folders/:id"
-            element={
-              <NumericId back="/lists">
-                <FolderDetail />
-              </NumericId>
-            }
-          />
-          <Route path="/lists" element={<div>Lists</div>} />
-        </Routes>
-        <Address />
-      </MemoryRouter>
+      <AuthContext.Provider value={AUTHENTICATED}>
+        <MemoryRouter
+          initialEntries={arriveFrom ? [arriveFrom] : entries}
+          initialIndex={arriveFrom ? 0 : entries.length - 1}
+        >
+          <NavigationDepthProvider>
+            <Routes>
+              <Route
+                path="/folders/:id"
+                element={
+                  <NumericId back="/lists">
+                    <FolderDetail />
+                  </NumericId>
+                }
+              />
+              <Route path="/lists" element={<div>Lists</div>} />
+              <Route path="/lists/:id" element={<ArrivedFrom to={`/folders/${id}`} />} />
+            </Routes>
+          </NavigationDepthProvider>
+          <Address />
+        </MemoryRouter>
+      </AuthContext.Provider>
     </QueryClientProvider>
   );
 }
@@ -226,7 +255,25 @@ describe("FolderDetail", () => {
 
     renderFolderDetail();
 
-    expect(await screen.findByRole("link", { name: /Lists/ })).toHaveAttribute("href", "/lists");
+    expect(await screen.findByRole("link", { name: "\u2190 Back to Lists" })).toHaveAttribute(
+      "href",
+      "/lists",
+    );
+  });
+
+  // Arrived from a list rather than from the dashboard: Back is the list.
+  it("returns to the page it was opened from, and says only Back", async () => {
+    server.use(
+      http.get(`${API}/folders/1`, () => HttpResponse.json(sampleFolder)),
+      http.get(`${API}/lists`, () => HttpResponse.json([])),
+    );
+
+    renderFolderDetail("1", { arriveFrom: "/lists/9" });
+    await userEvent.click(screen.getByRole("button", { name: "arrive" }));
+
+    await userEvent.click(await screen.findByRole("button", { name: "\u2190 Back" }));
+
+    expect(screen.getByRole("button", { name: "arrive" })).toBeInTheDocument();
   });
 
   it("attributes folder lists the same way every other list view does", async () => {
@@ -277,6 +324,27 @@ describe("FolderDetail — the tab is a place", () => {
     renderFolderDetail("1", { entries: ["/folders/1?tab=shopping"] });
 
     expect(await screen.findByRole("tab", { name: "My shopping", selected: true })).toBeInTheDocument();
+  });
+
+  // Criterion 5, the push half. A tab is a *place*, so it pushes (CONTEXT.md
+  // rule 8) — which means one press of the control closes the tab rather than
+  // leaving the page, and the control has to stop naming /lists while that is
+  // true. The surprising direction of the two, so it is asserted rather than
+  // inferred from the counter's own suite.
+  it("becomes a plain Back once a tab has been pushed, and closes the tab", async () => {
+    serveFolder();
+
+    renderFolderDetail();
+    expect(await screen.findByRole("link", { name: "\u2190 Back to Lists" })).toBeInTheDocument();
+
+    await userEvent.click(await screen.findByRole("tab", { name: "My shopping" }));
+    expect(await screen.findByText("address: /folders/1?tab=shopping")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Back to Lists/ })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "\u2190 Back" }));
+
+    expect(await screen.findByRole("tab", { name: "Lists", selected: true })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "\u2190 Back to Lists" })).toBeInTheDocument();
   });
 
   it("pushes on a tab change — Back returns to the Lists tab", async () => {

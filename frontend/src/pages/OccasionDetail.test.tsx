@@ -7,6 +7,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { server } from "../test/mocks/server";
 import { AuthProvider } from "../contexts/AuthContext";
+import { NavigationDepthProvider } from "../contexts/NavigationDepthContext";
+import { ArrivedFrom } from "../test/arrived-from";
 import { NumericId } from "../components/NumericId";
 import { OccasionDetail } from "./OccasionDetail";
 
@@ -110,12 +112,17 @@ function renderOccasion({
   lists = [list()],
   shopping = [],
   entries = ["/occasions/3"],
+  arriveFrom,
 }: {
   userId?: number;
   occasionResponse?: Response;
   lists?: ReturnType<typeof list>[];
   shopping?: Record<string, unknown>[];
   entries?: string[];
+  /** Start the session here and push into the page, so the back control is at
+   *  depth > 0. A deeper `entries` would not do: that is still an entry
+   *  location, and still depth 0 (NEU-1302). */
+  arriveFrom?: string;
 } = {}) {
   server.use(
     http.post(`${API}/auth/refresh`, () =>
@@ -133,18 +140,24 @@ function renderOccasion({
   return render(
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <MemoryRouter initialEntries={entries} initialIndex={entries.length - 1}>
-          <Routes>
-            <Route
-              path="/occasions/:id"
-              element={
-                <NumericId back="/people">
-                  <OccasionDetail />
-                </NumericId>
-              }
-            />
-            <Route path="/people/families/:id" element={<div>Family Page</div>} />
-          </Routes>
+        <MemoryRouter
+          initialEntries={arriveFrom ? [arriveFrom] : entries}
+          initialIndex={arriveFrom ? 0 : entries.length - 1}
+        >
+          <NavigationDepthProvider>
+            <Routes>
+              <Route
+                path="/occasions/:id"
+                element={
+                  <NumericId back="/people">
+                    <OccasionDetail />
+                  </NumericId>
+                }
+              />
+              <Route path="/people/families/:id" element={<div>Family Page</div>} />
+              <Route path="/lists/:id" element={<ArrivedFrom to="/occasions/3" />} />
+            </Routes>
+          </NavigationDepthProvider>
           <Toaster />
           <Address />
         </MemoryRouter>
@@ -160,8 +173,37 @@ describe("OccasionDetail", () => {
     renderOccasion();
 
     expect(await screen.findByRole("heading", { name: "Christmas 2026" })).toBeInTheDocument();
-    const back = await screen.findByRole("link", { name: /Boone Family/ });
+    const back = await screen.findByRole("link", { name: "\u2190 Boone Family" });
     expect(back).toHaveAttribute("href", "/people/families/7");
+  });
+
+  // Arrived from a list rather than from the family page: Back is the list.
+  it("returns to the page it was opened from, and says only Back", async () => {
+    renderOccasion({ arriveFrom: "/lists/1" });
+    await userEvent.click(screen.getByRole("button", { name: "arrive" }));
+
+    expect(await screen.findByRole("heading", { name: "Christmas 2026" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Boone Family/ })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "\u2190 Back" }));
+
+    expect(screen.getByRole("button", { name: "arrive" })).toBeInTheDocument();
+  });
+
+  // The occasion itself did not load, so there is no family id to name — the
+  // one arm in the table that falls back to People instead (Decision 7).
+  it("the unreachable arm names People, having no family to name", async () => {
+    renderOccasion({
+      occasionResponse: HttpResponse.json({ detail: "Not found" }, { status: 404 }),
+    });
+
+    expect(
+      await screen.findByText(/doesn't exist, or it belongs to a family you're not in/)
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "\u2190 Back to People" })).toHaveAttribute(
+      "href",
+      "/people",
+    );
   });
 
   it("lists every list shared to the occasion, naming who each came from", async () => {
