@@ -8,10 +8,13 @@ export type HeaderMenuItem = {
 };
 
 /**
- * A page header's `⋯` menu, so the header can lead with the thing itself rather
- * than with its controls. List detail's owner menu holds the folder action plus
- * edit, archive and delete; a viewer's holds the folder action alone; the
- * occasion page's holds rename and archive for an organizer.
+ * The app's one overflow menu, wherever a `⋯` is the right way to hold actions
+ * back — in a page header, so the header can lead with the thing itself rather
+ * than with its controls, or on a row, so a list of people is a list of people
+ * rather than a column of red buttons. List detail's owner menu holds the
+ * folder action plus edit, archive and delete; a viewer's holds the folder
+ * action alone; the occasion page's holds rename and archive for an organizer;
+ * a People row's holds `Remove`.
  *
  * `ariaLabel` names *what* the menu acts on ("List actions", "Occasion
  * actions"), because a page may hold more than one and "More actions" would
