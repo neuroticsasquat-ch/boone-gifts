@@ -16,7 +16,7 @@ import { useNumericId } from "../components/NumericId";
 import { BackControl, BACK_TO_LISTS } from "../components/BackControl";
 import { HeaderMenu } from "../components/HeaderMenu";
 import { ConfirmDialog, type ConfirmAction } from "../components/ConfirmDialog";
-import { SharingModal } from "../components/SharingModal";
+import { ListSharingModal } from "../components/ListSharingModal";
 import { GiftsTab } from "./list-detail/GiftsTab";
 import { SharingSummary } from "./list-detail/SharingSummary";
 import { FolderPicker } from "./list-detail/FolderPicker";
@@ -163,7 +163,7 @@ export function ListDetail() {
           pushed the list's own content down, and at M3's ~50 connections and
           ~8 families that is unusable. */}
       {isOwner && share === "open" && (
-        <SharingModal listId={listId} queryClient={queryClient} onClose={closeSharing} />
+        <ListSharingModal listId={listId} queryClient={queryClient} onClose={closeSharing} />
       )}
     </div>
   );

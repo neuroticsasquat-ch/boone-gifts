@@ -7,7 +7,8 @@ import { http, HttpResponse } from "msw";
 import toast, { Toaster } from "react-hot-toast";
 import { server } from "../test/mocks/server";
 import { AuthProvider } from "../contexts/AuthContext";
-import { SharingModal } from "./SharingModal";
+import { ListSharingModal } from "./ListSharingModal";
+import { SharingModal, type PersonRow, type SharingSelection } from "./SharingModal";
 
 const API = "https://boone-gifts-api.localhost";
 
@@ -78,6 +79,13 @@ function serveSharingState({
   );
 }
 
+/**
+ * The whole live suite runs through `ListSharingModal`, the container that
+ * holds the queries and the mutations — the dialog's behaviour is unchanged by
+ * NEU-1307's controlled refactor, and these assertions are the guard that says
+ * so. The controlled seam itself is exercised at the bottom of the file,
+ * against the shell alone.
+ */
 function renderModal(onClose = vi.fn()) {
   server.use(
     http.post(`${API}/auth/refresh`, () =>
@@ -89,7 +97,7 @@ function renderModal(onClose = vi.fn()) {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <MemoryRouter>
-          <SharingModal listId={1} queryClient={queryClient} onClose={onClose} />
+          <ListSharingModal listId={1} queryClient={queryClient} onClose={onClose} />
           <Toaster />
         </MemoryRouter>
       </AuthProvider>
@@ -915,6 +923,139 @@ describe("SharingModal — the revoke confirmation stacks on top", () => {
 
     await waitFor(() =>
       expect(screen.getByRole("checkbox", { name: /share with the boones/i })).toHaveFocus(),
+    );
+  });
+});
+
+describe("SharingModal — controlled by whatever container mounts it", () => {
+  /** A family of each shape, as a draft sees them: nothing shared, nothing
+   *  archived, and no members to report. */
+  const draftFamilies = [
+    {
+      id: 7,
+      name: "The Boones",
+      member_ids: [],
+      occasions: [{ id: 10, name: "Christmas 2026", is_archived: false, shared: false }],
+    },
+    {
+      id: 9,
+      name: "The Joneses",
+      member_ids: [],
+      occasions: [
+        { id: 31, name: "Jones Christmas", is_archived: false, shared: false },
+        { id: 32, name: "Jones Birthdays", is_archived: false, shared: false },
+      ],
+    },
+  ];
+  const draftPeople: PersonRow[] = [
+    { userId: 2, name: "Alice", email: "alice@test.com" },
+    { userId: 3, name: "Bob", email: "bob@test.com" },
+  ];
+  const nothing: SharingSelection = { familyOccasions: {}, userIds: [] };
+
+  function renderShell({
+    selection = nothing,
+    families = draftFamilies,
+    people = draftPeople,
+    linkAway = false,
+  }: {
+    selection?: SharingSelection;
+    families?: typeof draftFamilies;
+    people?: PersonRow[];
+    linkAway?: boolean;
+  } = {}) {
+    const onFamilyToggled = vi.fn();
+    const onPersonToggled = vi.fn();
+    render(
+      <MemoryRouter>
+        <SharingModal
+          families={{ data: families, isLoading: false, isError: false, pending: false }}
+          people={{ data: people, isLoading: false, isError: false, pending: false }}
+          selection={{ data: selection, isLoading: false, isError: false }}
+          onFamilyToggled={onFamilyToggled}
+          onPersonToggled={onPersonToggled}
+          linkAway={linkAway}
+          onClose={vi.fn()}
+        />
+      </MemoryRouter>
+    );
+    return { onFamilyToggled, onPersonToggled };
+  }
+
+  it("ticks the boxes the selection names, and no others", async () => {
+    // The same rows the live container drives off server state, driven off a
+    // draft's local state instead — one implementation, two sources.
+    renderShell({ selection: { familyOccasions: { 9: 32 }, userIds: [3] } });
+
+    expect(screen.getByRole("checkbox", { name: /share with the joneses/i })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /share with bob/i })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /share with the boones/i })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /share with alice/i })).not.toBeChecked();
+    expect(screen.getByText("Shared with 1 family and 1 person")).toBeInTheDocument();
+  });
+
+  it("reports the intended state rather than a delta", async () => {
+    const { onFamilyToggled, onPersonToggled } = renderShell({
+      selection: { familyOccasions: { 9: 32 }, userIds: [] },
+    });
+
+    await userEvent.click(screen.getByRole("checkbox", { name: /share with the boones/i }));
+    expect(onFamilyToggled).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: 7 }),
+      10,
+    );
+
+    // Unticking says `null` — the container looks up which occasion that was.
+    await userEvent.click(screen.getByRole("checkbox", { name: /share with the joneses/i }));
+    expect(onFamilyToggled).toHaveBeenLastCalledWith(expect.objectContaining({ id: 9 }), null);
+
+    await userEvent.click(screen.getByRole("checkbox", { name: /share with alice/i }));
+    expect(onPersonToggled).toHaveBeenLastCalledWith(2, true);
+  });
+
+  it("refuses a tick on a family with several occasions until one is chosen", async () => {
+    // The refusal is the shell's, so both modes inherit it.
+    const { onFamilyToggled } = renderShell();
+
+    await userEvent.click(screen.getByRole("checkbox", { name: /share with the joneses/i }));
+    expect(screen.getByText(/choose an occasion to share with the joneses/i)).toBeInTheDocument();
+    expect(onFamilyToggled).not.toHaveBeenCalled();
+
+    await userEvent.selectOptions(
+      screen.getByRole("combobox", { name: /occasion for the joneses/i }),
+      "31",
+    );
+    await userEvent.click(screen.getByRole("checkbox", { name: /share with the joneses/i }));
+    expect(onFamilyToggled).toHaveBeenCalledWith(expect.objectContaining({ id: 9 }), 31);
+  });
+
+  it("disables no person row when nothing covers them", async () => {
+    // A draft tick is not a share: it reports no covering family, so every row
+    // stays live however many families are ticked (NEU-1307, decision 5).
+    renderShell({ selection: { familyOccasions: { 7: 10 }, userIds: [] } });
+
+    expect(screen.getByRole("checkbox", { name: /share with alice/i })).toBeEnabled();
+    expect(screen.getByRole("checkbox", { name: /share with bob/i })).toBeEnabled();
+    expect(screen.queryByText(/already sees this/i)).not.toBeInTheDocument();
+  });
+
+  it("keeps the empty sentences and drops their links when there is nowhere safe to go", async () => {
+    // Nothing on a create form may silently discard a half-typed list, and the
+    // fact the section is empty is what the row is there to say.
+    renderShell({ families: [], people: [], linkAway: false });
+
+    expect(screen.getByText(/don't belong to any families yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/don't have any connections yet/i)).toBeInTheDocument();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
+
+  it("offers those links where following one costs nothing", async () => {
+    renderShell({ families: [], people: [], linkAway: true });
+
+    expect(screen.getByRole("link", { name: /go to people/i })).toHaveAttribute("href", "/people");
+    expect(screen.getByRole("link", { name: /add a connection/i })).toHaveAttribute(
+      "href",
+      "/people",
     );
   });
 });

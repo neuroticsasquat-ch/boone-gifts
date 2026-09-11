@@ -1,17 +1,56 @@
 import { useId, useState } from "react";
 import { Link } from "react-router";
-import { useQuery, useMutation, type useQueryClient } from "@tanstack/react-query";
-import { isAxiosError } from "axios";
-import toast from "react-hot-toast";
-import { getShares, createShare, deleteShare } from "../api/shares";
-import { getConnections } from "../api/connections";
-import { getShareTargets, shareListWithOccasion, unshareListFromOccasion } from "../api/lists";
 import { NO_ACTIVE_OCCASION, occasionChoice } from "../lib/occasion-choice";
-import type { Connection, ListShare, ShareTargetFamily, ShareTargetOccasion } from "../types";
-import { ConfirmDialog, type ConfirmAction } from "./ConfirmDialog";
+import { joinNames, sharedWithSentence } from "../lib/sharing-summary";
+import type { ShareTargetFamily, ShareTargetOccasion } from "../types";
 import { Modal } from "./Modal";
 
-type QueryClient = ReturnType<typeof useQueryClient>;
+/**
+ * Who a list is to reach: the ticked boxes, in one value both modes hold.
+ *
+ * It is the **intended** state and never a delta, so a section renders from it
+ * without knowing whether the container writes to a server or to `useState`.
+ */
+export interface SharingSelection {
+  /** familyId → the occasion this list reaches that family through. A family
+   *  absent from the map is unticked; there is no "ticked but unchosen" state,
+   *  because a tick without a choice is refused before it lands here. */
+  familyOccasions: Record<number, number>;
+  /** Users the list is shared with directly. */
+  userIds: number[];
+}
+
+/** One person the list can be shared with, as a container supplies them. */
+export interface PersonRow {
+  userId: number;
+  name: string;
+  /** Absent on a share held by someone who is no longer a connection: the row
+   *  is synthesised from the share alone and has nothing but a name. */
+  email?: string;
+  /** Families whose **live** occasion share already puts this list in front of
+   *  them (CONTEXT.md rule 6). Empty while creating: a draft tick is not a
+   *  share, so nothing is covered yet (NEU-1307, decision 5). */
+  coveredBy?: string[];
+}
+
+/** A section's rows, what the read behind them is doing, and whether a write of
+ *  its own is in flight — the whole of what makes its controls live or dead. */
+export interface SectionState<T> {
+  data: T | undefined;
+  isLoading: boolean;
+  isError: boolean;
+  /** A write is in flight; the section's controls are dead until it lands. */
+  pending: boolean;
+}
+
+/** The selection, and whether it is a fact yet. A failed read leaves every
+ *  count at zero, and "nobody can see this" is far too load-bearing a sentence
+ *  to say on the strength of a request that never answered. */
+export interface SelectionState {
+  data: SharingSelection;
+  isLoading: boolean;
+  isError: boolean;
+}
 
 /**
  * The one place an owner says who can see a list — people and families in the
@@ -23,21 +62,32 @@ type QueryClient = ReturnType<typeof useQueryClient>;
  * open-ness is held in the URL as `?share=open`, so the mobile Back gesture
  * closes it rather than navigating away (CONTEXT.md rule 8).
  *
- * Owner-only: it is opened by the header's Change control. The backend is still
- * the gate; this writes through `/lists/{id}/shares` for people and
- * `/lists/{id}/occasions/{occasion_id}` for families.
- *
- * It lives in `components/` rather than under `pages/list-detail/` because New
- * List mounts the same control (NEU-1307) — reuse is a committed M3 contract,
- * unlike the write seam, which that ticket designs against a caller that exists.
+ * **Controlled** since NEU-1307, and this is the shell alone: the rows, the
+ * filter, the three-state occasion rule and the refusal live here, and the data
+ * behind them does not. Two containers supply it — `ListSharingModal`, which
+ * reads and writes a list that exists, and `DraftSharingModal`, which holds a
+ * create form's selections until submit. Everything a user sees is the same in
+ * both, which is the whole point: creation and editing cannot drift.
  */
 export function SharingModal({
-  listId,
-  queryClient,
+  families,
+  people,
+  selection,
+  onFamilyToggled,
+  onPersonToggled,
+  linkAway,
   onClose,
 }: {
-  listId: number;
-  queryClient: QueryClient;
+  families: SectionState<ShareTargetFamily[]>;
+  people: SectionState<PersonRow[]>;
+  selection: SelectionState;
+  /** `next` is the occasion to reach this family through, or `null` to stop.
+   *  The container reads what is currently ticked from `selection`. */
+  onFamilyToggled: (family: ShareTargetFamily, next: number | null) => void;
+  onPersonToggled: (userId: number, next: boolean) => void;
+  /** Whether an empty section may offer its way out to People. False on the
+   *  create form, where following a link would discard a half-typed list. */
+  linkAway: boolean;
   onClose: () => void;
 }) {
   const titleId = useId();
@@ -46,16 +96,6 @@ export function SharingModal({
   // names. Nobody links to a half-typed filter, and one `replaceState` per
   // keystroke across 50 rows can reach Safari's ~100-per-30s throttle.
   const [filter, setFilter] = useState("");
-
-  // The reads are lifted: the filter spans both sections and the summary needs
-  // both halves, so one source beats three components re-deriving "what is this
-  // list shared to". The writes stay in the sections that make them.
-  const shares = useQuery({ queryKey: ["shares", listId], queryFn: () => getShares(listId) });
-  const connections = useQuery({ queryKey: ["connections"], queryFn: getConnections });
-  const targets = useQuery({
-    queryKey: ["share-targets", listId],
-    queryFn: () => getShareTargets(listId),
-  });
 
   return (
     <Modal open labelledBy={titleId} size="lg" onClose={onClose}>
@@ -78,7 +118,7 @@ export function SharingModal({
           onChange={(event) => setFilter(event.target.value)}
           className="block w-full rounded border border-gray-300 px-3 py-2 text-sm"
         />
-        <SharedWithLine shares={shares} targets={targets} />
+        <SharedWithLine selection={selection} />
       </div>
 
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
@@ -87,22 +127,18 @@ export function SharingModal({
             People rows can offer at all, so reading it second would be reading
             the control backwards (project spec §5.2). */}
         <FamiliesSection
-          listId={listId}
-          queryClient={queryClient}
-          families={targets.data}
-          isLoading={targets.isLoading}
-          isError={targets.isError}
+          families={families}
+          selection={selection.data}
+          onFamilyToggled={onFamilyToggled}
           filter={filter}
+          linkAway={linkAway}
         />
         <PeopleSection
-          listId={listId}
-          queryClient={queryClient}
-          shares={shares.data}
-          connections={connections.data}
-          families={targets.data}
-          isLoading={shares.isLoading || connections.isLoading || targets.isLoading}
-          isError={shares.isError || connections.isError}
+          people={people}
+          selection={selection.data}
+          onPersonToggled={onPersonToggled}
           filter={filter}
+          linkAway={linkAway}
         />
       </div>
 
@@ -150,52 +186,28 @@ function NoMatches({ noun, filter }: { noun: string; filter: string }) {
 
 // --- The summary ---
 
-/** `2 families`, `1 person` — the unit named, and pluralised with the count. */
-function counted(count: number, singular: string, plural: string): string {
-  return `${count} ${count === 1 ? singular : plural}`;
-}
-
 /**
  * What is ticked, so the state is legible without reading every checkbox.
  *
- * It counts the boxes and names the unit, rather than the people the list
- * actually reaches. A true headcount is computable from `member_ids`, and was
- * rejected: it would count people the owner has never met and cannot name, it
- * moves when someone joins a family without the owner touching anything, and it
- * would have to include occasions archived *after* their share, since archiving
- * withdraws nothing. The header's `SharingSummary` already **names** everyone
- * and is unreadable behind this dialog; it names, this counts.
+ * It counts the selection rather than the people the list actually reaches, and
+ * says so in `lib/sharing-summary`'s words — the create form's own section says
+ * the same sentence about the same selection, and the two must not drift.
  */
-function SharedWithLine({
-  shares,
-  targets,
-}: {
-  shares: { data?: ListShare[]; isLoading: boolean; isError: boolean };
-  targets: { data?: ShareTargetFamily[]; isLoading: boolean; isError: boolean };
-}) {
+function SharedWithLine({ selection }: { selection: SelectionState }) {
   // A failed fetch also leaves both counts at zero, and "nobody can see this"
   // is far too load-bearing a sentence to say on the strength of a request that
   // never answered — the same rule `SharingSummary` follows, in its words.
-  if (shares.isLoading || targets.isLoading) return <Summary>Loading sharing…</Summary>;
-  if (shares.isError || targets.isError) {
+  if (selection.isLoading) return <Summary>Loading sharing…</Summary>;
+  if (selection.isError) {
     return <Summary>Couldn't load who this list is shared with.</Summary>;
   }
 
-  const families = (targets.data ?? []).filter((family) =>
-    family.occasions.some((occasion) => occasion.shared),
-  ).length;
-  const people = (shares.data ?? []).length;
-
-  const units = [
-    ...(families > 0 ? [counted(families, "family", "families")] : []),
-    ...(people > 0 ? [counted(people, "person", "people")] : []),
-  ];
-
   return (
     <Summary>
-      {units.length === 0
-        ? "This list isn't shared with anyone."
-        : `Shared with ${units.join(" and ")}`}
+      {sharedWithSentence(
+        Object.keys(selection.data.familyOccasions).length,
+        selection.data.userIds.length,
+      )}
     </Summary>
   );
 }
@@ -215,6 +227,36 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
 
 function Hint({ children }: { children: React.ReactNode }) {
   return <p className="text-sm text-gray-500">{children}</p>;
+}
+
+/** An empty section's sentence, and — only where following a link costs the
+ *  viewer nothing — the way out of it. */
+function EmptyGroup({
+  title,
+  children,
+  link,
+  linkAway,
+}: {
+  title: string;
+  children: React.ReactNode;
+  link: string;
+  linkAway: boolean;
+}) {
+  return (
+    <Group title={title}>
+      <Hint>
+        {children}
+        {linkAway && (
+          <>
+            {" "}
+            <Link to="/people" className="text-blue-600 hover:underline">
+              {link}
+            </Link>
+          </>
+        )}
+      </Hint>
+    </Group>
+  );
 }
 
 /** One row: a name, optional detail line, and the checkbox that grants access. */
@@ -253,76 +295,26 @@ function ShareRow({
 
 // --- People ---
 
-/**
- * The families whose live occasion share already puts this list in front of a
- * person — every one of them, because unticking only the first would leave the
- * row disabled and the owner none the wiser (project spec §5.2).
- *
- * "Live" is deliberately narrower than access: a share made before its occasion
- * was archived still grants sight, but that route is winding down, so a direct
- * share there is the useful offer rather than a redundant one. A disabled row
- * therefore means "the live route already covers them", not "they can already
- * see this".
- */
-function coveringFamilies(targets: ShareTargetFamily[], userId: number): string[] {
-  return targets
-    .filter(
-      (family) =>
-        family.member_ids.includes(userId) &&
-        family.occasions.some((occasion) => occasion.shared && !occasion.is_archived),
-    )
-    .map((family) => family.name);
-}
-
-function joinNames(names: string[]): string {
-  if (names.length < 2) return names[0] ?? "";
-  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
-}
-
 function PeopleSection({
-  listId,
-  queryClient,
-  shares,
-  connections,
-  families,
-  isLoading,
-  isError,
+  people,
+  selection,
+  onPersonToggled,
   filter,
+  linkAway,
 }: {
-  listId: number;
-  queryClient: QueryClient;
-  shares: ListShare[] | undefined;
-  connections: Connection[] | undefined;
-  families: ShareTargetFamily[] | undefined;
-  isLoading: boolean;
-  isError: boolean;
+  people: SectionState<PersonRow[]>;
+  selection: SharingSelection;
+  onPersonToggled: (userId: number, next: boolean) => void;
   filter: string;
+  linkAway: boolean;
 }) {
-  function invalidate() {
-    queryClient.invalidateQueries({ queryKey: ["shares", listId] });
-    queryClient.invalidateQueries({ queryKey: ["list", listId] });
-    queryClient.invalidateQueries({ queryKey: ["lists"] });
-  }
-
-  const shareMutation = useMutation({
-    mutationFn: (userId: number) => createShare(listId, userId),
-    onSuccess: invalidate,
-    onError: () => toast.error("Failed to share list."),
-  });
-
-  const unshareMutation = useMutation({
-    mutationFn: (userId: number) => deleteShare(listId, userId),
-    onSuccess: invalidate,
-    onError: () => toast.error("Failed to stop sharing with this person."),
-  });
-
   // The families read gates the rows as well: a row that arrives interactive
   // and turns disabled a moment later is disabled at precisely the moment an
-  // owner clicks.
-  if (isLoading) {
+  // owner clicks — so a container folds that read into this one's loading.
+  if (people.isLoading) {
     return <Group title="People"><Hint>Loading…</Hint></Group>;
   }
-  if (isError) {
+  if (people.isError) {
     return (
       <Group title="People">
         <p className="text-sm text-red-600">Failed to load people.</p>
@@ -330,32 +322,16 @@ function PeopleSection({
     );
   }
 
-  const connectionList = connections ?? [];
-  const shareList = shares ?? [];
-  const connected = new Set(connectionList.map((c) => c.user.id));
-
-  // Every connection, plus anyone still holding a share who is no longer a
-  // connection. Without that second half such a grant would be readable in the
-  // header summary — which falls back to the same "User 42" — while this modal,
-  // the only revoke surface there is, offered no row to switch it off.
-  const rows = [
-    ...connectionList.map((c) => ({ userId: c.user.id, name: c.user.name, email: c.user.email })),
-    ...shareList
-      .filter((s) => !connected.has(s.user_id))
-      .map((s) => ({ userId: s.user_id, name: `User ${s.user_id}`, email: undefined })),
-  ];
+  const rows = people.data ?? [];
 
   // Both headings stay while filtering, each with its own emptiness, so a
   // viewer whose query matched three families and no people can see which
   // population came up empty rather than guessing.
   if (rows.length === 0) {
     return (
-      <Group title="People">
-        <Hint>
-          You don't have any connections yet.{" "}
-          <Link to="/people" className="text-blue-600 hover:underline">Add a connection</Link>
-        </Hint>
-      </Group>
+      <EmptyGroup title="People" link="Add a connection" linkAway={linkAway}>
+        You don't have any connections yet.
+      </EmptyGroup>
     );
   }
 
@@ -369,23 +345,18 @@ function PeopleSection({
     );
   }
 
-  const sharedUserIds = new Set(shareList.map((s) => s.user_id));
-  const pending = shareMutation.isPending || unshareMutation.isPending;
-  // A failed families fetch leaves this empty, which offers a grant that may be
-  // redundant. That is the right way to fail: the disable is a nudge, never a
-  // permission (CONTEXT.md rule 1), and the share it withholds is real.
-  const targetList = families ?? [];
+  const shared = new Set(selection.userIds);
 
   return (
     <Group title="People">
       <ul className="divide-y divide-gray-200 rounded-lg bg-white shadow">
         {visible.map((row) => {
-          const shared = sharedUserIds.has(row.userId);
+          const checked = shared.has(row.userId);
           // Only an unticked box is dead: you can always remove a grant, you
           // just cannot add a redundant one — and this modal is the only place
           // to remove one. Synthesised rows are ticked by definition, so they
           // are never touched by this.
-          const covering = shared ? [] : coveringFamilies(targetList, row.userId);
+          const covering = checked ? [] : (row.coveredBy ?? []);
           const covered = covering.length > 0;
           return (
             <ShareRow
@@ -394,11 +365,9 @@ function PeopleSection({
               // The reason replaces the email rather than stacking below it: the
               // email is decoration, the reason is why the control is dead.
               detail={covered ? `Already sees this through ${joinNames(covering)}` : row.email}
-              checked={shared}
-              disabled={pending || covered}
-              onToggle={() =>
-                shared ? unshareMutation.mutate(row.userId) : shareMutation.mutate(row.userId)
-              }
+              checked={checked}
+              disabled={people.pending || covered}
+              onToggle={() => onPersonToggled(row.userId, !checked)}
             />
           );
         })}
@@ -415,30 +384,24 @@ function PeopleSection({
  *
  * A list is shared to an occasion, never to a family (project spec §5.1), so a
  * row's shape follows from how many active occasions its family has —
- * `occasionChoice` states that rule once, for this modal and the create form
- * both. A family with none is listed and disabled rather than hidden: "you
- * cannot share here yet, and here is why" is the whole point of the row, and
- * the filter keeps it that way.
+ * `occasionChoice` states that rule once, for every surface that renders it. A
+ * family with none is listed and disabled rather than hidden: "you cannot share
+ * here yet, and here is why" is the whole point of the row, and the filter
+ * keeps it that way.
  */
 function FamiliesSection({
-  listId,
-  queryClient,
   families,
-  isLoading,
-  isError,
+  selection,
+  onFamilyToggled,
   filter,
+  linkAway,
 }: {
-  listId: number;
-  queryClient: QueryClient;
-  families: ShareTargetFamily[] | undefined;
-  isLoading: boolean;
-  isError: boolean;
+  families: SectionState<ShareTargetFamily[]>;
+  selection: SharingSelection;
+  onFamilyToggled: (family: ShareTargetFamily, next: number | null) => void;
   filter: string;
+  linkAway: boolean;
 }) {
-  const [pendingRevoke, setPendingRevoke] = useState<{
-    familyName: string;
-    occasionId: number;
-  } | null>(null);
   // What a row's select is pointing at. Read only while the row is unticked —
   // ticking is what commits it, and after that the occasion is a fact.
   const [picked, setPicked] = useState<Record<number, number>>({});
@@ -446,56 +409,10 @@ function FamiliesSection({
   // server-side, and the row says which half is missing.
   const [needsChoice, setNeedsChoice] = useState<number[]>([]);
 
-  function invalidate() {
-    queryClient.invalidateQueries({ queryKey: ["share-targets", listId] });
-    queryClient.invalidateQueries({ queryKey: ["list", listId] });
-    queryClient.invalidateQueries({ queryKey: ["lists"] });
-    // Sharing a list into an occasion moves that occasion's list_count and its
-    // last_activity_at, so the /lists strip is stale the moment this returns.
-    queryClient.invalidateQueries({ queryKey: ["occasions"] });
-  }
-
-  const shareMutation = useMutation({
-    mutationFn: (occasionId: number) => shareListWithOccasion(listId, occasionId),
-    onSuccess: invalidate,
-    onError: (err) => {
-      // The only 409 on this call is an occasion archived since the modal
-      // loaded. The generic failure toast would leave the owner clicking a box
-      // that is never going to tick, so name the cause and the way out — and
-      // refetch, because the row is now showing a stale occasion.
-      if (isAxiosError(err) && err.response?.status === 409) {
-        toast.error(
-          "That occasion has been archived, so it can't be shared to. Pick another, or ask an organizer to unarchive it.",
-        );
-        invalidate();
-        return;
-      }
-      toast.error("Failed to share list with this occasion.");
-    },
-  });
-
-  const unshareMutation = useMutation({
-    mutationFn: (vars: { occasionId: number; familyName: string; claims?: "release" | "keep" }) =>
-      unshareListFromOccasion(listId, vars.occasionId, vars.claims),
-    onSuccess: () => {
-      setPendingRevoke(null);
-      invalidate();
-    },
-    onError: (err, vars) => {
-      // A 409 means only one thing here: members of that family hold claims that
-      // revoking would orphan. Ask the owner what to do with them.
-      if (isAxiosError(err) && err.response?.status === 409 && !vars.claims) {
-        setPendingRevoke({ familyName: vars.familyName, occasionId: vars.occasionId });
-        return;
-      }
-      toast.error("Failed to stop sharing with this family.");
-    },
-  });
-
-  if (isLoading) {
+  if (families.isLoading) {
     return <Group title="Families"><Hint>Loading…</Hint></Group>;
   }
-  if (isError) {
+  if (families.isError) {
     return (
       <Group title="Families">
         <p className="text-sm text-red-600">Failed to load families.</p>
@@ -503,25 +420,20 @@ function FamiliesSection({
     );
   }
 
-  const data = families ?? [];
+  const data = families.data ?? [];
   if (data.length === 0) {
     return (
-      <Group title="Families">
-        <Hint>
-          You don't belong to any families yet.{" "}
-          <Link to="/people" className="text-blue-600 hover:underline">Go to People</Link>
-        </Hint>
-      </Group>
+      <EmptyGroup title="Families" link="Go to People" linkAway={linkAway}>
+        You don't belong to any families yet.
+      </EmptyGroup>
     );
   }
 
   const visible = data.filter((family) => matchesFilter(filter, family.name));
-  const pending = shareMutation.isPending || unshareMutation.isPending;
 
   function toggle(family: ShareTargetFamily) {
-    const shared = sharedOccasionOf(family);
-    if (shared) {
-      unshareMutation.mutate({ occasionId: shared.id, familyName: family.name });
+    if (selection.familyOccasions[family.id] !== undefined) {
+      onFamilyToggled(family, null);
       return;
     }
     const choice = occasionChoice(family.occasions);
@@ -533,7 +445,7 @@ function FamiliesSection({
       return;
     }
     setNeedsChoice((ids) => ids.filter((id) => id !== family.id));
-    shareMutation.mutate(occasionId);
+    onFamilyToggled(family, occasionId);
   }
 
   return (
@@ -546,7 +458,8 @@ function FamiliesSection({
             <FamilyRow
               key={family.id}
               family={family}
-              disabled={pending}
+              disabled={families.pending}
+              selectedOccasionId={selection.familyOccasions[family.id]}
               pickedOccasionId={picked[family.id]}
               needsChoice={needsChoice.includes(family.id)}
               onPick={(occasionId) => {
@@ -558,38 +471,8 @@ function FamiliesSection({
           ))}
         </ul>
       )}
-
-      {/* Stacked over the sharing modal rather than replacing its body: the
-          owner keeps their place and their filter text mid-decision, and
-          reopening would cost a second history entry. `Modal`'s topmost-only
-          rule is what makes two of them at once behave. */}
-      {pendingRevoke && (
-        <RevokeClaimsDialog
-          familyName={pendingRevoke.familyName}
-          pending={unshareMutation.isPending}
-          onCancel={() => setPendingRevoke(null)}
-          onChoose={(claims) =>
-            unshareMutation.mutate({
-              occasionId: pendingRevoke.occasionId,
-              familyName: pendingRevoke.familyName,
-              claims,
-            })
-          }
-        />
-      )}
     </Group>
   );
-}
-
-/**
- * The occasion this list currently reaches the family through, if any.
- *
- * One row shares to one occasion, so this is the only share the row can have
- * made. A second one is unreachable from here; were the API used to add one, the
- * row simply stays ticked on the next occasion after this is switched off.
- */
-function sharedOccasionOf(family: ShareTargetFamily): ShareTargetOccasion | null {
-  return family.occasions.find((occasion) => occasion.shared) ?? null;
 }
 
 /** An occasion's name, saying so when it has been archived — which only ever
@@ -603,14 +486,19 @@ function occasionLabel(occasion: ShareTargetOccasion): string {
  *
  * A family with several occasions carries its select whether or not the list
  * already reaches it — the row keeps one shape as the box is ticked, which is
- * how project spec §5.2 draws it. Once shared the select is **disabled**: the
- * occasion is then a fact, and re-pointing a share is untick-then-tick, the only
- * order in which the claims question can be asked (§5.4). A family with a single
- * occasion names it in text instead — displayed, not offered.
+ * how project spec §5.2 draws it. Once ticked the select is **disabled**: on a
+ * live list the occasion is then a fact, and re-pointing a share is
+ * untick-then-tick, the only order in which the claims question can be asked
+ * (§5.4). A draft keeps the same rule though it does not need it — one
+ * behaviour beats two, and a select live in one mounting of this dialog and
+ * dead in the other is a difference a user would have to learn for no benefit.
+ * A family with a single occasion names it in text instead — displayed, not
+ * offered.
  */
 function FamilyRow({
   family,
   disabled,
+  selectedOccasionId,
   pickedOccasionId,
   needsChoice,
   onPick,
@@ -618,29 +506,32 @@ function FamilyRow({
 }: {
   family: ShareTargetFamily;
   disabled: boolean;
+  selectedOccasionId: number | undefined;
   pickedOccasionId: number | undefined;
   needsChoice: boolean;
   onPick: (occasionId: number) => void;
   onToggle: () => void;
 }) {
-  const shared = sharedOccasionOf(family);
+  const selected = family.occasions.find((o) => o.id === selectedOccasionId) ?? null;
   const choice = occasionChoice(family.occasions);
   // A family with nothing active can still be unshared *from*: its occasion was
   // archived after the share was made, and archiving is not unsharing.
-  const operable = shared !== null || choice.kind !== "none";
+  const operable = selected !== null || choice.kind !== "none";
 
   // An occasion archived after its share was made is no longer selectable, so it
   // is put back as the value the disabled select displays — otherwise the row
   // would show a share pointing at nothing.
   const selectable = choice.kind === "many" ? choice.occasions : [];
   const options =
-    shared && !selectable.some((o) => o.id === shared.id) ? [shared, ...selectable] : selectable;
+    selected && !selectable.some((o) => o.id === selected.id)
+      ? [selected, ...selectable]
+      : selectable;
   const showSelect = options.length > 1;
 
   const detail = showSelect
     ? null
-    : shared
-      ? occasionLabel(shared)
+    : selected
+      ? occasionLabel(selected)
       : choice.kind === "one"
         ? choice.occasion.name
         : choice.kind === "none"
@@ -658,12 +549,12 @@ function FamilyRow({
           {showSelect && (
             <select
               aria-label={`Occasion for ${family.name}`}
-              value={shared ? shared.id : (pickedOccasionId ?? "")}
-              disabled={disabled || shared !== null}
+              value={selected ? selected.id : (pickedOccasionId ?? "")}
+              disabled={disabled || selected !== null}
               onChange={(e) => e.target.value && onPick(Number(e.target.value))}
               className="rounded border border-gray-300 px-2 py-1 text-sm disabled:opacity-50"
             >
-              {!shared && <option value="">Choose an occasion…</option>}
+              {!selected && <option value="">Choose an occasion…</option>}
               {options.map((occasion) => (
                 <option key={occasion.id} value={occasion.id}>
                   {occasionLabel(occasion)}
@@ -675,7 +566,7 @@ function FamilyRow({
             <span className="sr-only">Share with {family.name}</span>
             <input
               type="checkbox"
-              checked={shared !== null}
+              checked={selected !== null}
               disabled={disabled || !operable}
               onChange={onToggle}
               className="h-4 w-4 rounded border-gray-300 disabled:opacity-50"
@@ -689,40 +580,5 @@ function FamilyRow({
         </p>
       )}
     </li>
-  );
-}
-
-const REVOKE_CLAIMS_ACTIONS: ConfirmAction[] = [
-  { id: "release", label: "Release those claims", tone: "primary" },
-  { id: "keep", label: "Keep them claimed", tone: "neutral" },
-];
-
-/**
- * Owners are blind to claim state on their own lists, so this reveals only THAT
- * claims exist — never a count, a gift name, or a claimer name.
- */
-function RevokeClaimsDialog({
-  familyName,
-  pending,
-  onCancel,
-  onChoose,
-}: {
-  familyName: string;
-  pending: boolean;
-  onCancel: () => void;
-  onChoose: (claims: "release" | "keep") => void;
-}) {
-  return (
-    <ConfirmDialog
-      open
-      title="Some gifts are claimed"
-      body={`Members of ${familyName} have claimed gifts on this list. If you stop sharing, what should happen to those claims?`}
-      actions={REVOKE_CLAIMS_ACTIONS}
-      pending={pending}
-      onResolve={(id) => {
-        if (id === "release" || id === "keep") onChoose(id);
-        else onCancel();
-      }}
-    />
   );
 }

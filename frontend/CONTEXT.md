@@ -17,7 +17,7 @@ architecture live in [`AGENTS.md`](AGENTS.md); this file is only about what the 
 | **Family** | A named group of people. A list reaches one **through an occasion of that family**, never the family itself. Its page administers the family — members, occasions, settings — and is **not** the way in to an occasion | `pages/FamilyDetail.tsx` |
 | **Folder** | My saved grouping of lists — "Christmas 2026". Was called a *collection*, then an *occasion*. Has a page (`/folders/:id`) but no index | `pages/FolderDetail.tsx` |
 | **Occasion** | A family's shared gifting occasion — "Christmas 2026". The unit a list is shared *to*, and the only thing that makes a family shareable | `pages/OccasionDetail.tsx`, `pages/lists/OccasionStrip.tsx` (finding one), `pages/family-detail/OccasionsSection.tsx` (managing one), `lib/occasion-choice.ts` |
-| **Who can see this list** | The owner's one sharing surface — families and connections in a single dialog over the list, behind the header's **Change** control, with one filter box across both sections and a line saying what is ticked. Its open-ness is the address: `?share=open` | `components/SharingModal.tsx` |
+| **Who can see this list** | The owner's one sharing surface — families and connections in a single dialog, with one filter box across both sections and a line saying what is ticked. Over a list that exists it sits behind the header's **Change** control and every tick is a write; **New List mounts the same dialog** behind `Choose…`, holding its ticks until the list is created and starting from **nothing ticked**. Its open-ness is the address: `?share=open` | `components/SharingModal.tsx` (the rows), `ListSharingModal.tsx` / `DraftSharingModal.tsx` (the two modes) |
 | **Occasion strip** | The row of occasion cards at the top of `/lists`: every non-archived occasion in every family I belong to, most recently active first, four at a time. Absent entirely when I have none. Carries no money | `pages/lists/OccasionStrip.tsx` |
 | **Claim** / "I'll get this" | My private intent to buy a gift. Never visible to the list's owner | `pages/list-detail/GiftsTab.tsx` |
 | **My shopping** | Everything *I* have claimed within one occasion or one folder — what I still have to buy, what I bought, and what I paid. Never anyone else's, in any aggregate | `components/MyShopping.tsx` |
@@ -87,6 +87,11 @@ behaviour).
    made stays revokable, because this panel is the only place to revoke one. Archived shares are
    outside the rule: they still grant sight, but the row stays live, since a direct share is what
    the owner would want as that occasion winds down.
+   The rule is defined on a **live share**, so it is inert while a list is being created: a draft
+   tick grants nothing until the list exists and can be withdrawn before it does, so no person row
+   is greyed on the create form however many families are ticked. A list created with both a family
+   share and a direct share to one of its members renders on the list page with that person ticked,
+   live and revokable — exactly as if the owner had made the same pair from the list page.
 
 7. **A wrong address is not a missing thing, and neither is a slow one.** An `:id` in a route is a
    positive integer or it is not an address at all — the page it names is never asked for, never

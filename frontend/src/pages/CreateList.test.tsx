@@ -1,11 +1,14 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, it, expect, vi } from "vitest";
-import { MemoryRouter } from "react-router";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
+import toast, { Toaster } from "react-hot-toast";
 import { server } from "../test/mocks/server";
 import { AuthProvider } from "../contexts/AuthContext";
+import { NavigationDepthProvider } from "../contexts/NavigationDepthContext";
+import { ArrivedFrom } from "../test/arrived-from";
 import { CreateList } from "./CreateList";
 
 const API = "https://boone-gifts-api.localhost";
@@ -25,31 +28,52 @@ const families = [
   { id: 8, name: "The Smiths", role: "member", member_count: 2 },
 ];
 
-function occasion(id: number, familyId: number, name: string) {
+/** An occasion as `GET /occasions` indexes it — the read the sharing dialog
+ *  shapes a draft's family rows from. */
+function indexed(id: number, familyId: number, name: string) {
   return {
     id,
     family_id: familyId,
+    family_name: families.find((f) => f.id === familyId)?.name ?? "",
     name,
     is_archived: false,
     created_by_id: 1,
     created_at: "2026-01-01",
     updated_at: "2026-01-01",
+    list_count: 0,
+    my_claimed_count: 0,
+    my_bought_count: 0,
+    last_activity_at: "2026-01-01",
   };
 }
 
-/** The Boones have one occasion, the Smiths two — the two shapes the pre-check
- *  rule tells apart. Anything not named here has none. */
-const occasions: Record<number, ReturnType<typeof occasion>[]> = {
-  7: [occasion(70, 7, "Christmas 2026")],
-  8: [occasion(80, 8, "Smith Christmas"), occasion(81, 8, "Smith Birthdays")],
-};
+/** Both families have **exactly one** active occasion — the shape the retired
+ *  pre-check ticked on sight, so a test that finds nothing ticked here is the
+ *  assertion this ticket asks for by name. */
+const occasionIndex = [indexed(70, 7, "Christmas 2026"), indexed(80, 8, "Smith Christmas")];
 
-function serveFamilies(list = families, byFamily = occasions) {
+const connections = [
+  {
+    id: 5,
+    status: "accepted",
+    user: { id: 2, name: "Alice", email: "alice@test.com" },
+    created_at: "2026-01-01",
+    accepted_at: "2026-01-02",
+  },
+  {
+    id: 6,
+    status: "accepted",
+    user: { id: 3, name: "Gran Boone", email: "gran@test.com" },
+    created_at: "2026-01-01",
+    accepted_at: "2026-01-02",
+  },
+];
+
+function serveFamilies(list = families, index = occasionIndex, people = connections) {
   server.use(
     http.get(`${API}/families`, () => HttpResponse.json(list)),
-    http.get(`${API}/families/:familyId/occasions`, ({ params }) =>
-      HttpResponse.json(byFamily[Number(params.familyId)] ?? [])
-    ),
+    http.get(`${API}/occasions`, () => HttpResponse.json(index)),
+    http.get(`${API}/connections`, () => HttpResponse.json(people)),
   );
 }
 
@@ -64,7 +88,24 @@ function serveCreate() {
   return posted;
 }
 
-function renderCreateList(authToken: string) {
+/** The address, so `?share=open` can be read, and a Back button to pop it. */
+function Address() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  return (
+    <>
+      <p>{`address: ${location.pathname}${location.search}`}</p>
+      <button onClick={() => navigate(-1)}>go back</button>
+    </>
+  );
+}
+
+/** `arriveFrom` starts the session elsewhere and pushes into the form from it,
+ *  so the sharing dialog's close has somewhere of ours to pop back to. */
+function renderCreateList(
+  authToken: string,
+  { entries = ["/lists/new"], arriveFrom }: { entries?: string[]; arriveFrom?: string } = {},
+) {
   server.use(
     http.post(`${API}/auth/refresh`, () =>
       HttpResponse.json({ access_token: authToken, token_type: "bearer" })
@@ -74,144 +115,261 @@ function renderCreateList(authToken: string) {
   return render(
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <MemoryRouter>
-          <CreateList />
+        <MemoryRouter
+          initialEntries={arriveFrom ? [arriveFrom] : entries}
+          initialIndex={arriveFrom ? 0 : entries.length - 1}
+        >
+          <NavigationDepthProvider>
+            <Routes>
+              <Route path="/lists/new" element={<CreateList />} />
+              <Route path="/folders/:id" element={<ArrivedFrom to="/lists/new" />} />
+              <Route path="*" element={null} />
+            </Routes>
+          </NavigationDepthProvider>
+          <Address />
+          <Toaster />
         </MemoryRouter>
       </AuthProvider>
     </QueryClientProvider>
   );
 }
 
-describe("CreateList — sharing to an occasion", () => {
-  it("pre-checks only the family with exactly one active occasion, and names it", async () => {
+/** The form's own section, and the way into the dialog the list page mounts. */
+const sharingSection = () => screen.getByRole("button", { name: /choose…/i });
+const sharingDialog = () => screen.queryByRole("dialog", { name: "Who can see this list" });
+
+async function openSharing() {
+  await userEvent.click(sharingSection());
+  return screen.findByRole("dialog", { name: "Who can see this list" });
+}
+
+describe("CreateList — who can see this list", () => {
+  // react-hot-toast keeps its queue at module level, so a toast raised by one
+  // test outlives `cleanup()` and shows up in the next one.
+  beforeEach(() => toast.remove());
+
+  // The assertion the ticket asks for by name. Someone who learned to rely on
+  // the pre-check creates their next list unshared — deliberately, because
+  // "uncheck any you'd rather keep it from" is the wrong direction for a
+  // sharing control (project spec §12).
+  it("arrives with nothing checked, and says so", async () => {
     serveFamilies();
 
     renderCreateList(authToken);
 
-    // One occasion: ticked by default, and the occasion is stated so the owner
-    // knows what the tick means.
-    expect(await screen.findByRole("checkbox", { name: "The Boones" })).toBeChecked();
-    expect(screen.getByText("Christmas 2026")).toBeInTheDocument();
-    // Several: nothing to pre-check, because ticking it needs an answer first.
-    expect(screen.getByRole("checkbox", { name: "The Smiths" })).not.toBeChecked();
-    expect(screen.getByRole("combobox", { name: /occasion for the smiths/i })).toBeInTheDocument();
+    expect(await screen.findByText("This list isn't shared with anyone.")).toBeInTheDocument();
+
+    const dialog = await openSharing();
+    // Both halves, so the assertion cannot pass on a paint that has the family
+    // rows and not the people.
+    await within(dialog).findByRole("checkbox", { name: /share with gran boone/i });
+    within(dialog).getByRole("checkbox", { name: /share with the boones/i });
+    for (const box of within(dialog).getAllByRole("checkbox")) expect(box).not.toBeChecked();
   });
 
-  it("posts the pre-checked family's occasion when the default is left alone", async () => {
+  it("mounts the list page's own dialog, people and all", async () => {
+    // The same component, so creation gains the people picker, the one filter
+    // box and every disabled-with-reason rule without restating any of them.
     serveFamilies();
-    const posted = serveCreate();
 
     renderCreateList(authToken);
 
-    await userEvent.type(await screen.findByRole("textbox", { name: /name/i }), "Birthday");
-    await screen.findByRole("checkbox", { name: "The Boones" });
-    await userEvent.click(screen.getByRole("button", { name: /create list/i }));
-
-    await waitFor(() => expect(posted).toHaveBeenCalled());
-    expect(posted.mock.calls[0][0]).toMatchObject({ name: "Birthday", occasion_ids: [70] });
+    const dialog = await openSharing();
+    expect(
+      within(dialog).getByRole("searchbox", { name: /filter people and families/i }),
+    ).toBeInTheDocument();
+    expect(
+      await within(dialog).findByRole("checkbox", { name: /share with gran boone/i }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("checkbox", { name: /share with the boones/i }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getAllByRole("heading", { level: 3 }).map((h) => h.textContent),
+    ).toEqual(["Families", "People"]);
   });
 
-  it("posts an empty occasion_ids when every family is unchecked", async () => {
+  it("pushes ?share=open, and Back closes it with the form intact", async () => {
     serveFamilies();
-    const posted = serveCreate();
 
-    renderCreateList(authToken);
+    renderCreateList(authToken, { arriveFrom: "/folders/5" });
+    await userEvent.click(screen.getByRole("button", { name: "arrive" }));
 
-    await userEvent.type(await screen.findByRole("textbox", { name: /name/i }), "Private");
-    await userEvent.click(await screen.findByRole("checkbox", { name: "The Boones" }));
-    await userEvent.click(screen.getByRole("button", { name: /create list/i }));
+    await userEvent.type(await screen.findByRole("textbox", { name: /^name/i }), "Birthday");
+    await userEvent.type(screen.getByRole("textbox", { name: /description/i }), "Ideas");
+    await openSharing();
+    expect(await screen.findByText("address: /lists/new?share=open")).toBeInTheDocument();
 
-    await waitFor(() => expect(posted).toHaveBeenCalled());
-    expect(posted.mock.calls[0][0]).toMatchObject({ occasion_ids: [] });
-  });
-
-  it("posts the occasion chosen for a family that has several", async () => {
-    serveFamilies();
-    const posted = serveCreate();
-
-    renderCreateList(authToken);
-
-    await userEvent.type(await screen.findByRole("textbox", { name: /name/i }), "Birthday");
-    await userEvent.selectOptions(
-      await screen.findByRole("combobox", { name: /occasion for the smiths/i }),
-      "81",
+    await userEvent.click(
+      await screen.findByRole("checkbox", { name: /share with the boones/i }),
     );
-    await userEvent.click(screen.getByRole("checkbox", { name: "The Smiths" }));
+    await userEvent.click(screen.getByRole("button", { name: "go back" }));
+
+    expect(await screen.findByText("address: /lists/new")).toBeInTheDocument();
+    expect(sharingDialog()).not.toBeInTheDocument();
+    // The form is unmounted by neither, so what was typed and what was ticked
+    // both survive the close.
+    expect(screen.getByRole("textbox", { name: /^name/i })).toHaveValue("Birthday");
+    expect(screen.getByRole("textbox", { name: /description/i })).toHaveValue("Ideas");
+    expect(screen.getByText("Shared with 1 family")).toBeInTheDocument();
+
+    // Done popped the entry the app pushed, so the next Back leaves the page
+    // rather than reopening the dialog.
+    await userEvent.click(screen.getByRole("button", { name: "go back" }));
+    expect(await screen.findByText("address: /folders/5")).toBeInTheDocument();
+  });
+
+  it("strips ?share without navigating when nothing was pushed", async () => {
+    serveFamilies();
+
+    renderCreateList(authToken, { entries: ["/lists", "/lists/new?share=open"] });
+
+    await userEvent.click(await screen.findByRole("button", { name: /^done$/i }));
+
+    expect(await screen.findByText("address: /lists/new")).toBeInTheDocument();
+    expect(sharingDialog()).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "go back" }));
+    expect(await screen.findByText("address: /lists")).toBeInTheDocument();
+  });
+
+  it("posts no occasions when the sharing section is never opened", async () => {
+    serveFamilies();
+    const posted = serveCreate();
+
+    renderCreateList(authToken);
+
+    await userEvent.type(await screen.findByRole("textbox", { name: /^name/i }), "Private");
     await userEvent.click(screen.getByRole("button", { name: /create list/i }));
 
     await waitFor(() => expect(posted).toHaveBeenCalled());
-    expect(posted.mock.calls[0][0]).toMatchObject({ occasion_ids: [70, 81] });
+    expect(posted.mock.calls[0][0]).toMatchObject({ name: "Private", occasion_ids: [] });
   });
 
-  it("refuses to submit a family ticked with no occasion chosen", async () => {
+  it("posts the occasion of each family ticked, and nothing else", async () => {
     serveFamilies();
+    const posted = serveCreate();
 
     renderCreateList(authToken);
 
-    await userEvent.type(await screen.findByRole("textbox", { name: /name/i }), "Birthday");
-    await userEvent.click(await screen.findByRole("checkbox", { name: "The Smiths" }));
-
-    expect(screen.getByText(/choose an occasion for the smiths/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /create list/i })).toBeDisabled();
-
-    // Answering it releases the form.
-    await userEvent.selectOptions(
-      screen.getByRole("combobox", { name: /occasion for the smiths/i }),
-      "80",
+    await userEvent.type(await screen.findByRole("textbox", { name: /^name/i }), "Birthday");
+    await openSharing();
+    await userEvent.click(
+      await screen.findByRole("checkbox", { name: /share with the smiths/i }),
     );
-    expect(screen.getByRole("button", { name: /create list/i })).toBeEnabled();
+    await userEvent.click(screen.getByRole("button", { name: /^done$/i }));
+    await userEvent.click(screen.getByRole("button", { name: /create list/i }));
+
+    await waitFor(() => expect(posted).toHaveBeenCalled());
+    expect(posted.mock.calls[0][0]).toMatchObject({ occasion_ids: [80] });
   });
 
-  it("disables a family with no active occasion and says why", async () => {
-    serveFamilies(families, { 7: occasions[7] });
-
-    renderCreateList(authToken);
-
-    const smiths = await screen.findByRole("checkbox", { name: "The Smiths" });
-    await waitFor(() => expect(smiths).toBeDisabled());
-    expect(screen.getByText(/no active occasion/i)).toBeInTheDocument();
-    expect(smiths).not.toBeChecked();
-  });
-
-  it("keeps an unchecked family unchecked when the form re-renders", async () => {
+  it("shares with the people ticked — the picker the form never had", async () => {
     serveFamilies();
-
-    renderCreateList(authToken);
-
-    await userEvent.click(await screen.findByRole("checkbox", { name: "The Boones" }));
-    // Typing re-renders the form; the default must not reassert itself over a
-    // deliberate uncheck.
-    await userEvent.type(screen.getByRole("textbox", { name: /name/i }), "Birthday");
-
-    expect(screen.getByRole("checkbox", { name: "The Boones" })).not.toBeChecked();
-  });
-
-  it("cannot be submitted before the occasions have answered", async () => {
-    let answer: (() => void) | undefined;
-    const answered = new Promise<void>((resolve) => {
-      answer = resolve;
-    });
+    const posted = serveCreate();
+    const shared = vi.fn();
     server.use(
-      http.get(`${API}/families`, () => HttpResponse.json(families)),
-      http.get(`${API}/families/:familyId/occasions`, async ({ params }) => {
-        await answered;
-        return HttpResponse.json(occasions[Number(params.familyId)] ?? []);
+      http.post(`${API}/lists/1/shares`, async ({ request }) => {
+        shared(await request.json());
+        return HttpResponse.json({ id: 1, list_id: 1, user_id: 3, created_at: "2026-01-01" }, { status: 201 });
       }),
     );
 
     renderCreateList(authToken);
 
-    // Submitting here would post no occasion_ids at all and create exactly the
-    // list that reaches nobody — the pre-check would be silently skipped.
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: /create list/i })).toBeDisabled()
+    await userEvent.type(await screen.findByRole("textbox", { name: /^name/i }), "Birthday");
+    await openSharing();
+    await userEvent.click(
+      await screen.findByRole("checkbox", { name: /share with gran boone/i }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: /^done$/i }));
+    await userEvent.click(screen.getByRole("button", { name: /create list/i }));
+
+    await waitFor(() => expect(posted).toHaveBeenCalled());
+    // `POST /lists` has no `user_ids`, so the people ticked are follow-up calls
+    // made once the list exists.
+    await waitFor(() => expect(shared).toHaveBeenCalledWith({ user_id: 3 }));
+  });
+
+  it("keeps the list and names who it could not be shared with", async () => {
+    // The list exists, and the page being navigated to is exactly where the
+    // failure is fixed: one Change, one tick.
+    serveFamilies();
+    serveCreate();
+    server.use(
+      http.post(`${API}/lists/1/shares`, async ({ request }) => {
+        const body = (await request.json()) as { user_id: number };
+        return body.user_id === 3
+          ? new HttpResponse(null, { status: 500 })
+          : HttpResponse.json({ id: 1, list_id: 1, user_id: body.user_id, created_at: "2026-01-01" }, { status: 201 });
+      }),
     );
 
-    answer!();
-    expect(await screen.findByRole("checkbox", { name: "The Boones" })).toBeChecked();
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: /create list/i })).toBeEnabled()
+    renderCreateList(authToken);
+
+    await userEvent.type(await screen.findByRole("textbox", { name: /^name/i }), "Birthday");
+    await openSharing();
+    await userEvent.click(await screen.findByRole("checkbox", { name: /share with alice/i }));
+    await userEvent.click(screen.getByRole("checkbox", { name: /share with gran boone/i }));
+    await userEvent.click(screen.getByRole("button", { name: /^done$/i }));
+    await userEvent.click(screen.getByRole("button", { name: /create list/i }));
+
+    expect(await screen.findByText(/couldn't share it with Gran Boone/i)).toBeInTheDocument();
+    // Navigation happens either way — the list was created.
+    expect(await screen.findByText("address: /lists/1")).toBeInTheDocument();
+  });
+
+  it("can be submitted before the families and occasions have answered", async () => {
+    // The guard that used to block this existed to stop a submission silently
+    // skipping the pre-check. With nothing pre-checked, a submission made early
+    // shares with nobody — precisely what it asked for.
+    const posted = serveCreate();
+    server.use(
+      http.get(`${API}/families`, () => new Promise(() => {})),
+      http.get(`${API}/occasions`, () => new Promise(() => {})),
+      http.get(`${API}/connections`, () => new Promise(() => {})),
     );
+
+    renderCreateList(authToken);
+
+    await userEvent.type(await screen.findByRole("textbox", { name: /^name/i }), "Private");
+    expect(screen.getByRole("button", { name: /create list/i })).toBeEnabled();
+
+    await userEvent.click(screen.getByRole("button", { name: /create list/i }));
+    await waitFor(() => expect(posted).toHaveBeenCalled());
+    expect(posted.mock.calls[0][0]).toMatchObject({ occasion_ids: [] });
+  });
+
+  it("keeps its section when the user belongs to no families", async () => {
+    // People are shareable even when families are not, and the section is where
+    // the form says what the list will and will not reach.
+    serveFamilies([]);
+
+    renderCreateList(authToken);
+
+    expect(await screen.findByText("This list isn't shared with anyone.")).toBeInTheDocument();
+    expect(sharingSection()).toBeInTheDocument();
+
+    const dialog = await openSharing();
+    expect(await within(dialog).findByText(/don't belong to any families yet/i)).toBeInTheDocument();
+    // And no way off a half-typed form, even out of an empty section.
+    expect(within(dialog).queryByRole("link")).not.toBeInTheDocument();
+    expect(
+      await within(dialog).findByRole("checkbox", { name: /share with gran boone/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("retires the sentence this ticket exists to delete, and keeps the other half", async () => {
+    serveFamilies();
+
+    renderCreateList(authToken);
+
+    await screen.findByRole("button", { name: /create list/i });
+    expect(screen.queryByText(/uncheck any you'd rather keep it from/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("Share with families")).not.toBeInTheDocument();
+    expect(
+      screen.getByText("You can change this later from the list itself."),
+    ).toBeInTheDocument();
   });
 
   it("says what to do when an occasion is archived between load and submit", async () => {
@@ -227,25 +385,18 @@ describe("CreateList — sharing to an occasion", () => {
 
     renderCreateList(authToken);
 
-    await userEvent.type(await screen.findByRole("textbox", { name: /name/i }), "Birthday");
-    await screen.findByRole("checkbox", { name: "The Boones" });
+    await userEvent.type(await screen.findByRole("textbox", { name: /^name/i }), "Birthday");
+    await openSharing();
+    await userEvent.click(
+      await screen.findByRole("checkbox", { name: /share with the boones/i }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: /^done$/i }));
     await userEvent.click(screen.getByRole("button", { name: /create list/i }));
 
     // "Try again" would be a lie — the same submission keeps failing until the
     // owner changes what it asks for.
     expect(await screen.findByText(/has been archived/i)).toBeInTheDocument();
     expect(screen.queryByText(/please try again/i)).not.toBeInTheDocument();
-  });
-
-  it("hides the section when the user belongs to no families", async () => {
-    serveFamilies([]);
-
-    renderCreateList(authToken);
-
-    await screen.findByRole("button", { name: /create list/i });
-    await waitFor(() =>
-      expect(screen.queryByText("Share with families")).not.toBeInTheDocument()
-    );
   });
 });
 
