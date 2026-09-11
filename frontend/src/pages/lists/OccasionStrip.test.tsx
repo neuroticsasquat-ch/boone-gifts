@@ -6,6 +6,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import toast from "react-hot-toast";
 import { server } from "../../test/mocks/server";
+import { AuthProvider } from "../../contexts/AuthContext";
+import { NavigationDepthProvider } from "../../contexts/NavigationDepthContext";
+import { ArrivedFrom } from "../../test/arrived-from";
 import { OccasionStrip } from "./OccasionStrip";
 
 const API = "https://boone-gifts-api.localhost";
@@ -187,8 +190,8 @@ describe("OccasionStrip", () => {
     renderStrip();
 
     const card = await screen.findByRole("listitem");
-    // The condition, and nothing more — not "0 lists" over "No lists yet".
-    expect(within(card).getByText("No lists yet")).toBeInTheDocument();
+    // The control, and nothing more — not "0 lists" over it.
+    expect(within(card).getByRole("button", { name: "Share a list" })).toBeInTheDocument();
     expect(within(card).queryByText(/0 lists/)).not.toBeInTheDocument();
   });
 
@@ -216,22 +219,23 @@ describe("OccasionStrip", () => {
     renderStrip();
 
     const card = await screen.findByRole("listitem");
-    // The condition and no instruction: NEU-1308 brings the control, and the
-    // wording arrives with the thing it describes.
-    expect(within(card).getByText("No lists yet")).toBeInTheDocument();
+    // NEU-1308 replaced the "No lists yet" sentence with the control that ends
+    // the condition — the CTA is what the body slot was shaped for.
+    expect(within(card).getByRole("button", { name: "Share a list" })).toBeInTheDocument();
+    expect(within(card).queryByText("No lists yet")).not.toBeInTheDocument();
     // Every occasion keeps its route — that page holds the budget and the
     // shopping tab, which is the whole argument of ADR 0007.
     expect(within(card).getByRole("link")).toHaveAttribute("href", "/occasions/9");
   });
 
-  it("shows both the empty-body sentence and the bought line on an unshared occasion", async () => {
+  it("shows both the empty-body control and the bought line on an unshared occasion", async () => {
     // A claim filed under an occasion survives its list being unshared, so 0
     // lists and a non-zero bought line is a legitimate pair (NEU-1292).
     occasions([summary({ id: 9, list_count: 0, my_claimed_count: 2, my_bought_count: 1 })]);
     renderStrip();
 
     const card = await screen.findByRole("listitem");
-    expect(within(card).getByText("No lists yet")).toBeInTheDocument();
+    expect(within(card).getByRole("button", { name: "Share a list" })).toBeInTheDocument();
     expect(within(card).getByText("1 of 2 bought")).toBeInTheDocument();
   });
 
@@ -255,5 +259,220 @@ describe("OccasionStrip", () => {
     await waitFor(() => expect(error).toHaveBeenCalledWith("Couldn't load your occasions."));
     expect(container).toBeEmptyDOMElement();
     error.mockRestore();
+  });
+});
+
+/** One list the viewer owns, as `GET /lists?filter=owned` returns it — the
+ *  population the dialog the strip mounts offers. */
+function ownedList(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 20,
+    name: "My wishlist",
+    description: null,
+    owner_id: 1,
+    owner_name: "Alice",
+    recipient_name: null,
+    account_person_id: null,
+    account_person_name: null,
+    is_archived: false,
+    gift_count: 1,
+    claimed_count: 0,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+    shared_via: [],
+    ...overrides,
+  };
+}
+
+/** The strip, its address, and a Back button — `?share` is a place, and neither
+ *  it nor Back is visible through the strip's own markup. */
+function renderSharing({
+  rows = [summary({ id: 7, name: "Christmas 2026", list_count: 0 })],
+  owned = [ownedList()],
+  here = [] as ReturnType<typeof ownedList>[],
+  entries = ["/lists"],
+  arrive = false,
+}: {
+  rows?: ReturnType<typeof summary>[];
+  owned?: ReturnType<typeof ownedList>[];
+  here?: ReturnType<typeof ownedList>[];
+  entries?: string[];
+  /** Push into `/lists` rather than entering on it, so the close path is at
+   *  depth > 0 — a deeper `initialEntries` would not do, because that is still
+   *  an entry location and still depth 0 (NEU-1302). */
+  arrive?: boolean;
+} = {}) {
+  occasions(rows);
+  server.use(
+    http.get(`${API}/lists`, () => HttpResponse.json(owned)),
+    http.get(`${API}/occasions/:id/lists`, () => HttpResponse.json(here)),
+  );
+
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  function At() {
+    const location = useLocation();
+    return <p>{`at: ${location.pathname}${location.search}`}</p>;
+  }
+  function Back() {
+    const navigate = useNavigate();
+    return <button onClick={() => navigate(-1)}>back</button>;
+  }
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <MemoryRouter initialEntries={entries} initialIndex={entries.length - 1}>
+          <NavigationDepthProvider>
+            <At />
+            {arrive && <ArrivedFrom to="/lists" />}
+            <OccasionStrip />
+            <Back />
+          </NavigationDepthProvider>
+        </MemoryRouter>
+      </AuthProvider>
+    </QueryClientProvider>,
+  );
+}
+
+/**
+ * The empty card's way out (NEU-1308).
+ *
+ * The card **opens** the dialog and the strip **mounts** it, because a
+ * successful share is exactly what makes the card's body slot stop rendering.
+ */
+describe("OccasionStrip — sharing a list into an occasion", () => {
+  it("opens the dialog for the card's own occasion, naming it in the address", async () => {
+    const user = userEvent.setup();
+    renderSharing();
+
+    await user.click(await screen.findByRole("button", { name: "Share a list" }));
+
+    expect(
+      await screen.findByRole("dialog", { name: "Share a list with Christmas 2026" }),
+    ).toBeInTheDocument();
+    // `open` would not say which of four cards this is.
+    expect(screen.getByText("at: /lists?share=7")).toBeInTheDocument();
+  });
+
+  it("names the card that opened it, not the first one", async () => {
+    const user = userEvent.setup();
+    renderSharing({
+      rows: [
+        summary({ id: 7, name: "Christmas 2026", list_count: 3 }),
+        summary({ id: 8, name: "Diwali 2026", list_count: 0 }),
+      ],
+    });
+
+    await user.click(await screen.findByRole("button", { name: "Share a list" }));
+
+    expect(
+      await screen.findByRole("dialog", { name: "Share a list with Diwali 2026" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("at: /lists?share=8")).toBeInTheDocument();
+  });
+
+  it("mounts the dialog on a deep link to ?share=<id>", async () => {
+    renderSharing({ entries: ["/lists?share=7"] });
+
+    expect(
+      await screen.findByRole("dialog", { name: "Share a list with Christmas 2026" }),
+    ).toBeInTheDocument();
+  });
+
+  // The heal waits for the index: scrubbing on the first render would strip a
+  // perfectly good id before the query that could recognise it has answered.
+  it("strips an id that is not among the viewer's occasions, once the index resolves", async () => {
+    renderSharing({ entries: ["/lists?share=999"] });
+
+    await screen.findByText("Christmas 2026");
+    await waitFor(() => expect(screen.getByText("at: /lists")).toBeInTheDocument());
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("strips a value that is not an id at all", async () => {
+    renderSharing({ entries: ["/lists?share=banana"] });
+
+    await screen.findByText("Christmas 2026");
+    await waitFor(() => expect(screen.getByText("at: /lists")).toBeInTheDocument());
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  // Rule 8: the app pushed the open entry, so Back closes the dialog, and a
+  // second Back leaves the page rather than reopening it.
+  it("closes on Back, and does not reopen on the next Back press", async () => {
+    const user = userEvent.setup();
+    renderSharing({ entries: ["/people"], arrive: true });
+
+    await user.click(await screen.findByRole("button", { name: "arrive" }));
+    await user.click(await screen.findByRole("button", { name: "Share a list" }));
+    await screen.findByRole("dialog");
+
+    await user.click(screen.getByRole("button", { name: "back" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getByText("at: /lists")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "back" }));
+    expect(screen.getByText("at: /people")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("closes on Done and leaves one entry behind, not two", async () => {
+    const user = userEvent.setup();
+    renderSharing({ entries: ["/people"], arrive: true });
+
+    await user.click(await screen.findByRole("button", { name: "arrive" }));
+    await user.click(await screen.findByRole("button", { name: "Share a list" }));
+    await screen.findByRole("dialog");
+
+    await user.click(screen.getByRole("button", { name: "Done" }));
+    await waitFor(() => expect(screen.getByText("at: /lists")).toBeInTheDocument());
+
+    await user.click(screen.getByRole("button", { name: "back" }));
+    expect(screen.getByText("at: /people")).toBeInTheDocument();
+  });
+
+  // Decision 6's regression: a successful share takes list_count from 0 to 1,
+  // which unmounts the card's body slot. A dialog owned by the card would go
+  // with it, mid-session, with the filter typed.
+  it("keeps the dialog mounted when the card that opened it loses its body", async () => {
+    const user = userEvent.setup();
+    let shared = false;
+    occasions([summary({ id: 7, name: "Christmas 2026", list_count: 0 })]);
+    server.use(
+      // The refetch after the share reports the occasion as populated, so the
+      // card's button goes away under the open dialog.
+      http.get(`${API}/occasions`, () =>
+        HttpResponse.json([
+          summary({ id: 7, name: "Christmas 2026", list_count: shared ? 1 : 0 }),
+        ]),
+      ),
+      http.get(`${API}/lists`, () => HttpResponse.json([ownedList()])),
+      http.get(`${API}/occasions/7/lists`, () =>
+        HttpResponse.json(shared ? [ownedList()] : []),
+      ),
+      http.put(`${API}/lists/20/occasions/7`, () => {
+        shared = true;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/lists"]}>
+          <OccasionStrip />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Share a list" }));
+    await user.click(await screen.findByRole("checkbox", { name: "Share My wishlist" }));
+
+    // The card's body slot is gone…
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "Share a list" })).not.toBeInTheDocument(),
+    );
+    // …and the dialog the viewer is standing in is not.
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(await screen.findByText("1 of your lists is shared here.")).toBeInTheDocument();
   });
 });

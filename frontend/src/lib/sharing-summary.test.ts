@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { sharedWithSentence, joinNames } from "./sharing-summary";
+import { sharedWithSentence, joinNames, listsSharedHereSentence } from "./sharing-summary";
 
 describe("sharedWithSentence", () => {
   it("says a list reaches nobody outright", () => {
@@ -28,5 +28,15 @@ describe("joinNames", () => {
     [["A", "B", "C"], "A, B and C"],
   ])("joins %j as %s", (names, expected) => {
     expect(joinNames(names)).toBe(expected);
+  });
+});
+
+describe("listsSharedHereSentence", () => {
+  it.each([
+    [0, "None of your lists are shared here yet."],
+    [1, "1 of your lists is shared here."],
+    [3, "3 of your lists are shared here."],
+  ])("counts %i of the viewer's own lists as %s", (count, expected) => {
+    expect(listsSharedHereSentence(count)).toBe(expected);
   });
 });

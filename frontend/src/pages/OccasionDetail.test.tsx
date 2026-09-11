@@ -110,6 +110,7 @@ function renderOccasion({
   userId = 1,
   occasionResponse = HttpResponse.json(occasion),
   lists = [list()],
+  ownedLists = [list({ id: 20, name: "My wishlist", owner_id: 1, owner_name: "Alice", shared_via: [] })],
   shopping = [],
   entries = ["/occasions/3"],
   arriveFrom,
@@ -117,6 +118,8 @@ function renderOccasion({
   userId?: number;
   occasionResponse?: Response;
   lists?: ReturnType<typeof list>[];
+  /** `GET /lists?filter=owned` — the population the sharing dialog offers. */
+  ownedLists?: ReturnType<typeof list>[];
   shopping?: Record<string, unknown>[];
   entries?: string[];
   /** Start the session here and push into the page, so the back control is at
@@ -133,7 +136,8 @@ function renderOccasion({
     http.get(`${API}/occasions/3/shopping`, () =>
       HttpResponse.json({ budget: noBudget, items: shopping })
     ),
-    http.get(`${API}/families/7`, () => HttpResponse.json(family))
+    http.get(`${API}/families/7`, () => HttpResponse.json(family)),
+    http.get(`${API}/lists`, () => HttpResponse.json(ownedLists))
   );
 
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -222,10 +226,14 @@ describe("OccasionDetail", () => {
     expect(await screen.findByRole("link", { name: /My Wishlist/ })).not.toHaveTextContent("from");
   });
 
-  it("says so plainly when nothing is shared to the occasion", async () => {
+  // Until NEU-1308 this read "No lists are shared to this occasion yet." and
+  // offered nothing — a dead end on the one page whose purpose is collecting
+  // lists. The empty state is now the control; the sharing block below covers
+  // what it does.
+  it("offers a way out of an occasion with no lists", async () => {
     renderOccasion({ lists: [] });
 
-    expect(await screen.findByText("No lists are shared to this occasion yet.")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Share a list" })).toBeInTheDocument();
   });
 
   it("ships the tab bar with Lists and My shopping, Lists first", async () => {
@@ -425,5 +433,154 @@ describe("OccasionDetail — the tab is a place", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "go back" }));
     expect(await screen.findByText("address: /people")).toBeInTheDocument();
+  });
+});
+
+/**
+ * Sharing **into** the occasion — the reverse of every other flow in the app
+ * (NEU-1308).
+ *
+ * The control is the same component in both states of the Lists tab, and the
+ * page — not the tab — mounts the dialog, because a successful share is exactly
+ * what replaces the empty state the control was standing in.
+ */
+describe("OccasionDetail — sharing a list into the occasion", () => {
+  const archived = { ...occasion, is_archived: true };
+
+  it("replaces the empty state with the control", async () => {
+    renderOccasion({ lists: [] });
+
+    expect(await screen.findByRole("button", { name: "Share a list" })).toBeInTheDocument();
+    // The dead end it replaces, not something it sits under.
+    expect(
+      screen.queryByText("No lists are shared to this occasion yet."),
+    ).not.toBeInTheDocument();
+  });
+
+  // Story NEU-1304's second criterion, which the ticket description omits — and
+  // the third of the three entry points, so it opens the same dialog rather than
+  // merely rendering the same button.
+  it("offers the control above the rows when the occasion already has lists", async () => {
+    renderOccasion({ lists: [list()] });
+
+    const control = await screen.findByRole("button", { name: "Share a list" });
+    expect(screen.getByText("Jane's Wishlist")).toBeInTheDocument();
+
+    await userEvent.click(control);
+
+    expect(
+      await screen.findByRole("dialog", { name: "Share a list with Christmas 2026" }),
+    ).toBeInTheDocument();
+  });
+
+  // Not an organizer power: sharing your own list into an occasion never was.
+  it("offers it to a plain member too", async () => {
+    renderOccasion({ userId: 2, lists: [] });
+
+    expect(await screen.findByRole("button", { name: "Share a list" })).toBeEnabled();
+  });
+
+  it("opens the dialog on ?share=open, naming the occasion", async () => {
+    renderOccasion({ lists: [] });
+
+    await userEvent.click(await screen.findByRole("button", { name: "Share a list" }));
+
+    expect(
+      await screen.findByRole("dialog", { name: "Share a list with Christmas 2026" }),
+    ).toBeInTheDocument();
+    expect(await screen.findByText("address: /occasions/3?share=open")).toBeInTheDocument();
+  });
+
+  it("mounts the dialog on a deep link straight into it", async () => {
+    renderOccasion({ lists: [], entries: ["/occasions/3?share=open"] });
+
+    expect(
+      await screen.findByRole("dialog", { name: "Share a list with Christmas 2026" }),
+    ).toBeInTheDocument();
+  });
+
+  // Rule 8: the app pushed the open entry, so Back closes the dialog — and a
+  // second Back leaves the page rather than reopening it.
+  it("closes on Back, and does not reopen on the next Back press", async () => {
+    renderOccasion({ lists: [], arriveFrom: "/lists/3" });
+
+    await userEvent.click(await screen.findByRole("button", { name: "arrive" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Share a list" }));
+    await screen.findByRole("dialog", { name: "Share a list with Christmas 2026" });
+
+    await userEvent.click(screen.getByRole("button", { name: "go back" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    expect(await screen.findByText("address: /occasions/3")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "go back" }));
+    expect(await screen.findByText("address: /lists/3")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  // Done pops rather than writing the default: writing through the push-mode
+  // setter would add a second entry, leaving Back to reopen what was just shut.
+  it("closes on Done and leaves one entry behind, not two", async () => {
+    renderOccasion({ lists: [], arriveFrom: "/lists/3" });
+
+    await userEvent.click(await screen.findByRole("button", { name: "arrive" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Share a list" }));
+    await screen.findByRole("dialog", { name: "Share a list with Christmas 2026" });
+
+    await userEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(await screen.findByText("address: /occasions/3")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "go back" }));
+    expect(await screen.findByText("address: /lists/3")).toBeInTheDocument();
+  });
+
+  // A deep link has nothing of ours behind it, so closing replace-strips the
+  // key instead of popping off the site.
+  it("strips ?share on close at depth 0", async () => {
+    renderOccasion({ lists: [], entries: ["/occasions/3?share=open"] });
+
+    await userEvent.click(await screen.findByRole("button", { name: "Done" }));
+
+    expect(await screen.findByText("address: /occasions/3")).toBeInTheDocument();
+  });
+
+  // Rule 6's shape — listed, disabled, reason given — and unlike a placeholder,
+  // a reason the viewer can act on.
+  it("renders the control disabled with its reason on an archived occasion", async () => {
+    renderOccasion({ occasionResponse: HttpResponse.json(archived), lists: [] });
+
+    const control = await screen.findByRole("button", { name: "Share a list" });
+    expect(control).toBeDisabled();
+    expect(
+      screen.getByText("This occasion is archived, so lists can't be shared to it."),
+    ).toBeInTheDocument();
+
+    await userEvent.click(control);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  // Decision 7 rejected "a live control and the 409 as the only feedback" — so a
+  // pasted, bookmarked or Back-reached `?share=open` on an archived occasion must
+  // not mount a live dialog either. The param is stripped so the address and the
+  // page agree (rule 8).
+  it("mounts nothing and strips ?share=open on an archived occasion", async () => {
+    renderOccasion({
+      occasionResponse: HttpResponse.json(archived),
+      lists: [],
+      entries: ["/occasions/3?share=open"],
+    });
+
+    expect(await screen.findByText("address: /occasions/3")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    // The control is still there, still dead, still saying why.
+    expect(screen.getByRole("button", { name: "Share a list" })).toBeDisabled();
+  });
+
+  it("heals ?share=banana away and mounts nothing", async () => {
+    renderOccasion({ lists: [], entries: ["/occasions/3?share=banana"] });
+
+    expect(await screen.findByText("address: /occasions/3")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });

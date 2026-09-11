@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from "react";
-import { Link } from "react-router";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 import toast from "react-hot-toast";
@@ -15,7 +15,10 @@ import { ListAttributionLine, RecipientLine } from "../components/ListAttributio
 import { MyShopping } from "../components/MyShopping";
 import { TabBar } from "../components/TabBar";
 import { useEnumSearchParam } from "../hooks/useSearchParamState";
+import { useNavigationDepth } from "../contexts/NavigationDepthContext";
 import { ConfirmDialog, type ConfirmAction } from "../components/ConfirmDialog";
+import { OccasionSharingModal } from "../components/OccasionSharingModal";
+import { ShareIntoOccasionButton } from "../components/ShareIntoOccasionButton";
 import type { Occasion } from "../types";
 
 /**
@@ -33,6 +36,12 @@ type TabKey = (typeof TABS)[number]["key"];
 const TAB_KEYS = TABS.map((tab) => tab.key);
 
 const ORGANIZER_ONLY = "Only an organizer can rename or archive an occasion.";
+
+/** An open modal is a place you can be, so `?share=open` is the whole state and
+ *  a shut one leaves no trace: setting the fallback writes `null`. The path
+ *  already names the occasion, so `open` is unambiguous here — the `/lists`
+ *  strip, which can hold fifteen cards, carries the id as the value instead. */
+const SHARE_VALUES = ["open", "closed"] as const;
 
 /**
  * A family occasion — "Boone Family · Christmas 2026" — and the lists shared to
@@ -86,6 +95,9 @@ export function OccasionDetail() {
 
 function OccasionPage({ occasion }: { occasion: Occasion }) {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const depth = useNavigationDepth();
+  const [, setSearchParams] = useSearchParams();
   // A tab is a **place**, so it pushes: "My shopping for Christmas 2026" has an
   // address, and Back closes it rather than undoing a dropdown (spec §6.3).
   const [tab, setTab] = useEnumSearchParam<TabKey>("tab", {
@@ -93,6 +105,50 @@ function OccasionPage({ occasion }: { occasion: Occasion }) {
     values: TAB_KEYS,
     fallback: TABS[0].key,
   });
+  // So is an open modal. Read as an enum so `?share=banana` heals away through
+  // the wrapper's mount-time scrub instead of sitting in the address with the
+  // dialog shut.
+  const [share, setShare] = useEnumSearchParam("share", {
+    mode: "push",
+    values: SHARE_VALUES,
+    fallback: "closed",
+  });
+
+  const stripShare = useCallback(() => {
+    setSearchParams(
+      (current) => {
+        const params = new URLSearchParams(current);
+        params.delete("share");
+        return params;
+      },
+      { replace: true },
+    );
+  }, [setSearchParams]);
+
+  // One close path, depth-aware, mirroring `ListDetail` and `BackControl`
+  // (CONTEXT.md rules 8 and 9). The app pushed the open entry, so popping lands
+  // exactly where the viewer was; writing `closed` through the push-mode hook
+  // would add *another* entry, and Back after Done would reopen the dialog. At
+  // depth 0 — a deep link straight to `/occasions/7?share=open` — there is
+  // nothing of ours behind us, so strip instead.
+  const closeSharing = useCallback(() => {
+    if (depth > 0) {
+      navigate(-1);
+      return;
+    }
+    stripShare();
+  }, [depth, navigate, stripShare]);
+
+  // The control is dead on an archived occasion, but `?share=open` can be
+  // pasted, bookmarked, or reached by Back from a session that opened the dialog
+  // before an organizer archived it. Mounting it anyway would leave the 409 as
+  // the only refusal — the "click that can never succeed" decision 7 rejected —
+  // so the param is stripped instead and the address agrees with the page
+  // (rule 8). Same shape as `ListDetail`'s non-owner strip.
+  const archived = occasion.is_archived;
+  useEffect(() => {
+    if (share === "open" && archived) stripShare();
+  }, [share, archived, stripShare]);
 
   // The family behind the occasion: its name for the header and the back link,
   // and its members for the organizer gate. Keyed as the family page keys it,
@@ -114,9 +170,20 @@ function OccasionPage({ occasion }: { occasion: Occasion }) {
       <TabBar tabs={TABS} active={tab} onSelect={setTab} label="Occasion sections" />
 
       {tab === "lists" ? (
-        <ListsTab occasionId={occasion.id} />
+        <ListsTab occasion={occasion} onShare={() => setShare("open")} />
       ) : (
         <MyShopping scope={{ kind: "occasion", id: occasion.id }} />
+      )}
+
+      {/* Mounted at page level, not inside the tab: the Lists tab's empty state
+          is one of the things a successful share replaces, and a dialog owned by
+          it would unmount under the viewer's cursor on their first tick. */}
+      {share === "open" && !archived && (
+        <OccasionSharingModal
+          occasionId={occasion.id}
+          occasionName={occasion.name}
+          onClose={closeSharing}
+        />
       )}
     </div>
   );
@@ -278,39 +345,55 @@ function OccasionHeader({ occasion, isOrganizer }: { occasion: Occasion; isOrgan
   );
 }
 
-/** Every list shared to this occasion that the viewer can see. */
-function ListsTab({ occasionId }: { occasionId: number }) {
+/**
+ * Every list shared to this occasion that the viewer can see, and the control
+ * that adds one of the viewer's own.
+ *
+ * The control is here in **both** states (NEU-1308, decision 4). With no lists
+ * the empty state's body *is* the button — the page whose whole purpose is
+ * collecting lists used to say "No lists are shared to this occasion yet." and
+ * offer nothing. With lists it sits above the rows, which is story NEU-1304's
+ * second criterion.
+ *
+ * It is not organizer-gated, and deliberately: sharing your own list into an
+ * occasion was never an organizer power, and the `OwnedList` gate behind the
+ * write is the same one that always enforced it.
+ */
+function ListsTab({ occasion, onShare }: { occasion: Occasion; onShare: () => void }) {
   const { user } = useAuth();
 
   const lists = useQuery({
-    queryKey: ["occasion-lists", occasionId],
-    queryFn: () => getOccasionLists(occasionId),
+    queryKey: ["occasion-lists", occasion.id],
+    queryFn: () => getOccasionLists(occasion.id),
   });
 
   if (lists.isPending) return <Spinner />;
   if (lists.isError) return <p className="text-sm text-red-600">Couldn&apos;t load lists.</p>;
   if (lists.data.length === 0) {
-    return <p className="text-gray-500">No lists are shared to this occasion yet.</p>;
+    return <ShareIntoOccasionButton isArchived={occasion.is_archived} onOpen={onShare} />;
   }
 
   return (
-    <ul className="divide-y divide-gray-200 rounded-lg bg-white shadow">
-      {lists.data.map((list) => (
-        <li key={list.id}>
-          <Link to={`/lists/${list.id}`} className="block px-4 py-3 hover:bg-gray-50">
-            <p className="font-medium text-gray-900">{list.name}</p>
-            {/* The viewer's own list reads as their own row does elsewhere —
-                "from Tom" on your own list would be nonsense. Every other list
-                reached this page through this occasion, so the row names the
-                person it came from rather than repeating the family overhead. */}
-            {list.owner_id === user?.id ? (
-              <RecipientLine list={list} />
-            ) : (
-              <ListAttributionLine list={list} />
-            )}
-          </Link>
-        </li>
-      ))}
-    </ul>
+    <div className="space-y-3">
+      <ShareIntoOccasionButton isArchived={occasion.is_archived} onOpen={onShare} />
+      <ul className="divide-y divide-gray-200 rounded-lg bg-white shadow">
+        {lists.data.map((list) => (
+          <li key={list.id}>
+            <Link to={`/lists/${list.id}`} className="block px-4 py-3 hover:bg-gray-50">
+              <p className="font-medium text-gray-900">{list.name}</p>
+              {/* The viewer's own list reads as their own row does elsewhere —
+                  "from Tom" on your own list would be nonsense. Every other list
+                  reached this page through this occasion, so the row names the
+                  person it came from rather than repeating the family overhead. */}
+              {list.owner_id === user?.id ? (
+                <RecipientLine list={list} />
+              ) : (
+                <ListAttributionLine list={list} />
+              )}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

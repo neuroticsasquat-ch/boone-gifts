@@ -18,6 +18,7 @@ architecture live in [`AGENTS.md`](AGENTS.md); this file is only about what the 
 | **Folder** | My saved grouping of lists — "Christmas 2026". Was called a *collection*, then an *occasion*. Has a page (`/folders/:id`) but no index | `pages/FolderDetail.tsx` |
 | **Occasion** | A family's shared gifting occasion — "Christmas 2026". The unit a list is shared *to*, and the only thing that makes a family shareable | `pages/OccasionDetail.tsx`, `pages/lists/OccasionStrip.tsx` (finding one), `pages/family-detail/OccasionsSection.tsx` (managing one), `lib/occasion-choice.ts` |
 | **Who can see this list** | The owner's one sharing surface — families and connections in a single dialog, with one filter box across both sections and a line saying what is ticked. Over a list that exists it sits behind the header's **Change** control and every tick is a write; **New List mounts the same dialog** behind `Choose…`, holding its ticks until the list is created and starting from **nothing ticked**. Its open-ness is the address: `?share=open` | `components/SharingModal.tsx` (the rows), `ListSharingModal.tsx` / `DraftSharingModal.tsx` (the two modes) |
+| **Share a list** | The **other** sharing direction: the occasion is fixed and the *list* is chosen, from lists I own. The same dialog chrome, a different population and a different write — one `PUT` per tick, add-only, and a list already here is ticked and dead. Offered from the occasion page's Lists tab in both its states, and from an empty card in the occasion strip | `components/OccasionSharingModal.tsx` (the rows), `ShareIntoOccasionButton.tsx` (the control), `SharingShell.tsx` (the chrome both modes wear) |
 | **Occasion strip** | The row of occasion cards at the top of `/lists`: every non-archived occasion in every family I belong to, most recently active first, four at a time. Absent entirely when I have none. Carries no money | `pages/lists/OccasionStrip.tsx` |
 | **Claim** / "I'll get this" | My private intent to buy a gift. Never visible to the list's owner | `pages/list-detail/GiftsTab.tsx` |
 | **My shopping** | Everything *I* have claimed within one occasion or one folder — what I still have to buy, what I bought, and what I paid. Never anyone else's, in any aggregate | `components/MyShopping.tsx` |
@@ -84,7 +85,11 @@ behaviour).
    The same "listed, disabled, reason given" shape covers a **person an active occasion share
    already reaches**: their box is dead because ticking it would change nothing, and the row names
    every family that covers them. It applies only to an *unticked* box — a direct share already
-   made stays revokable, because this panel is the only place to revoke one. Archived shares are
+   made stays revokable, because this panel is the only place to revoke one. **In occasion mode the
+   tick is the dead one**: the dialog opened from an occasion is add-only, and the reason points at
+   where revoking lives — `Already shared here — change this from the list`. The clause above is
+   what flips it: the list's own modal *is* another place to revoke, and it is the one with the
+   owner's context, the family named, and the release-or-keep question a claim needs. Archived shares are
    outside the rule: they still grant sight, but the row stays live, since a direct share is what
    the owner would want as that occasion winds down.
    The rule is defined on a **live share**, so it is inert while a list is being created: a draft
@@ -109,7 +114,12 @@ behaviour).
    is required and never defaulted, because the wrong answer is felt only through the Back button,
    where nobody looks. A value the URL carries but the app does not recognise is replaced by the
    default and removed from the address, so what the link says and what the page shows never
-   disagree. **The rule stops at the dialog edge**: a modal's own open-ness is URL-held view state,
+   disagree. Where one page can open **several** dialogs of the same kind, the key's *value* names
+   which: `/occasions/7?share=open` on a page whose path already says which occasion, and
+   `/lists?share=7` on the strip, where fifteen cards make `open` meaningless. A value that names
+   something the viewer cannot reach is healed the way an unrecognised one is — but **only once the
+   query that could recognise it has answered**, because scrubbing on the first render would strip a
+   good id before anything knew it was good. **The rule stops at the dialog edge**: a modal's own open-ness is URL-held view state,
    but scratch input *inside* it — the sharing modal's filter box — is component state, because
    nobody links to a half-typed filter and one write per keystroke can reach Safari's `replaceState`
    throttle. **Closing a pushed modal pops rather than writing the default**: the app pushed that

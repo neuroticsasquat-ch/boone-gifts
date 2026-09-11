@@ -1,9 +1,9 @@
-import { useId, useState } from "react";
-import { Link } from "react-router";
+import { useState } from "react";
 import { NO_ACTIVE_OCCASION, occasionChoice } from "../lib/occasion-choice";
 import { joinNames, sharedWithSentence } from "../lib/sharing-summary";
 import type { ShareTargetFamily, ShareTargetOccasion } from "../types";
-import { Modal } from "./Modal";
+import { SharingShell, SharingSummaryLine } from "./SharingShell";
+import { EmptyGroup, Group, Hint, NoMatches, ShareRow, matchesFilter } from "./sharing-rows";
 
 /**
  * Who a list is to reach: the ticked boxes, in one value both modes hold.
@@ -90,98 +90,41 @@ export function SharingModal({
   linkAway: boolean;
   onClose: () => void;
 }) {
-  const titleId = useId();
-  // Scratch input inside a dialog that pops out of existence, so it stays out
-  // of the URL — the genuine exception to CONTEXT.md rule 8, which the rule now
-  // names. Nobody links to a half-typed filter, and one `replaceState` per
-  // keystroke across 50 rows can reach Safari's ~100-per-30s throttle.
-  const [filter, setFilter] = useState("");
-
   return (
-    <Modal open labelledBy={titleId} size="lg" onClose={onClose}>
-      {/* Fixed: the filter box, the summary and Done stay in reach however far
-          the rows scroll. */}
-      <div className="space-y-3 border-b border-gray-200 p-4">
-        <h2 id={titleId} className="text-lg font-semibold text-gray-900">
-          Who can see this list
-        </h2>
-        {/* One box across both sections: someone typing "boone" does not know
-            or care whether Boone is a family or a surname, and two boxes would
-            double the chrome in a dialog already dense with occasion dropdowns
-            and disabled-with-reason rows. Rendered unconditionally — a control
-            that appears once you cross some row count is one nobody learns. */}
-        <input
-          type="search"
-          aria-label="Filter people and families"
-          placeholder="Filter people and families…"
-          value={filter}
-          onChange={(event) => setFilter(event.target.value)}
-          className="block w-full rounded border border-gray-300 px-3 py-2 text-sm"
-        />
-        <SharedWithLine selection={selection} />
-      </div>
-
-      <div className="flex-1 space-y-4 overflow-y-auto p-4">
-        {/* Families first, then people — the same order the header summary
-            reads in. Families is the broader stroke, and it decides what the
-            People rows can offer at all, so reading it second would be reading
-            the control backwards (project spec §5.2). */}
-        <FamiliesSection
-          families={families}
-          selection={selection.data}
-          onFamilyToggled={onFamilyToggled}
-          filter={filter}
-          linkAway={linkAway}
-        />
-        <PeopleSection
-          people={people}
-          selection={selection.data}
-          onPersonToggled={onPersonToggled}
-          filter={filter}
-          linkAway={linkAway}
-        />
-      </div>
-
-      <div className="flex justify-end border-t border-gray-200 p-4">
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          Done
-        </button>
-      </div>
-    </Modal>
+    <SharingShell
+      title="Who can see this list"
+      // One box across both sections: someone typing "boone" does not know or
+      // care whether Boone is a family or a surname, and two boxes would double
+      // the chrome in a dialog already dense with occasion dropdowns and
+      // disabled-with-reason rows.
+      filterLabel="Filter people and families"
+      summary={<SharedWithLine selection={selection} />}
+      onClose={onClose}
+    >
+      {(filter) => (
+        <>
+          {/* Families first, then people — the same order the header summary
+              reads in. Families is the broader stroke, and it decides what the
+              People rows can offer at all, so reading it second would be reading
+              the control backwards (project spec §5.2). */}
+          <FamiliesSection
+            families={families}
+            selection={selection.data}
+            onFamilyToggled={onFamilyToggled}
+            filter={filter}
+            linkAway={linkAway}
+          />
+          <PeopleSection
+            people={people}
+            selection={selection.data}
+            onPersonToggled={onPersonToggled}
+            filter={filter}
+            linkAway={linkAway}
+          />
+        </>
+      )}
+    </SharingShell>
   );
-}
-
-// --- The filter ---
-
-/**
- * The one predicate, applied identically to every row in both sections.
- *
- * A disabled row is never *specially* dropped and never *specially* kept.
- * "The filter must not hide disabled rows" has a literal reading that defeats
- * the feature — at 8 families and 20 covered people the list would never get
- * short — and the contract is the narrow one: "why can't I share with Gran?"
- * is answered by typing "gran" and seeing Gran, greyed, with the reason
- * (CONTEXT.md rule 6).
- *
- * Occasion names are deliberately not among the fields any caller passes: an
- * occasion is not the row's identity, the `<select>` already lists them, and a
- * family row matching on text inside a collapsed control the viewer cannot see
- * is worse than one that does not appear at all.
- */
-function matchesFilter(filter: string, ...fields: (string | undefined)[]): boolean {
-  const query = filter.trim().toLowerCase();
-  if (query === "") return true;
-  return fields.some((field) => field !== undefined && field.toLowerCase().includes(query));
-}
-
-/** What a query for nothing looks like, said apart from having nothing to
- *  query: showing "add a connection" to someone with forty of them is a lie. */
-function NoMatches({ noun, filter }: { noun: string; filter: string }) {
-  return <Hint>{`No ${noun} match "${filter.trim()}"`}</Hint>;
 }
 
 // --- The summary ---
@@ -197,99 +140,18 @@ function SharedWithLine({ selection }: { selection: SelectionState }) {
   // A failed fetch also leaves both counts at zero, and "nobody can see this"
   // is far too load-bearing a sentence to say on the strength of a request that
   // never answered — the same rule `SharingSummary` follows, in its words.
-  if (selection.isLoading) return <Summary>Loading sharing…</Summary>;
+  if (selection.isLoading) return <SharingSummaryLine>Loading sharing…</SharingSummaryLine>;
   if (selection.isError) {
-    return <Summary>Couldn't load who this list is shared with.</Summary>;
+    return <SharingSummaryLine>Couldn't load who this list is shared with.</SharingSummaryLine>;
   }
 
   return (
-    <Summary>
+    <SharingSummaryLine>
       {sharedWithSentence(
         Object.keys(selection.data.familyOccasions).length,
         selection.data.userIds.length,
       )}
-    </Summary>
-  );
-}
-
-function Summary({ children }: { children: React.ReactNode }) {
-  return <p className="text-sm font-medium text-gray-900">{children}</p>;
-}
-
-function Group({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-2">
-      <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
-      {children}
-    </div>
-  );
-}
-
-function Hint({ children }: { children: React.ReactNode }) {
-  return <p className="text-sm text-gray-500">{children}</p>;
-}
-
-/** An empty section's sentence, and — only where following a link costs the
- *  viewer nothing — the way out of it. */
-function EmptyGroup({
-  title,
-  children,
-  link,
-  linkAway,
-}: {
-  title: string;
-  children: React.ReactNode;
-  link: string;
-  linkAway: boolean;
-}) {
-  return (
-    <Group title={title}>
-      <Hint>
-        {children}
-        {linkAway && (
-          <>
-            {" "}
-            <Link to="/people" className="text-blue-600 hover:underline">
-              {link}
-            </Link>
-          </>
-        )}
-      </Hint>
-    </Group>
-  );
-}
-
-/** One row: a name, optional detail line, and the checkbox that grants access. */
-function ShareRow({
-  name,
-  detail,
-  checked,
-  disabled,
-  onToggle,
-}: {
-  name: string;
-  detail?: string;
-  checked: boolean;
-  disabled: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <li className="flex items-center justify-between px-4 py-3">
-      <div className="min-w-0">
-        <p className="font-medium text-gray-900">{name}</p>
-        {detail && <p className="text-sm text-gray-500">{detail}</p>}
-      </div>
-      <label className="flex items-center gap-2">
-        <span className="sr-only">Share with {name}</span>
-        <input
-          type="checkbox"
-          checked={checked}
-          disabled={disabled}
-          onChange={onToggle}
-          className="h-4 w-4 rounded border-gray-300 disabled:opacity-50"
-        />
-      </label>
-    </li>
+    </SharingSummaryLine>
   );
 }
 
@@ -329,7 +191,7 @@ function PeopleSection({
   // population came up empty rather than guessing.
   if (rows.length === 0) {
     return (
-      <EmptyGroup title="People" link="Add a connection" linkAway={linkAway}>
+      <EmptyGroup title="People" link="Add a connection" to="/people" linkAway={linkAway}>
         You don't have any connections yet.
       </EmptyGroup>
     );
@@ -423,7 +285,7 @@ function FamiliesSection({
   const data = families.data ?? [];
   if (data.length === 0) {
     return (
-      <EmptyGroup title="Families" link="Go to People" linkAway={linkAway}>
+      <EmptyGroup title="Families" link="Go to People" to="/people" linkAway={linkAway}>
         You don't belong to any families yet.
       </EmptyGroup>
     );

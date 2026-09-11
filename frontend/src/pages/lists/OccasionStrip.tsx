@@ -1,9 +1,12 @@
-import { useEffect } from "react";
-import { Link } from "react-router";
+import { useCallback, useEffect } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { getOccasionIndex } from "../../api/occasions";
 import { useSearchParamState } from "../../hooks/useSearchParamState";
+import { useNavigationDepth } from "../../contexts/NavigationDepthContext";
+import { OccasionSharingModal } from "../../components/OccasionSharingModal";
+import { ShareIntoOccasionButton } from "../../components/ShareIntoOccasionButton";
 import type { OccasionSummary } from "../../types";
 
 /** How many cards the collapsed strip shows. A cap on what is *rendered*, not
@@ -57,7 +60,46 @@ export function OccasionStrip() {
   const [expansion, setExpansion] = useSearchParamState("occasions", { mode: "replace" });
   const expanded = expansion === EXPANDED;
 
+  // An open dialog is a *place*, so it pushes — and on this page the value has
+  // to say **which** occasion, because the strip can hold fifteen cards and
+  // `open` would not. `useEnumSearchParam` cannot carry it: its heal fires
+  // whenever the raw value is not in `values`, and the occasion index is async,
+  // so `?share=7` would be scrubbed from the address on the first render,
+  // before the query that could recognise `7` has answered.
+  const [share, setShare] = useSearchParamState("share", { mode: "push" });
+  const depth = useNavigationDepth();
+  const navigate = useNavigate();
+  const [, setSearchParams] = useSearchParams();
+
+  const stripShare = useCallback(() => {
+    setSearchParams(
+      (current) => {
+        const params = new URLSearchParams(current);
+        params.delete("share");
+        return params;
+      },
+      { replace: true },
+    );
+  }, [setSearchParams]);
+
   const all = occasions.data ?? [];
+  // So the heal happens **once the index resolves** — the same shape
+  // `ListDetail` uses for a non-owner's `?share=open`, and for the same reason:
+  // ownership, like membership, is not known until a query answers. An id that
+  // is not among the viewer's occasions is replace-stripped and no dialog
+  // mounts; `?share=banana` goes the same way.
+  const sharing = all.find((occasion) => String(occasion.id) === share) ?? null;
+  const unknownShare = occasions.isSuccess && share !== null && sharing === null;
+  useEffect(() => {
+    if (unknownShare) stripShare();
+  }, [unknownShare, stripShare]);
+
+  // One close path, depth-aware, mirroring `ListDetail` (CONTEXT.md rule 8).
+  function closeSharing() {
+    if (depth > 0) navigate(-1);
+    else stripShare();
+  }
+
   if (all.length === 0) return null;
 
   // The server's order is the order (`last_activity_at DESC, id DESC`).
@@ -71,10 +113,23 @@ export function OccasionStrip() {
       <ul className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
         {shown.map((occasion) => (
           <li key={occasion.id}>
-            <OccasionCard occasion={occasion} />
+            <OccasionCard occasion={occasion} onShare={() => setShare(String(occasion.id))} />
           </li>
         ))}
       </ul>
+
+      {/* The strip mounts it, never the card. A successful share takes that
+          occasion's list_count from 0 to 1, which is exactly what makes the
+          card's body slot — and the button inside it — stop rendering; a dialog
+          owned by the card would unmount under the viewer's cursor, filter
+          text and all, the moment their first tick landed. */}
+      {sharing && (
+        <OccasionSharingModal
+          occasionId={sharing.id}
+          occasionName={sharing.name}
+          onClose={closeSharing}
+        />
+      )}
 
       {/* One control in one place, in both states. An expansion the viewer can
           set and cannot unset is a trap, and on a phone showing fifteen cards
@@ -105,7 +160,13 @@ export function OccasionStrip() {
  * included — that page holds the budget and the shopping tab, which is the
  * whole argument of ADR 0007.
  */
-function OccasionCard({ occasion }: { occasion: OccasionSummary }) {
+function OccasionCard({
+  occasion,
+  onShare,
+}: {
+  occasion: OccasionSummary;
+  onShare: () => void;
+}) {
   return (
     <div className="flex h-full flex-col rounded-lg bg-white p-4 shadow">
       <Link to={`/occasions/${occasion.id}`} className="-m-2 rounded p-2 hover:bg-gray-50">
@@ -123,9 +184,19 @@ function OccasionCard({ occasion }: { occasion: OccasionSummary }) {
         <BoughtLine occasion={occasion} />
       </Link>
 
-      {/* The body slot. A sentence today; NEU-1308's sharing control tomorrow. */}
+      {/* The body slot, and what it was shaped for: the control that shares one
+          of the viewer's own lists into this occasion, replacing the "No lists
+          yet" sentence rather than sitting under it. Only on an empty card —
+          a non-empty one has no body slot, and giving it one would mean either
+          restructuring the card or a second card shape. The occasion page is
+          one tap away and carries the control in both states.
+
+          The strip excludes archived occasions, so no card here is ever the
+          disabled branch. */}
       {occasion.list_count === 0 && (
-        <p className="mt-2 text-sm text-gray-500">No lists yet</p>
+        <div className="mt-2">
+          <ShareIntoOccasionButton onOpen={onShare} />
+        </div>
       )}
     </div>
   );

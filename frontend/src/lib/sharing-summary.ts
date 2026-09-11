@@ -37,3 +37,43 @@ export function joinNames(names: string[]): string {
   if (names.length < 2) return names[0] ?? "";
   return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
+
+/**
+ * How many of the viewer's **own** lists already reach one occasion, for the
+ * occasion dialog's summary line (NEU-1308).
+ *
+ * A sibling of {@link sharedWithSentence} rather than a second sentence in a
+ * second module: both answer "what is ticked above these boxes", and a dialog
+ * that counted differently from the one next to it would be the drift M3 exists
+ * to end.
+ *
+ * It counts the viewer's own lists and never the occasion's total. `list_count`
+ * on the card includes other people's lists, and a sentence over a member's
+ * checkboxes that counted them would be answering a different question from the
+ * rows below it.
+ */
+export function listsSharedHereSentence(count: number): string {
+  if (count === 0) return "None of your lists are shared here yet.";
+  return `${counted(count, "of your lists is", "of your lists are")} shared here.`;
+}
+
+
+/**
+ * Why an archived occasion refuses a share, said **once**.
+ *
+ * Two surfaces say it: the disabled control, which says it before anything is
+ * attempted, and the 409 toast, when an occasion is archived between the dialog
+ * loading and a tick landing. One fact, so one sentence — the drift NEU-1308's
+ * Decision 1 exists to end would be funny to reintroduce in the same ticket.
+ */
+export const OCCASION_ARCHIVED = "This occasion is archived, so lists can't be shared to it.";
+
+/**
+ * The same refusal, plus the way out — for the toast alone.
+ *
+ * A viewer reading the disabled control is not mid-action and has the occasion
+ * in front of them; one who just ticked a box needs to know what to do next.
+ * The list's own modal adds "pick another" here, which has no meaning when the
+ * occasion is the fixed half of the dialog.
+ */
+export const OCCASION_ARCHIVED_MID_SHARE = `${OCCASION_ARCHIVED} Ask an organizer to unarchive it.`;
