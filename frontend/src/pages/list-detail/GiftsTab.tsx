@@ -576,9 +576,23 @@ function DeleteGiftButton({
 
 // --- Viewer Gift Components ---
 
-// "Never mind" is the wording the unclaim confirmation has always used; the
-// audit in NEU-1319 is where copy like this gets revisited, not here.
+// "Never mind" is the wording the unclaim confirmation has always used, and
+// NEU-1319's audit kept it — what that audit changed is *when* the dialog is
+// raised at all, not how it reads once it is.
 const UNCLAIM_ACTIONS: ConfirmAction[] = [{ id: "unclaim", label: "Never mind", tone: "danger" }];
+
+/**
+ * What unclaiming a purchased gift costs, named. The amount is optional at the
+ * row — a claimer can tick "bought" and skip the figure, which is a first-class
+ * answer rather than a missing value — so the sentence that mentions one is
+ * only used when there is one to mention.
+ */
+function unclaimLoss(gift: Gift): string {
+  const paid = formatMoney(gift.amount_paid);
+  return paid === null
+    ? "You marked this bought. That will be forgotten."
+    : `You marked this bought. That, and the ${paid} you recorded, will be forgotten.`;
+}
 
 function ViewerGiftRow({
   gift,
@@ -646,6 +660,13 @@ function ViewerGiftRow({
   const isTaken = gift.claimed_by_id !== null && !isMine;
   const isAvailable = gift.claimed_by_id === null;
 
+  // Unclaiming a plain claim is one click from undone and invisible to
+  // everybody, so it asks nothing. Unclaiming a *purchased* one destroys the
+  // purchase and the amount recorded against it — `unclaim_gift` deletes the
+  // row, so there is no purchase state left to reset — and that is what the
+  // dialog is for (`CONTEXT.md` rule 11).
+  const isPurchased = gift.purchased_at !== null;
+
   let rowStyle = "";
   let actionButton: React.ReactNode = null;
 
@@ -654,7 +675,7 @@ function ViewerGiftRow({
     if (!isArchived) {
       actionButton = (
         <button
-          onClick={() => setConfirmingUnclaim(true)}
+          onClick={() => (isPurchased ? setConfirmingUnclaim(true) : unclaimMutation.mutate())}
           disabled={isPending}
           className="rounded bg-yellow-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-yellow-700 disabled:opacity-50"
         >
@@ -719,6 +740,7 @@ function ViewerGiftRow({
       <ConfirmDialog
         open={confirmingUnclaim}
         title="Are you sure you no longer want to get this gift?"
+        body={unclaimLoss(gift)}
         actions={UNCLAIM_ACTIONS}
         onResolve={(id) => {
           if (id === "unclaim") unclaimMutation.mutate();

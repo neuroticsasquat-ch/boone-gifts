@@ -154,9 +154,47 @@ describe("FamilySettingsSection", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Revoke" }));
 
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Revoke" }));
+
     await waitFor(() => {
       expect(screen.queryByText("pending@example.com")).not.toBeInTheDocument();
     });
+  });
+
+  it("revoke: the dialog names the invite it was raised from, and cancelling sends nothing", async () => {
+    let called = false;
+    server.use(
+      http.get(`${API}/families/1/invites`, () =>
+        HttpResponse.json([
+          { ...pendingInvite, id: 10, email: "first@example.com" },
+          { ...pendingInvite, id: 11, email: "second@example.com" },
+        ])
+      ),
+      http.delete(`${API}/families/1/invites/:inviteId`, () => {
+        called = true;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+
+    renderFamilyDetail(organizerToken);
+
+    await waitFor(() => {
+      expect(screen.getByText("second@example.com")).toBeInTheDocument();
+    });
+
+    const secondRow = screen.getByText("second@example.com").closest("li") as HTMLElement;
+    await userEvent.click(within(secondRow).getByRole("button", { name: "Revoke" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      within(dialog).getByText("Revoke the invite to second@example.com?")
+    ).toBeInTheDocument();
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(called).toBe(false);
   });
 
   it("409 duplicate invite shows inline error message", async () => {

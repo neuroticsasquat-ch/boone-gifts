@@ -60,7 +60,38 @@ describe("FamilyDetail", () => {
     expect(zoneHeadings()).toEqual(["Members", "Occasions", "Leave Family"]);
   });
 
-  it("leave: click Leave Family → calls DELETE /families/:id/members/:userId → navigates to /people", async () => {
+  it("leave: the dialog names the family, and cancelling sends nothing", async () => {
+    let called = false;
+    server.use(
+      http.delete(`${API}/families/1/members/2`, () => {
+        called = true;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+
+    renderFamilyDetail(memberToken);
+
+    await waitFor(() => {
+      expect(screen.getByText("Boone Family")).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Leave Family" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Leave Boone Family?")).toBeInTheDocument();
+    // Bare and conditional — no count, no gift, no claimer (`CONTEXT.md` rule 2).
+    expect(
+      within(dialog).getByText(/any gifts you've claimed here will be released/)
+    ).toBeInTheDocument();
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByText("Boone Family")).toBeInTheDocument();
+    expect(called).toBe(false);
+  });
+
+  it("leave: confirming calls DELETE /families/:id/members/:userId → navigates to /people", async () => {
     server.use(
       http.delete(`${API}/families/1/members/2`, () => new HttpResponse(null, { status: 204 })),
     );
@@ -73,12 +104,15 @@ describe("FamilyDetail", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Leave Family" }));
 
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Leave" }));
+
     await waitFor(() => {
       expect(screen.getByText("People Page")).toBeInTheDocument();
     });
   });
 
-  it("409 on leave shows the last-organizer message inside the Leave Family zone", async () => {
+  it("409 on leave closes the dialog and shows the last-organizer message inside the Leave Family zone", async () => {
     server.use(
       http.delete(`${API}/families/1/members/1`, () =>
         HttpResponse.json({ detail: "Cannot remove last organizer" }, { status: 409 })
@@ -95,12 +129,18 @@ describe("FamilyDetail", () => {
       .closest("section") as HTMLElement;
     await userEvent.click(within(zone).getByRole("button", { name: "Leave Family" }));
 
-    // Beside the control that provoked it, not scrolled away into another zone.
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Leave" }));
+
+    // Beside the control that provoked it, not scrolled away into another zone
+    // — and with the dialog out of the way, because the fix is promoting
+    // another organizer in the Members section behind it.
     await waitFor(() => {
       expect(
         within(zone).getByText("Promote another organizer first, or delete the family.")
       ).toBeInTheDocument();
     });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   // A reachability failure keeps its own arm (CONTEXT.md rule 7), but the arm

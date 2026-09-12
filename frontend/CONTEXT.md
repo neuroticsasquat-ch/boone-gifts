@@ -157,3 +157,13 @@ behaviour).
     written once (`lib/request-failure.ts`) and name nothing page-specific; anything the server
     rejected outright is the page's own business. This is rule 7 one layer out: a wrong address is
     not a missing thing, a slow one is not either, and neither is an unreachable server.
+
+11. **A confirmation is for what cannot be undone, or what lands on somebody else.** Archiving is
+    neither: it is reversible from a link on the page it was started from, and nobody else can tell.
+    So it does not ask, and neither does anything else that only rearranges the viewer's own view of
+    their own things. Removing a member, leaving a family, removing a connection and revoking a share
+    all do ask, because each deletes shares and releases claims that re-inviting does not bring back
+    — and the body says so, conditionally and without a count, a gift or a claimer, which is rule 2's
+    limit and not a lower one. Unclaiming asks only when there is a recorded purchase to lose;
+    unticking a purchase never does, because the amount survives it. The dialog itself is settled and
+    is not the subject of this rule — see ADR 0008.

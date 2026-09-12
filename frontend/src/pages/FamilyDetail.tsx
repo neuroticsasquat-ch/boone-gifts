@@ -10,6 +10,7 @@ import { BackControl, BACK_TO_PEOPLE } from "../components/BackControl";
 import { MembersSection } from "./family-detail/MembersSection";
 import { OccasionsSection } from "./family-detail/OccasionsSection";
 import { FamilySettingsSection } from "./family-detail/FamilySettingsSection";
+import { ConfirmDialog, type ConfirmAction } from "../components/ConfirmDialog";
 import toast from "react-hot-toast";
 import { isAxiosError } from "axios";
 
@@ -33,6 +34,7 @@ export function FamilyDetail() {
   const queryClient = useQueryClient();
 
   const [leaveError, setLeaveError] = useState<string | null>(null);
+  const [confirmingLeave, setConfirmingLeave] = useState(false);
 
   const family = useQuery({
     queryKey: ["family", familyId],
@@ -55,7 +57,12 @@ export function FamilyDetail() {
       setLeaveError(null);
       navigate("/people");
     },
+    // The dialog closes either way. A last-organizer 409 is fixed by promoting
+    // someone in the Members section further up this page, which the modal
+    // covers — so the error belongs in this zone's own line, with the button
+    // re-armed only once the page behind it can make it succeed.
     onError: (err: unknown) => {
+      setConfirmingLeave(false);
       if (isAxiosError(err) && err.response?.status === 409) {
         setLeaveError("Promote another organizer first, or delete the family.");
       } else {
@@ -85,6 +92,7 @@ export function FamilyDetail() {
 
       <MembersSection
         familyId={familyId}
+        familyName={f.name}
         members={f.members}
         currentUserId={user?.id}
         isOrganizer={isOrganizer}
@@ -101,14 +109,38 @@ export function FamilyDetail() {
       <section>
         <h2 className="text-lg font-semibold text-gray-900 mb-3">Leave Family</h2>
         <button
-          onClick={() => leaveMutation.mutate(user!.id)}
+          onClick={() => setConfirmingLeave(true)}
           disabled={leaveMutation.isPending}
           className="rounded bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50"
         >
           Leave Family
         </button>
         {leaveError && <p className="mt-2 text-sm text-red-600">{leaveError}</p>}
+        {/* Leaving hits the same endpoint as Remove and loses the same things:
+            the shares this member owns into the family's occasions, and the
+            claims between them and everyone they no longer reach — including
+            what they recorded paying. Being invited back restores none of it,
+            which is why a button that used to fire on the first click asks
+            (`CONTEXT.md` rule 11). The name is the guard: a member of several
+            families reaches all of them through this same page. */}
+        <ConfirmDialog
+          open={confirmingLeave}
+          title={`Leave ${f.name}?`}
+          body={
+            "You'll lose sight of lists shared to this family's occasions, and any gifts " +
+            "you've claimed here will be released along with anything you recorded paying. " +
+            "You can be invited back later."
+          }
+          actions={LEAVE_ACTIONS}
+          pending={leaveMutation.isPending}
+          onResolve={(id) => {
+            if (id === "leave") leaveMutation.mutate(user!.id);
+            else setConfirmingLeave(false);
+          }}
+        />
       </section>
     </div>
   );
 }
+
+const LEAVE_ACTIONS: ConfirmAction[] = [{ id: "leave", label: "Leave", tone: "danger" }];

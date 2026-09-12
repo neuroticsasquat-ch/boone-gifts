@@ -93,7 +93,6 @@ export function FolderDetail() {
   );
 }
 
-const ARCHIVE_ACTIONS: ConfirmAction[] = [{ id: "archive", label: "Archive", tone: "danger" }];
 const DELETE_ACTIONS: ConfirmAction[] = [{ id: "delete", label: "Delete", tone: "danger" }];
 
 function FolderHeader({
@@ -108,7 +107,7 @@ function FolderHeader({
   navigate: ReturnType<typeof useNavigate>;
 }) {
   const [editing, setEditing] = useState(false);
-  const [confirming, setConfirming] = useState<"archive" | "delete" | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [name, setName] = useState(folder.name);
   const [description, setDescription] = useState(folder.description ?? "");
 
@@ -143,15 +142,6 @@ function FolderHeader({
   function handleSave(e: FormEvent) {
     e.preventDefault();
     updateMutation.mutate({ name, description: description || undefined });
-  }
-
-  // Only the archive direction asks; unarchiving is not destructive.
-  function handleArchiveToggle() {
-    if (folder.is_archived) {
-      archiveMutation.mutate();
-    } else {
-      setConfirming("archive");
-    }
   }
 
   if (editing) {
@@ -211,7 +201,7 @@ function FolderHeader({
         </div>
         <div className="flex gap-2 shrink-0">
           <button
-            onClick={handleArchiveToggle}
+            onClick={() => archiveMutation.mutate()}
             disabled={archiveMutation.isPending}
             className={`rounded px-3 py-1 text-sm font-medium text-white disabled:opacity-50 ${folder.is_archived ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700"}`}
           >
@@ -224,7 +214,7 @@ function FolderHeader({
             Edit
           </button>
           <button
-            onClick={() => setConfirming("delete")}
+            onClick={() => setConfirmingDelete(true)}
             disabled={deleteMutation.isPending}
             className="rounded bg-red-600 px-3 py-1 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
           >
@@ -233,14 +223,13 @@ function FolderHeader({
         </div>
       </div>
       <ConfirmDialog
-        open={confirming !== null}
-        title={confirming === "delete" ? "Delete this folder?" : "Archive this folder?"}
-        body={confirming === "delete" ? "This cannot be undone." : undefined}
-        actions={confirming === "delete" ? DELETE_ACTIONS : ARCHIVE_ACTIONS}
+        open={confirmingDelete}
+        title="Delete this folder?"
+        body="This cannot be undone."
+        actions={DELETE_ACTIONS}
         onResolve={(id) => {
           if (id === "delete") deleteMutation.mutate();
-          else if (id === "archive") archiveMutation.mutate();
-          setConfirming(null);
+          setConfirmingDelete(false);
         }}
       />
     </div>

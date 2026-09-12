@@ -204,6 +204,18 @@ function OccasionPage({ occasion }: { occasion: Occasion }) {
 const ARCHIVE_ACTIONS: ConfirmAction[] = [{ id: "archive", label: "Archive", tone: "danger" }];
 
 /**
+ * What archiving an occasion does to the lists already shared into it, said
+ * once. Two sites ask the question — here, and the family page's per-row
+ * Archive (`family-detail/OccasionsSection`) — and one sentence answering it
+ * must not be able to drift into two answers (NEU-1319).
+ *
+ * `ActionableBanner`'s nudge deliberately does **not** use this: its body
+ * argues the case for archiving something that has gone quiet, which is a
+ * different sentence doing a different job.
+ */
+export const ARCHIVE_OCCASION_BODY = "Lists already shared to it stay shared.";
+
+/**
  * The occasion's name, whether it is archived, and the controls for changing
  * either.
  *
@@ -278,9 +290,9 @@ function OccasionHeader({
     renameMutation.mutate(trimmed);
   }
 
-  // Archiving takes the occasion out of every default view, so it is confirmed
-  // — the same as the archive item in list detail's `⋯` menu. Unarchiving puts
-  // it back and asks nothing.
+  // Archiving takes the occasion out of every default view, for every member
+  // of the family and not just the viewer, so it is confirmed (`CONTEXT.md`
+  // rule 11). Unarchiving puts it back and asks nothing.
   function handleArchiveToggle() {
     if (occasion.is_archived) {
       setArchivedMutation.mutate(false);
@@ -369,7 +381,7 @@ function OccasionHeader({
       <ConfirmDialog
         open={confirmingArchive}
         title="Archive this occasion?"
-        body="Lists already shared to it stay shared."
+        body={ARCHIVE_OCCASION_BODY}
         actions={ARCHIVE_ACTIONS}
         onResolve={(id) => {
           if (id === "archive") setArchivedMutation.mutate(true);

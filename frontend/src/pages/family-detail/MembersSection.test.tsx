@@ -90,7 +90,63 @@ describe("MembersSection", () => {
     });
   });
 
-  it("409 on remove shows the last-organizer message inside the Members zone", async () => {
+  it("remove: the dialog names the member and the family, and cancelling sends nothing", async () => {
+    let called = false;
+    server.use(
+      http.delete(`${API}/families/1/members/2`, () => {
+        called = true;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+
+    renderFamilyDetail(organizerToken);
+
+    await waitFor(() => {
+      expect(screen.getByText("Boone Family")).toBeInTheDocument();
+    });
+
+    await userEvent.click(within(membersZone()).getByRole("button", { name: "Remove" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Remove Bob from Boone Family?")).toBeInTheDocument();
+    // Conditional and bare: no count, no gift, no claimer, and no assertion
+    // that a claim exists (`CONTEXT.md` rule 2).
+    expect(
+      within(dialog).getByText(/any gifts claimed between you will be released/)
+    ).toBeInTheDocument();
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(called).toBe(false);
+  });
+
+  it("remove: confirming sends DELETE /families/:id/members/:userId", async () => {
+    let called = false;
+    server.use(
+      http.delete(`${API}/families/1/members/2`, () => {
+        called = true;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+
+    renderFamilyDetail(organizerToken);
+
+    await waitFor(() => {
+      expect(screen.getByText("Boone Family")).toBeInTheDocument();
+    });
+
+    await userEvent.click(within(membersZone()).getByRole("button", { name: "Remove" }));
+
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Remove" }));
+
+    await waitFor(() => {
+      expect(called).toBe(true);
+    });
+  });
+
+  it("409 on remove closes the dialog and shows the last-organizer message inside the Members zone", async () => {
     server.use(
       http.delete(`${API}/families/1/members/2`, () =>
         HttpResponse.json({ detail: "Cannot remove last organizer" }, { status: 409 })
@@ -103,14 +159,20 @@ describe("MembersSection", () => {
       expect(screen.getByText("Boone Family")).toBeInTheDocument();
     });
 
-    const zone = membersZone();
-    await userEvent.click(within(zone).getByRole("button", { name: "Remove" }));
+    await userEvent.click(within(membersZone()).getByRole("button", { name: "Remove" }));
 
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Remove" }));
+
+    // The fix is promoting another organizer, in this same section behind the
+    // modal — so the dialog gets out of the way and the message lands in the
+    // zone's own error line.
     await waitFor(() => {
       expect(
-        within(zone).getByText("Promote another organizer first, or delete the family.")
+        within(membersZone()).getByText("Promote another organizer first, or delete the family.")
       ).toBeInTheDocument();
     });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("409 on demote shows the last-organizer message inside the Members zone", async () => {

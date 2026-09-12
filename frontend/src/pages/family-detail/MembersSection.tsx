@@ -3,14 +3,18 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 import toast from "react-hot-toast";
 import { removeMember, updateMemberRole } from "../../api/families";
+import { ConfirmDialog, type ConfirmAction } from "../../components/ConfirmDialog";
 import type { FamilyMember } from "../../types";
 
 interface MembersSectionProps {
   familyId: number;
+  familyName: string;
   members: FamilyMember[];
   currentUserId: number | undefined;
   isOrganizer: boolean;
 }
+
+const REMOVE_ACTIONS: ConfirmAction[] = [{ id: "remove", label: "Remove", tone: "danger" }];
 
 /**
  * The family's roster, on the family page — who is in it and, for an organizer,
@@ -25,10 +29,19 @@ interface MembersSectionProps {
  * 409 when the family would be left without an organizer. *Leaving* hits the
  * same endpoint but belongs to the page, next to its own button — the branch on
  * whose id it was is what used to make one mutation serve both.
+ *
+ * Remove confirms and promote/demote does not, which is the rule rather than a
+ * preference about severity: removing deletes the shares that person owns into
+ * the family's occasions and releases claims in both directions, and a
+ * re-invite brings back neither (`CONTEXT.md` rule 11). A role change is one
+ * click away from being undone.
  */
-export function MembersSection({ familyId, members, currentUserId, isOrganizer }: MembersSectionProps) {
+export function MembersSection({ familyId, familyName, members, currentUserId, isOrganizer }: MembersSectionProps) {
   const queryClient = useQueryClient();
   const [actionError, setActionError] = useState<string | null>(null);
+  // The member being removed, not a boolean: the dialog names them, and the
+  // section lists every member.
+  const [removing, setRemoving] = useState<FamilyMember | null>(null);
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["family", familyId] });
@@ -43,13 +56,22 @@ export function MembersSection({ familyId, members, currentUserId, isOrganizer }
     }
   };
 
+  // The dialog closes on *both* outcomes, unlike the connection removal it
+  // otherwise follows (`People.tsx`): a last-organizer 409 cannot be retried
+  // until another organizer is promoted, and that control is in this same
+  // section further up the page, behind the modal. Re-arming a button that
+  // cannot yet succeed buys a second identical failure.
   const removeMutation = useMutation({
     mutationFn: (userId: number) => removeMember(familyId, userId),
     onSuccess: () => {
       invalidate();
       setActionError(null);
+      setRemoving(null);
     },
-    onError: onLastOrganizer,
+    onError: (err: unknown) => {
+      setRemoving(null);
+      onLastOrganizer(err);
+    },
   });
 
   const updateRoleMutation = useMutation({
@@ -92,7 +114,7 @@ export function MembersSection({ familyId, members, currentUserId, isOrganizer }
                     {member.role === "member" ? "Make Organizer" : "Make Member"}
                   </button>
                   <button
-                    onClick={() => removeMutation.mutate(member.user_id)}
+                    onClick={() => setRemoving(member)}
                     disabled={removeMutation.isPending}
                     className="rounded bg-red-100 px-3 py-1 text-sm font-medium text-red-700 hover:bg-red-200 disabled:opacity-50"
                   >
@@ -104,6 +126,28 @@ export function MembersSection({ familyId, members, currentUserId, isOrganizer }
           );
         })}
       </ul>
+
+      {/* Naming both the member and the family, following the connection
+          removal's reasoning (`People.tsx`): "Remove this member?" means
+          nothing on a roster reached by a mis-tap, and an organizer of several
+          families arrives at all of them through the same shape of page.
+
+          The claim sentence is conditional and bare — no count, no gift, no
+          claimer, and no assertion that a claim exists (`CONTEXT.md` rule 2). */}
+      <ConfirmDialog
+        open={removing !== null}
+        title={`Remove ${removing?.name} from ${familyName}?`}
+        body={
+          "They'll lose sight of lists shared to this family's occasions, and any gifts " +
+          "claimed between you will be released. You can invite them back later."
+        }
+        actions={REMOVE_ACTIONS}
+        pending={removeMutation.isPending}
+        onResolve={(id) => {
+          if (id === "remove" && removing) removeMutation.mutate(removing.user_id);
+          else setRemoving(null);
+        }}
+      />
     </section>
   );
 }

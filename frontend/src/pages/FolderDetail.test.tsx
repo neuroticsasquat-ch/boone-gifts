@@ -186,6 +186,83 @@ describe("FolderDetail", () => {
     await userEvent.click(screen.getByText("Save"));
   });
 
+  // Archiving is reversible from the "View archived folders" toggle on /folders
+  // and nobody else can tell, so it asks nothing (`CONTEXT.md` rule 11,
+  // NEU-1319).
+  it("archives the folder in one click, with no dialog at any point", async () => {
+    let archived: unknown = null;
+    server.use(
+      http.get(`${API}/folders/1`, () => HttpResponse.json(sampleFolder)),
+      http.get(`${API}/lists`, () => HttpResponse.json([])),
+      http.put(`${API}/folders/1`, async ({ request }) => {
+        archived = ((await request.json()) as { is_archived?: boolean }).is_archived;
+        return HttpResponse.json({ ...sampleFolder, is_archived: true });
+      }),
+    );
+
+    renderFolderDetail();
+
+    await waitFor(() => {
+      expect(screen.getByText("Christmas 2026")).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Archive" }));
+
+    await waitFor(() => expect(archived).toBe(true));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  // Unchanged behaviour, but it is the same code path as Archive now rather
+  // than the other arm of a branch.
+  it("unarchives the folder in one click, with no dialog at any point", async () => {
+    let archived: unknown = null;
+    server.use(
+      http.get(`${API}/folders/1`, () => HttpResponse.json({ ...sampleFolder, is_archived: true })),
+      http.get(`${API}/lists`, () => HttpResponse.json([])),
+      http.put(`${API}/folders/1`, async ({ request }) => {
+        archived = ((await request.json()) as { is_archived?: boolean }).is_archived;
+        return HttpResponse.json(sampleFolder);
+      }),
+    );
+
+    renderFolderDetail();
+
+    await waitFor(() => {
+      expect(screen.getByText("Christmas 2026")).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Unarchive" }));
+
+    await waitFor(() => expect(archived).toBe(false));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("deleting the folder still confirms", async () => {
+    let deleted = false;
+    server.use(
+      http.get(`${API}/folders/1`, () => HttpResponse.json(sampleFolder)),
+      http.get(`${API}/lists`, () => HttpResponse.json([])),
+      http.delete(`${API}/folders/1`, () => {
+        deleted = true;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+
+    renderFolderDetail();
+
+    await waitFor(() => {
+      expect(screen.getByText("Christmas 2026")).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveAccessibleName("Delete this folder?");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => expect(deleted).toBe(true));
+  });
+
   it("removes a list from folder", async () => {
     server.use(
       http.get(`${API}/folders/1`, () => HttpResponse.json(sampleFolder)),

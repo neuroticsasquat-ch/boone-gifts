@@ -539,9 +539,9 @@ describe("ListDetail — no tab bar", () => {
 describe("ListDetail — header actions menu", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  function serveOwnerList() {
+  function serveOwnerList(list: object = ownerListDetail) {
     server.use(
-      http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
+      http.get(`${API}/lists/1`, () => HttpResponse.json(list)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
@@ -564,7 +564,9 @@ describe("ListDetail — header actions menu", () => {
     expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
   });
 
-  it("archives from the menu once confirmed", async () => {
+  // Archiving is reversible from the "View archive" link on /lists and nobody
+  // else can tell, so it asks nothing (`CONTEXT.md` rule 11, NEU-1319).
+  it("archives from the menu in one click, with no dialog at any point", async () => {
     serveOwnerList();
     let archived: unknown = null;
     server.use(
@@ -578,37 +580,30 @@ describe("ListDetail — header actions menu", () => {
     await screen.findByText("My Wishlist");
     await userEvent.click(screen.getByRole("button", { name: "List actions" }));
     await userEvent.click(screen.getByRole("button", { name: "Archive" }));
-
-    // The menu item and the dialog's action share a label, so the confirming
-    // click is scoped to the dialog.
-    const dialog = await screen.findByRole("dialog");
-    expect(dialog).toHaveAccessibleName("Archive this list?");
-    await userEvent.click(within(dialog).getByRole("button", { name: "Archive" }));
 
     await waitFor(() => expect(archived).toBe(true));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("archives nothing when the confirmation is cancelled", async () => {
-    serveOwnerList();
+  // Unchanged behaviour, but it is the same code path as Archive now rather
+  // than the other arm of a branch.
+  it("unarchives from the menu in one click, with no dialog at any point", async () => {
+    serveOwnerList({ ...ownerListDetail, is_archived: true });
     let archived: unknown = null;
     server.use(
       http.put(`${API}/lists/1`, async ({ request }) => {
         archived = ((await request.json()) as { is_archived?: boolean }).is_archived;
-        return HttpResponse.json({ ...ownerListDetail, is_archived: true });
+        return HttpResponse.json(ownerListDetail);
       }),
     );
-
     renderListDetail(ownerToken);
 
     await screen.findByText("My Wishlist");
     await userEvent.click(screen.getByRole("button", { name: "List actions" }));
-    await userEvent.click(screen.getByRole("button", { name: "Archive" }));
+    await userEvent.click(screen.getByRole("button", { name: "Unarchive" }));
 
-    const dialog = await screen.findByRole("dialog");
-    await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
-
+    await waitFor(() => expect(archived).toBe(false));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(archived).toBeNull();
   });
 
   it("returns focus to the actions menu when the confirmation is dismissed", async () => {
@@ -619,7 +614,7 @@ describe("ListDetail — header actions menu", () => {
     await screen.findByText("My Wishlist");
     const menu = screen.getByRole("button", { name: "List actions" });
     await userEvent.click(menu);
-    await userEvent.click(screen.getByRole("button", { name: "Archive" }));
+    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
 
     await screen.findByRole("dialog");
     await userEvent.keyboard("{Escape}");
@@ -1267,6 +1262,83 @@ describe("ListDetail — recording what a purchase cost", () => {
 
     expect(await screen.findByText("Taken")).toBeInTheDocument();
     expect(screen.queryByRole("checkbox", { name: "Bought" })).not.toBeInTheDocument();
+  });
+
+  // Unclaiming is where the rule turns: `unclaim_gift` deletes the claim row,
+  // so a plain claim is one click from undone and a purchased one loses the
+  // record and the amount with it (`CONTEXT.md` rule 11, NEU-1319).
+  it("unclaims an unpurchased gift in one click, with no dialog at any point", async () => {
+    const unclaimed = vi.fn();
+    serveViewerList(myClaim);
+    server.use(
+      http.delete(`${API}/lists/1/gifts/10/claim`, () => {
+        unclaimed();
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    renderListDetail(viewerToken);
+
+    await userEvent.click(await screen.findByRole("button", { name: "Never mind" }));
+
+    await waitFor(() => expect(unclaimed).toHaveBeenCalled());
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("unclaiming a purchased gift asks, and names the amount recorded", async () => {
+    const unclaimed = vi.fn();
+    serveViewerList({ ...myClaim, purchased_at: "2026-01-03", amount_paid: "32.50" });
+    server.use(
+      http.delete(`${API}/lists/1/gifts/10/claim`, () => {
+        unclaimed();
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    renderListDetail(viewerToken);
+
+    await userEvent.click(await screen.findByRole("button", { name: "Never mind" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveAccessibleName("Are you sure you no longer want to get this gift?");
+    expect(
+      within(dialog).getByText("You marked this bought. That, and the $32.50 you recorded, will be forgotten.")
+    ).toBeInTheDocument();
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(unclaimed).not.toHaveBeenCalled();
+  });
+
+  // A skipped amount is a first-class answer, not a missing value, so the
+  // sentence must not imply a figure exists.
+  it("asks without implying a figure when the purchase carries no amount", async () => {
+    serveViewerList({ ...myClaim, purchased_at: "2026-01-03", amount_paid: null });
+    renderListDetail(viewerToken);
+
+    await userEvent.click(await screen.findByRole("button", { name: "Never mind" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      within(dialog).getByText("You marked this bought. That will be forgotten.")
+    ).toBeInTheDocument();
+    expect(within(dialog).queryByText(/you recorded/)).not.toBeInTheDocument();
+  });
+
+  it("unclaims a purchased gift once confirmed", async () => {
+    const unclaimed = vi.fn();
+    serveViewerList({ ...myClaim, purchased_at: "2026-01-03", amount_paid: "32.50" });
+    server.use(
+      http.delete(`${API}/lists/1/gifts/10/claim`, () => {
+        unclaimed();
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    renderListDetail(viewerToken);
+
+    await userEvent.click(await screen.findByRole("button", { name: "Never mind" }));
+
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Never mind" }));
+
+    await waitFor(() => expect(unclaimed).toHaveBeenCalled());
   });
 
   it("keeps every trace of the purchase off the owner's copy of the list", async () => {

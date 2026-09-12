@@ -6,6 +6,8 @@ import toast from "react-hot-toast";
 import { createOccasion, getFamilyOccasions, updateOccasion } from "../../api/occasions";
 import { useAuth } from "../../hooks/useAuth";
 import { Spinner } from "../../components/Spinner";
+import { ConfirmDialog, type ConfirmAction } from "../../components/ConfirmDialog";
+import { ARCHIVE_OCCASION_BODY } from "../OccasionDetail";
 import type { Occasion } from "../../types";
 
 // The same pair `OccasionDetail` carries, because the backend gates the two
@@ -14,6 +16,8 @@ import type { Occasion } from "../../types";
 const RENAME_ONLY = "Only an organizer can rename an occasion.";
 const ARCHIVE_ONLY =
   "Only an organizer or the person who created this occasion can archive it.";
+
+const ARCHIVE_ACTIONS: ConfirmAction[] = [{ id: "archive", label: "Archive", tone: "danger" }];
 
 interface OccasionsSectionProps {
   familyId: number;
@@ -72,6 +76,9 @@ export function OccasionsSection({ familyId, familyName, isOrganizer }: Occasion
   const [actionError, setActionError] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  // The occasion being archived, not a boolean: this is a per-row action on a
+  // section listing every active occasion, so the dialog has to name which.
+  const [archiving, setArchiving] = useState<Occasion | null>(null);
 
   // The family's *active* occasions and nothing else. The archived ones have
   // their own page now, so this section no longer has a state that can show
@@ -132,9 +139,13 @@ export function OccasionsSection({ familyId, familyName, isOrganizer }: Occasion
     onSuccess: () => {
       invalidate();
       setActionError(null);
+      setArchiving(null);
+      // Kept, unlike the list and folder cases: the row leaves the section on
+      // success, so nothing left on the page says what happened.
       toast.success("Occasion archived.");
     },
     onError: (err: unknown) => {
+      setArchiving(null);
       if (isAxiosError(err) && err.response?.status === 403) {
         setActionError(ARCHIVE_ONLY);
       } else {
@@ -247,7 +258,7 @@ export function OccasionsSection({ familyId, familyName, isOrganizer }: Occasion
                         </button>
                       )}
                       <button
-                        onClick={() => archiveMutation.mutate(occasion.id)}
+                        onClick={() => setArchiving(occasion)}
                         disabled={archiveMutation.isPending}
                         className="rounded bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50"
                       >
@@ -307,6 +318,23 @@ export function OccasionsSection({ familyId, familyName, isOrganizer }: Occasion
       )}
 
       {createError && <p className="mt-2 text-sm text-red-600">{createError}</p>}
+
+      {/* Archiving an occasion lands on the whole family, not just the viewer,
+          so it asks (`CONTEXT.md` rule 11) — the one archive site the earlier
+          tickets did not reach. The title names the occasion because a bare
+          "this occasion?" says nothing in a list of them; the body is the same
+          sentence the occasion's own page uses, shared rather than retyped. */}
+      <ConfirmDialog
+        open={archiving !== null}
+        title={`Archive ${archiving?.name}?`}
+        body={ARCHIVE_OCCASION_BODY}
+        actions={ARCHIVE_ACTIONS}
+        pending={archiveMutation.isPending}
+        onResolve={(id) => {
+          if (id === "archive" && archiving) archiveMutation.mutate(archiving.id);
+          else setArchiving(null);
+        }}
+      />
     </section>
   );
 }

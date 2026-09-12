@@ -188,7 +188,7 @@ function OwnerHeader({
   onChangeSharing: () => void;
   onAddToFolder: () => void;
 }) {
-  const [confirming, setConfirming] = useState<"archive" | "delete" | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const archiveMutation = useMutation({
     mutationFn: () => updateList(listId, { is_archived: !list.is_archived }),
@@ -212,15 +212,6 @@ function OwnerHeader({
       toast.error(detail || "Failed to delete list.");
     },
   });
-
-  // Only the archive direction asks; unarchiving is not destructive.
-  function handleArchiveToggle() {
-    if (list.is_archived) {
-      archiveMutation.mutate();
-    } else {
-      setConfirming("archive");
-    }
-  }
 
   return (
     <>
@@ -248,21 +239,20 @@ function OwnerHeader({
             items={[
               { label: ADD_TO_FOLDER, onClick: onAddToFolder },
               { label: "Edit", onClick: onEdit },
-              { label: list.is_archived ? "Unarchive" : "Archive", onClick: handleArchiveToggle },
-              { label: "Delete", onClick: () => setConfirming("delete"), danger: true, separatorBefore: true },
+              { label: list.is_archived ? "Unarchive" : "Archive", onClick: () => archiveMutation.mutate() },
+              { label: "Delete", onClick: () => setConfirmingDelete(true), danger: true, separatorBefore: true },
             ]}
           />
         }
       />
       <ConfirmDialog
-        open={confirming !== null}
-        title={confirming === "delete" ? "Delete this list?" : "Archive this list?"}
-        body={confirming === "delete" ? "This cannot be undone." : undefined}
-        actions={confirming === "delete" ? DELETE_ACTIONS : ARCHIVE_ACTIONS}
+        open={confirmingDelete}
+        title="Delete this list?"
+        body="This cannot be undone."
+        actions={DELETE_ACTIONS}
         onResolve={(id) => {
           if (id === "delete") deleteMutation.mutate();
-          else if (id === "archive") archiveMutation.mutate();
-          setConfirming(null);
+          setConfirmingDelete(false);
         }}
       />
     </>
@@ -276,7 +266,6 @@ function OwnerHeader({
  */
 const ADD_TO_FOLDER = "Add to a folder…";
 
-const ARCHIVE_ACTIONS: ConfirmAction[] = [{ id: "archive", label: "Archive", tone: "danger" }];
 const DELETE_ACTIONS: ConfirmAction[] = [{ id: "delete", label: "Delete", tone: "danger" }];
 
 function ViewerHeader({

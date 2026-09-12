@@ -253,12 +253,44 @@ describe("OccasionsSection", () => {
 
     await userEvent.click(within(rowFor("Christmas 2026")).getByRole("button", { name: "Archive" }));
 
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Archive" }));
+
     await waitFor(() => {
       expect(capturedBody).toEqual({ is_archived: true });
     });
     await waitFor(() => {
       expect(screen.queryByText("Christmas 2026")).not.toBeInTheDocument();
     });
+  });
+
+  it("archive: the dialog names the row it was raised from, and cancelling sends nothing", async () => {
+    let called = false;
+    server.use(
+      serveOccasions([occasion(3, "Christmas 2026"), occasion(4, "Gran's 80th")]),
+      http.put(`${API}/occasions/:id`, () => {
+        called = true;
+        return HttpResponse.json(occasion(4, "Gran's 80th", true));
+      }),
+    );
+
+    renderFamilyDetail(organizerToken);
+
+    await waitFor(() => {
+      expect(screen.getByText("Gran's 80th")).toBeInTheDocument();
+    });
+
+    await userEvent.click(within(rowFor("Gran's 80th")).getByRole("button", { name: "Archive" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Archive Gran's 80th?")).toBeInTheDocument();
+    // The same sentence the occasion's own page uses, shared rather than retyped.
+    expect(within(dialog).getByText("Lists already shared to it stay shared.")).toBeInTheDocument();
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(called).toBe(false);
   });
 
   // Archiving is gated per field by the backend (NEU-1294 decision 4), so the
@@ -297,6 +329,9 @@ describe("OccasionsSection", () => {
     });
 
     await userEvent.click(within(rowFor("Christmas 2026")).getByRole("button", { name: "Archive" }));
+
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Archive" }));
 
     await waitFor(() => {
       expect(

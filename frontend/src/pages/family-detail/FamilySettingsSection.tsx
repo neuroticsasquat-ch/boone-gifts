@@ -5,6 +5,7 @@ import { isAxiosError } from "axios";
 import toast from "react-hot-toast";
 import { createInvite, deleteFamily, getInvites, renameFamily, revokeInvite } from "../../api/families";
 import { ConfirmDialog, type ConfirmAction } from "../../components/ConfirmDialog";
+import type { FamilyInvite } from "../../types";
 
 interface FamilySettingsSectionProps {
   familyId: number;
@@ -14,6 +15,8 @@ interface FamilySettingsSectionProps {
 const DELETE_FAMILY_ACTIONS: ConfirmAction[] = [
   { id: "delete", label: "Delete Family", tone: "danger" },
 ];
+
+const REVOKE_INVITE_ACTIONS: ConfirmAction[] = [{ id: "revoke", label: "Revoke", tone: "danger" }];
 
 /**
  * Administering the family itself — who is invited into it, what it is called,
@@ -39,6 +42,9 @@ export function FamilySettingsSection({ familyId, familyName }: FamilySettingsSe
   const [renameValue, setRenameValue] = useState("");
   const [renameError, setRenameError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // The invite being revoked, not a boolean: the dialog names the email, and
+  // several invites can be listed at once.
+  const [revoking, setRevoking] = useState<FamilyInvite | null>(null);
 
   const invites = useQuery({
     queryKey: ["family-invites", familyId],
@@ -70,8 +76,12 @@ export function FamilySettingsSection({ familyId, familyName }: FamilySettingsSe
 
   const revokeInviteMutation = useMutation({
     mutationFn: (inviteId: number) => revokeInvite(familyId, inviteId),
-    onSuccess: invalidateInvites,
+    onSuccess: () => {
+      invalidateInvites();
+      setRevoking(null);
+    },
     onError: () => {
+      setRevoking(null);
       toast.error("Failed to revoke invite.");
     },
   });
@@ -169,7 +179,7 @@ export function FamilySettingsSection({ familyId, familyName }: FamilySettingsSe
                 </div>
                 {invite.status === "pending" && (
                   <button
-                    onClick={() => revokeInviteMutation.mutate(invite.id)}
+                    onClick={() => setRevoking(invite)}
                     disabled={revokeInviteMutation.isPending}
                     className="rounded bg-red-100 px-3 py-1 text-sm font-medium text-red-700 hover:bg-red-200 disabled:opacity-50"
                   >
@@ -179,6 +189,21 @@ export function FamilySettingsSection({ familyId, familyName }: FamilySettingsSe
               </li>
             ))}
           </ul>
+          {/* It lands on somebody else — their link stops working — so it asks,
+              the same as the identical action on the admin page
+              (`CONTEXT.md` rule 11). The email is the guard: several invites
+              can be pending, and the rows differ only by it. */}
+          <ConfirmDialog
+            open={revoking !== null}
+            title={`Revoke the invite to ${revoking?.email}?`}
+            body="Their invite link will stop working. You can send a new one."
+            actions={REVOKE_INVITE_ACTIONS}
+            pending={revokeInviteMutation.isPending}
+            onResolve={(id) => {
+              if (id === "revoke" && revoking) revokeInviteMutation.mutate(revoking.id);
+              else setRevoking(null);
+            }}
+          />
         </div>
       )}
 
