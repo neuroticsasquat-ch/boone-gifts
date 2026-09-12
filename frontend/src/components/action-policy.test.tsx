@@ -1,4 +1,5 @@
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, it, expect } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -14,6 +15,7 @@ import { Folders } from "../pages/Folders";
 import { OccasionDetail } from "../pages/OccasionDetail";
 import { People } from "../pages/People";
 import { organizerToken, renderFamilyDetail } from "../pages/family-detail/harness";
+import { mockViewport } from "../test/viewport";
 
 /**
  * **The rule: every action on the thing a page header or a list row is about is
@@ -44,6 +46,28 @@ import { organizerToken, renderFamilyDetail } from "../pages/family-detail/harne
  * `ActionableBanner` (a CTA), the admin pages, `FamilySettingsSection` and
  * `SharedAccountCard`. Rule 12 governs action groups on a header or a row and
  * says nothing about the rest, so neither does this file.
+ *
+ * ## The width exception, and why the set is still the assertion
+ *
+ * Rule 12 now has one exception (ADR 0010): below `md`, a header carrying a
+ * *group* of actions may put them behind a labelled disclosure, because a
+ * header holding a heading *and* a group of buttons has no room for either on a
+ * phone. Two call sites are granted it — the occasion header and a list
+ * owner's.
+ *
+ * One exception is where a rule starts to erode, so the guard is that this one
+ * is **mechanical rather than tasteful**: a call site either passes
+ * `collapseOnMobile` or it does not, and this file asserts *both* arms at
+ * *every* site. The two that collapse are asserted to collapse and to reveal
+ * everything on one press; the six that do not are asserted to render every
+ * action visibly at a phone's width with nothing pressed. So a seventh site
+ * quietly adopting the prop fails the mobile row of this file, which is the
+ * only thing standing between "one width exception" and the overflow menu
+ * growing back one defensible header at a time.
+ *
+ * The desktop cases run at the suite's default width and are unchanged. A
+ * mobile case says `mockViewport("mobile")` first; `setup.ts` puts the default
+ * back after every test.
  */
 
 const API = "https://boone-gifts-api.localhost";
@@ -141,6 +165,15 @@ async function listPainted() {
   await screen.findByRole("heading", { level: 1, name: "My Wishlist" });
 }
 
+/**
+ * The owner's bar, in full. `Sharing…` joined it when `SharingSummary` lost its
+ * own `Change` control (NEU-1323): one bar is the whole answer to "what can I
+ * do to this list", which is what makes collapsing that one bar affordable.
+ */
+const OWNER_ACTIONS = ["Sharing…", "Add to a folder…", "Edit", "Archive", "Delete"];
+
+const OCCASION_ACTIONS = ["Rename", "Archive"];
+
 // --- Folder detail -------------------------------------------------------
 
 const folder = {
@@ -210,6 +243,11 @@ function renderOccasionDetail() {
   return mount("/occasions/3", "/occasions/:id", <NumericId back="/people"><OccasionDetail /></NumericId>);
 }
 
+/** Wait for the occasion page to have painted its heading, eyebrow and all. */
+async function occasionPainted() {
+  await screen.findByRole("heading", { level: 1, name: "Boone Family Christmas 2026" });
+}
+
 // --- People --------------------------------------------------------------
 
 const ALICE = {
@@ -244,11 +282,11 @@ function rowFor(name: string): HTMLElement {
 }
 
 describe("the action policy — a header's actions stand on the header", () => {
-  it("a list owner's four actions are all on the page at once", async () => {
+  it("a list owner's five actions are all on the page at once", async () => {
     renderListDetail(tokenFor(1), ownerList);
     await listPainted();
 
-    expectActionsVisible(["Add to a folder…", "Edit", "Archive", "Delete"]);
+    expectActionsVisible(OWNER_ACTIONS);
     expectNoGlyphControls();
   });
 
@@ -265,12 +303,12 @@ describe("the action policy — a header's actions stand on the header", () => {
   it("an occasion organizer's actions are on the occasion header", async () => {
     renderOccasionDetail();
 
-    await screen.findByRole("heading", { level: 1, name: "Boone Family · Christmas 2026" });
+    await occasionPainted();
     // Gated on the viewer's role, which the family read settles a tick later
     // than the occasion itself — so this waits for the bar rather than the page.
     await screen.findByRole("button", { name: "Rename" });
 
-    expectActionsVisible(["Rename", "Archive"]);
+    expectActionsVisible(OCCASION_ACTIONS);
     expectNoGlyphControls();
   });
 
@@ -324,6 +362,122 @@ describe("the action policy — a row's actions stand on the row, and name it", 
     await screen.findByText("Boone Family");
     expectActionsVisible(["Make Organizer Bob", "Remove Bob"], rowFor("Bob"));
     expectNoGlyphControls();
+  });
+});
+
+describe("the action policy — the two headers the width exception is granted to", () => {
+  /**
+   * The exception, as one assertion: below `md` the bar is a single labelled
+   * control, none of its actions is in the document, and **one** press reaches
+   * every one of them — enabled, and still not a glyph.
+   *
+   * "Not in the document" rather than "not visible" on purpose: jsdom computes
+   * no layout, so a case written against visibility would pass just as happily
+   * over a bar that had rendered all five buttons and hidden them in CSS — the
+   * two-copies arm ADR 0010 rejected for doubling the accessibility tree.
+   */
+  async function expectOnePressFromEverything(names: string[]) {
+    const trigger = screen.getByRole("button", { name: "Actions" });
+
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    for (const name of names) {
+      expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
+    }
+    expectNoGlyphControls();
+
+    await userEvent.click(trigger);
+
+    expectActionsVisible(names);
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    expectNoGlyphControls();
+  }
+
+  it("a list owner's five actions are one press away, not on the page", async () => {
+    mockViewport("mobile");
+    renderListDetail(tokenFor(1), ownerList);
+    await listPainted();
+
+    await expectOnePressFromEverything(OWNER_ACTIONS);
+  });
+
+  it("an occasion organizer's actions are one press away, not on the page", async () => {
+    mockViewport("mobile");
+    renderOccasionDetail();
+    await occasionPainted();
+    await screen.findByRole("button", { name: "Actions" });
+
+    await expectOnePressFromEverything(OCCASION_ACTIONS);
+  });
+});
+
+describe("the action policy — every other site is untouched at a phone's width", () => {
+  /**
+   * The guard on the exception, and the reason it stays mechanical: these six
+   * render exactly as they do on a desktop, with **no prior interaction**. A
+   * seventh call site adopting `collapseOnMobile` fails here.
+   *
+   * The two headers in this list are the limiting principle rather than an
+   * oversight. A list viewer's header holds `Add to a folder…` and nothing
+   * else — one of the two single-item menus ADR 0009 was filed against by name
+   * — and a header with one action has nothing to group. `FolderDetail`'s is
+   * the header ADR 0009 held up as the model. Rows never collapse at any width:
+   * a row has no heading competing for the width in the first place.
+   */
+
+  it("a list viewer's one action is still on the page, not behind a reveal", async () => {
+    mockViewport("mobile");
+    renderListDetail(tokenFor(2), viewerList);
+    await listPainted();
+
+    expectActionsVisible(["Add to a folder…"]);
+    expect(screen.queryByRole("button", { name: "Actions" })).not.toBeInTheDocument();
+    expectNoGlyphControls();
+  });
+
+  it("a folder's three actions are still on the folder header", async () => {
+    mockViewport("mobile");
+    renderFolderDetail();
+    await screen.findByRole("heading", { level: 1, name: "Christmas 2026" });
+
+    expectActionsVisible(["Archive", "Edit", "Delete"]);
+    expect(screen.queryByRole("button", { name: "Actions" })).not.toBeInTheDocument();
+    expectNoGlyphControls();
+  });
+
+  it("a connection row still carries Remove, naming the person", async () => {
+    mockViewport("mobile");
+    renderPeople();
+    await screen.findByRole("link", { name: "Alice" });
+
+    expectActionsVisible(["Remove Alice"], rowFor("alice@test.com"));
+    expect(screen.queryByRole("button", { name: "Actions" })).not.toBeInTheDocument();
+  });
+
+  it("a folder row still carries Delete, naming the folder", async () => {
+    mockViewport("mobile");
+    renderFolders();
+    await screen.findByText("Christmas 2026");
+
+    expectActionsVisible(["Delete Christmas 2026"], rowFor("Christmas 2026"));
+    expect(screen.queryByRole("button", { name: "Actions" })).not.toBeInTheDocument();
+  });
+
+  it("a folder's list row still carries Remove, naming the list", async () => {
+    mockViewport("mobile");
+    renderFolderDetail();
+    await screen.findByText("My Wishlist");
+
+    expectActionsVisible(["Remove My Wishlist"], rowFor("My Wishlist"));
+    expect(screen.queryByRole("button", { name: "Actions" })).not.toBeInTheDocument();
+  });
+
+  it("a member row still carries both of its actions", async () => {
+    mockViewport("mobile");
+    renderFamilyDetail(organizerToken);
+    await screen.findByText("Boone Family");
+
+    expectActionsVisible(["Make Organizer Bob", "Remove Bob"], rowFor("Bob"));
+    expect(screen.queryByRole("button", { name: "Actions" })).not.toBeInTheDocument();
   });
 });
 

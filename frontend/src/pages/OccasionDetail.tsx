@@ -318,53 +318,68 @@ function OccasionHeader({
   return (
     <div className="rounded-lg bg-white p-6 shadow">
       {renaming ? (
-        <form onSubmit={handleRename} className="flex items-center gap-2">
+        <form onSubmit={handleRename}>
           {/* The form replaces the whole heading row, so without this the family
-              would leave the page the moment an organizer started typing — this
-              ticket's own bug in a transient state, and at depth > 0 the control
-              above reads only "← Back". Static, because the rename covers the
-              occasion half of the heading and not the family. */}
-          <span className="shrink-0 text-sm text-gray-500">{occasion.family_name} &middot;</span>
-          <label className="sr-only" htmlFor="occasion-name">
-            Occasion name
-          </label>
-          <input
-            id="occasion-name"
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm"
-          />
-          <button
-            type="submit"
-            disabled={renameMutation.isPending}
-            className="rounded bg-blue-600 px-3 py-1 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            Save
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setRenaming(false);
-              setName(occasion.name);
-            }}
-            className="rounded bg-gray-200 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-300"
-          >
-            Cancel
-          </button>
+              would leave the page the moment an organizer started typing, and at
+              depth > 0 the control above reads only "← Back". It is the resting
+              eyebrow unchanged, link and all: a static copy would have the two
+              states disagree about what the family half *is*, one line and one
+              keystroke apart. Navigating away mid-rename is already possible —
+              the back control and the tab bar are live throughout — so a link
+              here loses nothing that was safe before. */}
+          <FamilyEyebrow occasion={occasion} />
+          <div className="flex items-center gap-2">
+            <label className="sr-only" htmlFor="occasion-name">
+              Occasion name
+            </label>
+            <input
+              id="occasion-name"
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+            <button
+              type="submit"
+              disabled={renameMutation.isPending}
+              className="rounded bg-blue-600 px-3 py-1 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setRenaming(false);
+                setName(occasion.name);
+              }}
+              className="rounded bg-gray-200 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-300"
+            >
+              Cancel
+            </button>
+          </div>
         </form>
       ) : (
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2">
-            {/* One <h1>, announced whole as "Boone Family · Christmas 2026" —
-                the family is what identifies *this* Christmas 2026 among
-                several. Unlinked and subordinate: the family's destination on
-                this page is the back control above (CONTEXT.md rule 3). */}
+        // Stacks below `md`, as `ListHeader` and `FolderDetail` always have.
+        // This header was the one that never did, which is half of why its
+        // heading had no width left beside its actions (ADR 0010).
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          {/* `items-end`, not `items-center`: with a two-line heading, centring
+              would float the pill against the eyebrow instead of the occasion
+              name it is a state badge for. */}
+          <div className="flex min-w-0 items-end gap-2">
+            {/* One <h1>, announced whole as "Boone Family Christmas 2026" — the
+                family is what identifies *this* Christmas 2026 among several,
+                and a <p> above the heading would take that identification back
+                out of it. The family half is a link *here and nowhere else*:
+                the viewer has arrived, so it stops disambiguating and becomes
+                the parent that administers this occasion (CONTEXT.md rule 3). */}
             <h1 className="text-2xl font-bold text-gray-900">
+              <FamilyEyebrow occasion={occasion} />
               {/* The space between the two halves is its own node: the accessible
-                  name trims each element child, so a trailing space inside the
-                  span is dropped and the heading announces as one run-on word. */}
-              <span className="font-normal text-gray-500">{occasion.family_name} &middot;</span>{" "}
+                  name trims each element child, so without it the heading
+                  announces as one run-on word. It costs nothing on screen —
+                  the eyebrow is `block`, so the name starts a new line. */}
+              {" "}
               {occasion.name}
             </h1>
             {occasion.is_archived && (
@@ -378,6 +393,7 @@ function OccasionHeader({
               organizer gets Archive alone rather than a Rename that 403s. */}
           {(canRename || canArchive) && (
             <ActionBar
+              collapseOnMobile
               items={[
                 ...(canRename
                   ? [
@@ -420,6 +436,37 @@ function OccasionHeader({
         }}
       />
     </div>
+  );
+}
+
+/**
+ * The family, above the occasion name and linked to the family's own page.
+ *
+ * Written once because the resting heading and the rename form must not drift
+ * apart on what the family half is — they sit one keystroke apart, and the
+ * whole reason the form carries it at all is that at depth > 0 the control
+ * above reads only "← Back" (NEU-1321 decision 6).
+ *
+ * `block` is what puts it on its own line, and `text-sm font-normal` is what
+ * makes it an eyebrow rather than a second 24px heading — which is what
+ * NEU-1321's "visually subordinate" asked for and the shipped span, inheriting
+ * `text-2xl`, never did. The ` · ` separator is dropped *here and only here*:
+ * two lines do not need one. Every heading that points **at** an occasion keeps
+ * the unlinked prefix.
+ *
+ * It duplicates the back control's destination at depth 0 alone, where that
+ * control reads "← Boone Family". That is accepted: one is the way back to
+ * where you were, the other the parent of the thing you are looking at, and
+ * they coincide only on a cold deep link.
+ */
+function FamilyEyebrow({ occasion }: { occasion: OccasionDetailPayload }) {
+  return (
+    <Link
+      to={`/people/families/${occasion.family_id}`}
+      className="block text-sm font-normal text-gray-500 hover:underline"
+    >
+      {occasion.family_name}
+    </Link>
   );
 }
 

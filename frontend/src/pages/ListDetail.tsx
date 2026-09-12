@@ -229,12 +229,16 @@ function OwnerHeader({
             : undefined
         }
         isArchived={list.is_archived}
-        sharing={
-          <SharingSummary listId={listId} onChange={onChangeSharing} />
-        }
+        sharing={<SharingSummary listId={listId} />}
         actions={
           <ActionBar
+            collapseOnMobile
             items={[
+              // First, ahead of the folder action: it is the most-reached thing
+              // an owner does to a list, and this is the surface that just
+              // pushed it furthest away (ADR 0010). Danger stays last whatever
+              // order this array is in — `ActionBar` sees to that.
+              { label: SHARING, onClick: onChangeSharing },
               { label: ADD_TO_FOLDER, onClick: onAddToFolder },
               { label: "Edit", onClick: onEdit },
               {
@@ -274,6 +278,15 @@ function OwnerHeader({
  * point a viewer has.
  */
 const ADD_TO_FOLDER = "Add to a folder…";
+
+/**
+ * The label has to name what it opens, now that it no longer sits at the end of
+ * the sentence "Shared with …". The trailing ellipsis follows a noun that says
+ * what it does, the way `Add to a folder…` does — not a glyph standing in for
+ * something unnamed, which is what rule 12 is against. `CreateList`'s `Choose…`
+ * is a different surface with a different default and keeps its own word.
+ */
+const SHARING = "Sharing…";
 
 const DELETE_ACTIONS: ConfirmAction[] = [{ id: "delete", label: "Delete", tone: "danger" }];
 

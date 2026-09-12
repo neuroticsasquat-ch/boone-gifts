@@ -8,17 +8,13 @@ import { getShareTargets } from "../../api/lists";
  * and the people it actually reaches, in that order, replacing the "Shared with"
  * and "Families" tabs as the place an owner reads their sharing state.
  *
- * Owner-only, and always editable: it names who the list actually reaches and
- * carries the Change control that opens the sharing modal — by pushing
- * `?share=open`, since an open modal is a place you can be (CONTEXT.md rule 8).
+ * Owner-only, and purely informational — which is most of what it always was.
+ * The `Change` control it used to carry moved into the header's action bar as
+ * `Sharing…` (NEU-1323), so that one bar is the whole answer to "what can I do
+ * to this list" on a surface where that bar is now collapsible below `md`. Out
+ * of this sentence, "Change" had no subject left to name anyway.
  */
-export function SharingSummary({
-  listId,
-  onChange,
-}: {
-  listId: number;
-  onChange: () => void;
-}) {
+export function SharingSummary({ listId }: { listId: number }) {
   const shares = useQuery({ queryKey: ["shares", listId], queryFn: () => getShares(listId) });
   const connections = useQuery({ queryKey: ["connections"], queryFn: getConnections });
   const targets = useQuery({
@@ -69,12 +65,6 @@ export function SharingSummary({
         <span aria-hidden="true">👥 </span>
         {text}
       </p>
-      <button
-        onClick={onChange}
-        className="text-sm font-medium text-blue-600 hover:underline"
-      >
-        Change
-      </button>
     </div>
   );
 }

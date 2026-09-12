@@ -2,11 +2,15 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
 import { ActionBar, type ActionBarItem } from "./ActionBar";
+import { mockViewport } from "../test/viewport";
 
 /**
  * The component's own contract. What it is *for* — that no action in the app
  * hides behind a glyph — is `action-policy.test.tsx`'s job; this file only
  * proves the bar keeps the promises those call sites rely on.
+ *
+ * Every case below runs at the suite's default desktop width unless it calls
+ * `mockViewport("mobile")` first.
  */
 
 function renderBar(items: ActionBarItem[]) {
@@ -133,12 +137,132 @@ describe("ActionBar", () => {
     expect(screen.getByRole("button", { name: "Edit" })).not.toHaveAttribute("aria-label");
   });
 
-  // Nothing to open, so nothing to say is open.
+  // Nothing to open, so nothing to say is open — and without the opt-in below,
+  // that is still true at every width.
   it("has no disclosure state of its own", () => {
     renderBar([{ label: "Edit", onClick: vi.fn() }]);
 
     const button = screen.getByRole("button", { name: "Edit" });
     expect(button).not.toHaveAttribute("aria-expanded");
     expect(button).toHaveAttribute("type", "button");
+  });
+});
+
+/**
+ * The width exception (ADR 0010): a header carrying a *group* of actions may
+ * collapse them behind a labelled disclosure below `md`. Which call sites are
+ * allowed to is `action-policy.test.tsx`'s business — this block is only about
+ * what the prop does when it is passed.
+ */
+describe("ActionBar — collapseOnMobile", () => {
+  function actions(): ActionBarItem[] {
+    return [
+      { label: "Sharing…", onClick: vi.fn() },
+      { label: "Delete", onClick: vi.fn(), tone: "danger" },
+      { label: "Edit", onClick: vi.fn() },
+    ];
+  }
+
+  function open() {
+    return screen.getByRole("button", { name: "Actions" });
+  }
+
+  it("changes nothing at either width when the prop is absent", () => {
+    const desktop = render(<ActionBar items={actions()} />);
+    mockViewport("mobile");
+    const mobile = render(<ActionBar items={actions()} />);
+
+    expect(mobile.container.innerHTML).toBe(desktop.container.innerHTML);
+  });
+
+  it("is an ordinary bar at md and up, prop or no prop", () => {
+    render(<ActionBar collapseOnMobile items={actions()} />);
+
+    expect(screen.queryByRole("button", { name: "Actions" })).not.toBeInTheDocument();
+    expect(labels()).toEqual(["Sharing…", "Edit", "Delete"]);
+  });
+
+  it("collapses below md to one labelled, unexpanded control", () => {
+    mockViewport("mobile");
+    render(<ActionBar collapseOnMobile items={actions()} />);
+
+    expect(open()).toHaveAttribute("aria-expanded", "false");
+    // Not merely invisible — out of the document, so nothing reaches them by
+    // tab order or by accessible name either.
+    for (const name of ["Sharing…", "Edit", "Delete"]) {
+      expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
+    }
+    // The finding ADR 0009 keeps: the trigger is a word, not a glyph.
+    expect(open().textContent).toBe("Actions");
+  });
+
+  it("reveals every action, in order and in tone, on one press", async () => {
+    mockViewport("mobile");
+    render(<ActionBar collapseOnMobile items={actions()} />);
+
+    await userEvent.click(open());
+
+    expect(open()).toHaveAttribute("aria-expanded", "true");
+    // Danger is still last and still an outline; the panel is the same bar.
+    expect(labels()).toEqual(["Actions", "Sharing…", "Edit", "Delete"]);
+    for (const name of ["Sharing…", "Edit", "Delete"]) {
+      expect(screen.getByRole("button", { name })).toBeEnabled();
+    }
+    expect(screen.getByRole("button", { name: "Delete" })).toHaveClass("border-red-600");
+  });
+
+  // Not a preference: `ConfirmDialog` captures the focused element as what to
+  // return focus to, so a panel that closed on click would unmount the button
+  // it has to restore to — the exact bug ADR 0009 deleted the focus dance to
+  // avoid. The panel closes on its trigger and on nothing else.
+  it("stays open when an action inside it is triggered", async () => {
+    mockViewport("mobile");
+    const edit = vi.fn();
+    render(<ActionBar collapseOnMobile items={[{ label: "Edit", onClick: edit }]} />);
+
+    await userEvent.click(open());
+    await userEvent.click(screen.getByRole("button", { name: "Edit" }));
+
+    expect(edit).toHaveBeenCalledOnce();
+    expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
+    expect(open()).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("closes when the trigger is pressed again", async () => {
+    mockViewport("mobile");
+    render(<ActionBar collapseOnMobile items={actions()} />);
+
+    await userEvent.click(open());
+    await userEvent.click(open());
+
+    expect(open()).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+  });
+
+  // The whole-bar rule, inside the panel: two mutations must never race on the
+  // same object, and reaching a second one through the trigger is still
+  // reaching it.
+  it("disables the panel and its trigger while any item is pending", async () => {
+    mockViewport("mobile");
+    const bar = (pending: boolean) => (
+      <ActionBar
+        collapseOnMobile
+        items={[
+          { label: "Edit", onClick: vi.fn() },
+          { label: "Archive", onClick: vi.fn(), pending, pendingLabel: "Archiving…" },
+        ]}
+      />
+    );
+    const { rerender } = render(bar(false));
+
+    await userEvent.click(open());
+    rerender(bar(true));
+
+    for (const name of ["Actions", "Edit", "Archiving…"]) {
+      expect(screen.getByRole("button", { name })).toBeDisabled();
+    }
+    // The panel does not slam shut under the user mid-mutation; it is disabled,
+    // which is what the open bar does too.
+    expect(open()).toHaveAttribute("aria-expanded", "true");
   });
 });

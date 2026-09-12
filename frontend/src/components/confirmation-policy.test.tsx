@@ -593,7 +593,7 @@ describe("the confirmation policy — what asks, and names what it is acting on"
   it("archiving an occasion from its own page asks", async () => {
     renderOccasionDetail();
 
-    await screen.findByRole("heading", { level: 1, name: "Boone Family \u00b7 Christmas 2026" });
+    await screen.findByRole("heading", { level: 1, name: "Boone Family Christmas 2026" });
     const dialog = await dialogFrom(screen.getByRole("button", { name: "Archive" }));
 
     // The page's own heading names the occasion above the dialog, so the title
