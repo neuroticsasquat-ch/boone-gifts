@@ -18,7 +18,7 @@ import { ListAttributionLine, RecipientLine } from "../components/ListAttributio
  * carry: archived rows are no longer a state the dashboard can be put into, so
  * nothing archived can reach a default view (NEU-1278).
  *
- * Nothing is unarchived from here. List detail's `⋯` menu and the folder page's
+ * Nothing is unarchived from here. List detail's header and the folder page's
  * header already own that mutation, and a second implementation of it is a
  * second thing to keep honest — so the rows are links to those pages and this
  * stays a way of finding them.

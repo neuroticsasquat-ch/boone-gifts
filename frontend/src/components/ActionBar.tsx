@@ -52,9 +52,13 @@ export function ActionBar({ items }: { items: ActionBarItem[] }) {
           type="button"
           onClick={item.onClick}
           disabled={busy}
-          // Stays put while the item works: it names the subject, which the
-          // busy label cannot, and a disabled button is not a voice-control
-          // target so WCAG 2.5.3 has nothing to hold against the mismatch.
+          // Stays put while the item works, so it still names the subject that
+          // the busy label cannot. WCAG 2.5.3 wants the accessible name to
+          // contain the visible label, and "Removing…" is not inside "Remove
+          // Jane Boone" — but that mismatch exists only while `pending` holds,
+          // and `pending` disables every button in the bar. A disabled control
+          // is operable by neither voice nor pointer, so there is no activation
+          // for the criterion to protect. At rest the two agree.
           aria-label={item.ariaLabel}
           className={`rounded px-3 py-1 text-sm font-medium disabled:opacity-50 ${
             item === firstDanger ? "ml-2 " : ""
