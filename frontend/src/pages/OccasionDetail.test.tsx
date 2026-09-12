@@ -11,6 +11,7 @@ import { NavigationDepthProvider } from "../contexts/NavigationDepthContext";
 import { ArrivedFrom } from "../test/arrived-from";
 import { NumericId } from "../components/NumericId";
 import { OccasionDetail } from "./OccasionDetail";
+import { mockViewport } from "../test/viewport";
 
 const API = "https://boone-gifts-api.localhost";
 
@@ -187,7 +188,7 @@ describe("OccasionDetail", () => {
   it("heads the page with the occasion, its family, and a link back to it", async () => {
     renderOccasion();
 
-    expect(await screen.findByRole("heading", { name: "Boone Family \u00b7 Christmas 2026" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Boone Family Christmas 2026" })).toBeInTheDocument();
     const back = await screen.findByRole("link", { name: "\u2190 Boone Family" });
     expect(back).toHaveAttribute("href", "/people/families/7");
   });
@@ -197,8 +198,11 @@ describe("OccasionDetail", () => {
     renderOccasion({ arriveFrom: "/lists/1" });
     await userEvent.click(screen.getByRole("button", { name: "arrive" }));
 
-    expect(await screen.findByRole("heading", { name: "Boone Family \u00b7 Christmas 2026" })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /Boone Family/ })).not.toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Boone Family Christmas 2026" })).toBeInTheDocument();
+    // The *back control* does not name the family at this depth \u2014 it reads only
+    // "\u2190 Back". The heading's eyebrow still links to it, and is now the page's
+    // only route there, which is the case NEU-1323 turns on.
+    expect(screen.queryByRole("link", { name: "\u2190 Boone Family" })).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "\u2190 Back" }));
 
@@ -367,10 +371,36 @@ describe("OccasionDetail", () => {
     expect(archived).not.toHaveBeenCalled();
   });
 
+  /**
+   * The constraint behind "triggering an action does not close the disclosure"
+   * (ADR 0010), asserted end to end rather than taken on trust: `Modal` captures
+   * `document.activeElement` when it opens and focuses it again on close, so a
+   * panel that unmounted the button it was opened from would have nothing to
+   * return to — the exact bug ADR 0009 deleted `HeaderMenu`'s focus dance to be
+   * rid of. On a phone the archive confirmation is now opened from inside the
+   * panel, which is the only place in the app where that risk is live.
+   */
+  it("returns focus into the open panel when a dialog opened from it closes", async () => {
+    mockViewport("mobile");
+    renderOccasion();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Actions" }));
+    const archive = screen.getByRole("button", { name: "Archive" });
+    await userEvent.click(archive);
+
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    // Still mounted, still the same node, and focused again.
+    expect(screen.getByRole("button", { name: "Archive" })).toBe(archive);
+    expect(archive).toHaveFocus();
+  });
+
   it("gives a plain member no rename or archive menu", async () => {
     renderOccasion({ userId: 2 });
 
-    expect(await screen.findByRole("heading", { name: "Boone Family \u00b7 Christmas 2026" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Boone Family Christmas 2026" })).toBeInTheDocument();
     for (const action of ["Rename", "Archive", "Unarchive"]) {
       expect(screen.queryByRole("button", { name: action })).not.toBeInTheDocument();
     }
@@ -418,8 +448,17 @@ describe("OccasionDetail", () => {
   it("renders an archived occasion normally, offering Unarchive", async () => {
     renderOccasion({ occasionResponse: HttpResponse.json({ ...occasion, is_archived: true }) });
 
-    expect(await screen.findByRole("heading", { name: "Boone Family \u00b7 Christmas 2026" })).toBeInTheDocument();
-    expect(screen.getByText("Archived")).toBeInTheDocument();
+    const heading = await screen.findByRole("heading", { name: "Boone Family Christmas 2026" });
+    // The eyebrow survives the pill: all three of eyebrow, name and badge are on
+    // the header, and the pill is a **sibling** of the heading, not part of the
+    // occasion's name. That is what keeps the accessible name to two halves and
+    // what `items-end` on the row is for — the badge belongs on the occasion
+    // line, not floated up against the family (AC 6).
+    expect(within(heading).getByRole("link", { name: "Boone Family" })).toBeInTheDocument();
+    const pill = screen.getByText("Archived");
+    expect(pill).toBeInTheDocument();
+    expect(heading).not.toContainElement(pill);
+    expect(heading.parentElement).toHaveClass("items-end");
     // Its lists are still listed: archiving is not unsharing.
     expect(await screen.findByRole("link", { name: /Jane's Wishlist/ })).toBeInTheDocument();
 
@@ -434,18 +473,38 @@ describe("OccasionDetail", () => {
 
     const heading = await screen.findByRole(
       "heading",
-      { name: "Boone Family \u00b7 Christmas 2026" },
+      { name: "Boone Family Christmas 2026" },
     );
-    // Unlinked, per CONTEXT.md rule 3: the family's destination on this page is
-    // the back control, and a second link to it two lines apart is the
-    // redundancy the rule avoids.
-    expect(within(heading).queryByRole("link")).not.toBeInTheDocument();
+    // Linked, and this is the exact inversion of NEU-1321's "the family half is
+    // not a link" — which was written one day earlier and is deleted rather
+    // than left to rot. Rule 3's test is whether the destination carries
+    // something this surface does not: on the occasion *page* the viewer has
+    // arrived, so the family stops disambiguating and becomes the parent that
+    // administers this occasion. It duplicates the back control at depth 0
+    // alone; here, where a viewer actually arrives from, it is the only route.
+    expect(within(heading).getByRole("link", { name: "Boone Family" })).toHaveAttribute(
+      "href",
+      "/people/families/7",
+    );
+  });
+
+  // The eyebrow is *inside* the <h1>, not a <p> above it. That is what keeps
+  // the page identified as "Boone Family Christmas 2026" to a screen reader —
+  // the identification NEU-1321 was filed to get, and the thing a detached line
+  // above the heading would quietly hand back.
+  it("keeps both halves inside the heading, and drops the separator there", async () => {
+    renderOccasion();
+
+    const heading = await screen.findByRole("heading", { level: 1 });
+
+    expect(heading).toHaveAccessibleName("Boone Family Christmas 2026");
+    expect(heading).toHaveTextContent(/^Boone Family\s*Christmas 2026$/);
   });
 
   it("titles the document with the family too", async () => {
     renderOccasion();
 
-    await screen.findByRole("heading", { name: "Boone Family \u00b7 Christmas 2026" });
+    await screen.findByRole("heading", { name: "Boone Family Christmas 2026" });
     expect(document.title).toContain("Boone Family \u00b7 Christmas 2026");
   });
 
@@ -458,7 +517,7 @@ describe("OccasionDetail", () => {
     server.use(http.get(`${API}/families/7`, () => new Promise(() => {})));
 
     expect(
-      await screen.findByRole("heading", { name: "Boone Family \u00b7 Christmas 2026" }),
+      await screen.findByRole("heading", { name: "Boone Family Christmas 2026" }),
     ).toBeInTheDocument();
     // Same field, same reason: the back control never shows the `Family`
     // placeholder on this page (Decision 7).
@@ -469,15 +528,20 @@ describe("OccasionDetail", () => {
     expect(screen.queryByRole("link", { name: "\u2190 Family" })).not.toBeInTheDocument();
   });
 
-  // This ticket's own bug, re-created in a transient state: with the qualifier
-  // in the <h1>, opening the form would take the family off the page again, and
-  // at depth > 0 the back control above reads only "\u2190 Back".
-  it("keeps the family on screen while the occasion is being renamed", async () => {
+  // NEU-1321's bug, re-created in a transient state: with the qualifier in the
+  // <h1>, opening the form would take the family off the page again, and at
+  // depth > 0 the back control above reads only "\u2190 Back". It is the same
+  // eyebrow as the resting state, link and all \u2014 a static copy would have the
+  // two states disagree about what the family half is, one keystroke apart.
+  it("keeps the linked family on screen while the occasion is being renamed", async () => {
     renderOccasion();
 
     await userEvent.click(await screen.findByRole("button", { name: "Rename" }));
 
-    expect(screen.getByText("Boone Family \u00b7")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Boone Family" })).toHaveAttribute(
+      "href",
+      "/people/families/7",
+    );
     // The edit covers the occasion half and not the family half.
     expect(screen.getByLabelText("Occasion name")).toHaveValue("Christmas 2026");
   });
@@ -500,7 +564,7 @@ describe("OccasionDetail", () => {
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
 
     expect(
-      await screen.findByRole("heading", { name: "Boone Family \u00b7 Christmas 2027" }),
+      await screen.findByRole("heading", { name: "Boone Family Christmas 2027" }),
     ).toBeInTheDocument();
   });
 

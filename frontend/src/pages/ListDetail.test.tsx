@@ -113,13 +113,13 @@ function renderListDetail(
 }
 
 describe("ListDetail sharing modal", () => {
-  // The tab bar is gone: sharing is reached from the header's Change control,
+  // The tab bar is gone: sharing is reached from the header bar's Sharing… action,
   // and that is the only way in.
   async function openSharingModal() {
     await waitFor(() => {
       expect(screen.getByText("My Wishlist")).toBeInTheDocument();
     });
-    await userEvent.click(await screen.findByRole("button", { name: "Change" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Sharing…" }));
     return screen.findByRole("dialog", { name: "Who can see this list" });
   }
 
@@ -168,7 +168,7 @@ describe("ListDetail sharing modal", () => {
     await waitFor(() => {
       expect(screen.getByText("My Wishlist")).toBeInTheDocument();
     });
-    expect(screen.queryByRole("button", { name: "Change" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Sharing…" })).not.toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: "Who can see this list" })).not.toBeInTheDocument();
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
@@ -473,7 +473,7 @@ describe("ListDetail — no tab bar", () => {
     expect(
       await screen.findByText("This list isn't shared with anyone."),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Change" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sharing…" })).toBeInTheDocument();
   });
 
   it("does not claim a list is unshared when the sharing state failed to load", async () => {
@@ -508,7 +508,7 @@ describe("ListDetail — no tab bar", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("opens the family controls from Change", async () => {
+  it("opens the family controls from Sharing…", async () => {
     server.use(
       http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
@@ -528,7 +528,7 @@ describe("ListDetail — no tab bar", () => {
     renderListDetail(ownerToken);
 
     await screen.findByText("My Wishlist");
-    await userEvent.click(await screen.findByRole("button", { name: "Change" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Sharing…" }));
 
     expect(
       await screen.findByRole("checkbox", { name: /share with the boones/i })
@@ -731,7 +731,7 @@ describe("ListDetail — add to a folder", () => {
     renderListDetail(ownerToken);
 
     await openThePicker();
-    await userEvent.click(await screen.findByRole("button", { name: "Change" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Sharing…" }));
 
     expect(
       await screen.findByRole("dialog", { name: "Who can see this list" }),
@@ -1741,13 +1741,13 @@ describe("ListDetail — the sharing modal lives at ?share=open", () => {
 
   // Criterion 2. An open modal is a place you can be, so it is linkable and
   // Back closes it (CONTEXT.md rule 8).
-  it("pushes ?share=open when Change is pressed, and Back closes it", async () => {
+  it("pushes ?share=open when Sharing… is pressed, and Back closes it", async () => {
     serveSharing();
 
     renderListDetail(ownerToken, { entries: ["/lists", "/lists/1"] });
 
     await screen.findByText("My Wishlist");
-    await userEvent.click(screen.getByRole("button", { name: "Change" }));
+    await userEvent.click(screen.getByRole("button", { name: "Sharing…" }));
 
     expect(await screen.findByText("address: /lists/1?share=open")).toBeInTheDocument();
     expect(sharingModal()).toBeInTheDocument();
@@ -1778,7 +1778,7 @@ describe("ListDetail — the sharing modal lives at ?share=open", () => {
     await userEvent.click(screen.getByRole("button", { name: "arrive" }));
 
     await screen.findByText("My Wishlist");
-    await userEvent.click(screen.getByRole("button", { name: "Change" }));
+    await userEvent.click(screen.getByRole("button", { name: "Sharing…" }));
     await screen.findByText("address: /lists/1?share=open");
 
     await userEvent.click(screen.getByRole("button", { name: /^done$/i }));

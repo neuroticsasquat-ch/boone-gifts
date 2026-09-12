@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { ACTION_TONE_CLASSES, type Tone } from "./tone";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 
 export type ActionBarItem = {
   label: string;
@@ -18,18 +20,43 @@ export type ActionBarItem = {
 };
 
 /**
+ * Tailwind v4's `md`, and the width `ListHeader` and `FolderDetail` already
+ * stack at. Not a prop: a call site choosing its own breakpoint would be a
+ * second way to say the thing this constant says.
+ */
+const MD = "(min-width: 768px)";
+
+/**
  * Every action on the thing a page header or a list row is about, as visible
  * controls (`CONTEXT.md` rule 12, ADR 0009). It replaced a `⋯` overflow menu
  * that nobody read as a menu — two of whose four call sites held a single item.
  *
- * There is no `open` state, no outside-click effect and no `aria-expanded`,
- * because there is nothing to reveal. Nor is there the focus dance the menu
- * needed: it returned focus to the trigger *before* running an action, since
- * choosing an item unmounted the trigger and a `ConfirmDialog` opened by that
- * action captures whatever is focused as the element to restore to. A visible
- * button is already the focused element when clicked.
+ * `collapseOnMobile` is that rule's one exception, and it is a width exception
+ * rather than a taste one (ADR 0010): below `md` a bar that opts in renders a
+ * labelled disclosure instead of its buttons, because a header carrying a
+ * heading *and* a group of actions has no room for either on a phone. It is
+ * granted to two call sites — the occasion header and a list owner's — and a
+ * header holding a single action never gets it, since there is nothing there to
+ * group and hiding it would rebuild the exact fault ADR 0009 was filed against.
+ *
+ * The disclosure is a word carrying `aria-expanded`, never a glyph, and it
+ * expands **in place** — so `HeaderMenu`'s outside-click effect and its
+ * focus-restore dance stay deleted. That dance returned focus to the trigger
+ * *before* running an action, since choosing an item unmounted the trigger and a
+ * `ConfirmDialog` opened by that action captures whatever is focused as the
+ * element to restore to. Here the button is still mounted and still focused
+ * after it is pressed, because triggering an action does not close the panel.
  */
-export function ActionBar({ items }: { items: ActionBarItem[] }) {
+export function ActionBar({
+  items,
+  collapseOnMobile = false,
+}: {
+  items: ActionBarItem[];
+  collapseOnMobile?: boolean;
+}) {
+  const isWide = useMediaQuery(MD);
+  const [open, setOpen] = useState(false);
+
   // Danger last, which is what `HeaderMenu`'s `separatorBefore` always meant:
   // it was set once, to fence Delete off from the rest.
   const isDanger = (item: ActionBarItem) => item.tone === "danger";
@@ -41,7 +68,7 @@ export function ActionBar({ items }: { items: ActionBarItem[] }) {
   // clickable buttons do not. Two mutations must never race on the same object.
   const busy = items.some((item) => item.pending);
 
-  return (
+  const buttons = (
     // Wraps; never scrolls and never truncates. The owner's list header is
     // wider than a 375px viewport, and a horizontal scroll strip would push
     // actions past the visible edge — this ticket's complaint in a new costume.
@@ -67,6 +94,27 @@ export function ActionBar({ items }: { items: ActionBarItem[] }) {
           {item.pending ? (item.pendingLabel ?? `${item.label}…`) : item.label}
         </button>
       ))}
+    </div>
+  );
+
+  if (!collapseOnMobile || isWide) return buttons;
+
+  return (
+    <div className="flex flex-col items-start gap-2">
+      <button
+        type="button"
+        aria-expanded={open}
+        // Disabled with the rest of the bar: reaching a second mutation through
+        // the trigger is still reaching it.
+        disabled={busy}
+        onClick={() => setOpen((isOpen) => !isOpen)}
+        // No `aria-controls`. The panel immediately follows its trigger, which
+        // is what a disclosure needs and all it needs.
+        className={`rounded px-3 py-1 text-sm font-medium disabled:opacity-50 ${ACTION_TONE_CLASSES.neutral}`}
+      >
+        Actions
+      </button>
+      {open && buttons}
     </div>
   );
 }
