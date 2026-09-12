@@ -79,9 +79,11 @@ src/
     Layout.tsx            # App shell: one tab set (Lists · People) + outlet, badge queries
     ProtectedRoute.tsx    # Auth guard        AdminRoute.tsx — admin guard for /admin/*
     Badge.tsx             # Numeric badge overlay for nav icons
-    HeaderMenu.tsx        # The `⋯` menu a page header hangs its actions off —
-                          # list detail's owner and viewer menus, and the
-                          # occasion page's organizer-only one
+    ActionBar.tsx         # Every action on the thing a header or row is about,
+                          # as visible controls (rule 12, ADR 0009). Replaced
+                          # the `⋯` overflow menu. Tones come from tone.ts
+    tone.ts               # danger | primary | neutral, and the two class maps
+                          # ActionBar and ConfirmDialog read them through
     BackControl.tsx       # The one page-level way back — `← Back` when the app
                           # pushed you here, the page's named parent when it
                           # didn't. Owns the BACK_TO_* destinations
@@ -146,7 +148,7 @@ src/
                      # action, and the organizer-only rename and archive)
     list-detail/     # GiftsTab (the page body), SharingSummary (the header's
                      # "Shared with …" line, and the Change control that opens
-                     # the sharing modal), FolderPicker (the ⋯ menu's
+                     # the sharing modal), FolderPicker (the header's
                      # "Add to a folder…", still an inline panel)
   lib/               # sharing-summary.ts — "Shared with 2 families and 1 person", said
                      # once for the dialog and the create form both;
@@ -178,12 +180,12 @@ src/
 | `/lists` | `Lists` | My lists + everything shared with me, under the actionable banner. Header controls: folder filter, sort, group by — held in the URL as `?folder=` · `?sort=` · `?group=`, all `replace` (plus the strip's `?occasions=all`). **Active only** — the archive is its own page, linked at the foot |
 | `/lists/archive` | `ListsArchive` | Archived lists (owned and shared) and archived folders. Read-only: rows link to the detail pages that own unarchive |
 | `/lists/new` | `CreateList` | Also shows "Share with families" checkboxes |
-| `/lists/:id` | `ListDetail` | Owner view or viewer/claimer view. No tab bar: header, then the gifts. Gift `?sort=` (both views) and `?filter=` (viewer only) are `replace`. Owner header carries the sharing summary line (+ **Change**) and a `⋯` menu holding Add to a folder…, Edit, Archive and Delete; a viewer gets the same menu holding the folder action alone |
+| `/lists/:id` | `ListDetail` | Owner view or viewer/claimer view. No tab bar: header, then the gifts. Gift `?sort=` (both views) and `?filter=` (viewer only) are `replace`. Owner header carries the sharing summary line (+ **Change**) and an action bar holding Add to a folder…, Edit, Archive and Delete; a viewer's header holds the folder action alone |
 | `/people` | `People` | The People tab: families, then individuals, under the actionable banner |
 | `/people/:id` | `ConnectionProfile` | |
 | `/people/families/:id` | `FamilyDetail` | Members, **active** occasions, invites, rename, delete, leave |
 | `/people/families/:id/archive` | `FamilyArchive` | That family's archived occasions, each linking to `/occasions/:id`. Any member may look |
-| `/occasions/:id` | `OccasionDetail` | A family occasion: header, tab bar (**Lists · My shopping**) held in the URL as `?tab=`, `push` — so a tab is linkable and Back closes it — and the lists shared to it. The `⋯` menu's rename and archive are organizer-only |
+| `/occasions/:id` | `OccasionDetail` | A family occasion: header, tab bar (**Lists · My shopping**) held in the URL as `?tab=`, `push` — so a tab is linkable and Back closes it — and the lists shared to it. The header's rename and archive are organizer-only |
 | `/folders/:id` | `FolderDetail` | One user's folder, with the same two tabs, under the same `?tab=` (`push`). There is no `/folders` index — `Folders.tsx` stays unrouted; a **Group by: Folder** heading on `/lists` is the one link here |
 | `/account` | `Account` | Via the user menu |
 | `/admin/invites`, `/admin/users` | `AdminInvites`, `AdminUsers` | Admin-only |
@@ -250,7 +252,7 @@ own: its name and family in the header, a back link to `/people/families/:id`, a
 `/occasions/{id}/lists`, which filters by `can_view_list` so a list the viewer cannot see is *absent*
 rather than greyed; **My shopping** is `components/MyShopping.tsx` scoped to this occasion. The bar is
 driven by a `TABS` array and the body by the active key, which is what made the second tab an entry
-plus a panel rather than a reshaping. The `⋯` menu carries rename and archive, **organizer
+plus a panel rather than a reshaping. The header's action bar carries rename and archive, **organizer
 only** and gated on the family's members exactly as the family page's controls are — the backend
 enforces both, so a 403 still has a message. An **archived** occasion renders like any other, carrying
 an Archived pill and offering Unarchive: archiving takes an occasion out of the default views and does
@@ -477,12 +479,12 @@ heading on `/lists` (NEU-1277). Its back link and its post-delete redirect both 
 because there is no folder index to return to.
 
 **Membership is an action on the list, not a tab.** `list-detail/FolderPicker.tsx` is opened by
-"Add to a folder…" in list detail's `⋯` menu — a checkbox per folder, ticked where this list is
+"Add to a folder…" on list detail's header — a checkbox per folder, ticked where this list is
 already a member, plus a field that creates one and files the list under it in a single step. It
 replaces the tab retired in NEU-1240.
 
 - **Owner or viewer.** Filing someone else's list under "Christmas 2026" is the main use of the
-  feature, so the `⋯` menu exists on the viewer header too, holding this one item. It is a viewer's
+  feature, so the action stands on the viewer header too, as the only thing on it. It is a viewer's
   only entry point to folders, so it must keep working for them.
 - A folder is private to whoever owns it: the picker always shows the *viewer's* own folders,
   and nothing about the list or its owner travels through it.
@@ -560,8 +562,8 @@ section that claims to hold everything shared with the viewer.
   unconditionally and `OccasionsSection` likewise; the `showArchived` state, both toggle buttons and
   every branch that hung off them are deleted. That is what makes "nothing archived appears in a
   default view" structural rather than a default someone has to keep choosing.
-- **Nothing is unarchived from an archive view.** List detail's `⋯` menu, the folder page's header
-  and the occasion page's organizer-only `⋯` menu already own that mutation — with its confirm, its
+- **Nothing is unarchived from an archive view.** List detail's header, the folder page's header
+  and the occasion page's organizer-only header actions already own that mutation — with its confirm, its
   403 handling and its gating — so the rows are **links to those pages** and the archive stays a way
   of finding them. A second copy of Unarchive would be a second thing to keep honest, and the
   occasion one would have to re-derive organizer-ness the occasion page already knows.

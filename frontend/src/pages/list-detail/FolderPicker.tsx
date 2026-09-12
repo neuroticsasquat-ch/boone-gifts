@@ -13,7 +13,7 @@ type QueryClient = ReturnType<typeof useQueryClient>;
 
 /**
  * "Add to a folder…" — the one entry point to folders from a list, opened
- * from the header's `⋯` menu and replacing the tab retired in NEU-1240.
+ * from the header's action bar and replacing the tab retired in NEU-1240.
  *
  * Deliberately **not** owner-gated: filing someone else's list under "Christmas
  * 2026" is the main use of the feature, and this is a viewer's only way in

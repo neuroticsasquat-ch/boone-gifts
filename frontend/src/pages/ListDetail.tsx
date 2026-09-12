@@ -14,7 +14,7 @@ import toast from "react-hot-toast";
 import { Spinner } from "../components/Spinner";
 import { useNumericId } from "../components/NumericId";
 import { BackControl, BACK_TO_LISTS } from "../components/BackControl";
-import { HeaderMenu } from "../components/HeaderMenu";
+import { ActionBar } from "../components/ActionBar";
 import { ConfirmDialog, type ConfirmAction } from "../components/ConfirmDialog";
 import { ListSharingModal } from "../components/ListSharingModal";
 import { GiftsTab } from "./list-detail/GiftsTab";
@@ -233,14 +233,23 @@ function OwnerHeader({
           <SharingSummary listId={listId} onChange={onChangeSharing} />
         }
         actions={
-          <HeaderMenu
-            ariaLabel="List actions"
-            pending={archiveMutation.isPending || deleteMutation.isPending}
+          <ActionBar
             items={[
               { label: ADD_TO_FOLDER, onClick: onAddToFolder },
               { label: "Edit", onClick: onEdit },
-              { label: list.is_archived ? "Unarchive" : "Archive", onClick: () => archiveMutation.mutate() },
-              { label: "Delete", onClick: () => setConfirmingDelete(true), danger: true, separatorBefore: true },
+              {
+                label: list.is_archived ? "Unarchive" : "Archive",
+                onClick: () => archiveMutation.mutate(),
+                pending: archiveMutation.isPending,
+                pendingLabel: list.is_archived ? "Unarchiving…" : "Archiving…",
+              },
+              {
+                label: "Delete",
+                onClick: () => setConfirmingDelete(true),
+                tone: "danger",
+                pending: deleteMutation.isPending,
+                pendingLabel: "Deleting…",
+              },
             ]}
           />
         }
@@ -302,12 +311,10 @@ function ViewerHeader({
         )
       }
       isArchived={list.is_archived}
-      // No owner controls, but the menu itself stays: filing someone else's list
-      // under a folder of your own is the main use of the feature, and this
-      // is a viewer's only way to reach it.
-      actions={
-        <HeaderMenu ariaLabel="List actions" items={[{ label: ADD_TO_FOLDER, onClick: onAddToFolder }]} />
-      }
+      // No owner controls, but the folder action stays: filing someone else's
+      // list under a folder of your own is the main use of the feature, and
+      // this is a viewer's only way to reach it.
+      actions={<ActionBar items={[{ label: ADD_TO_FOLDER, onClick: onAddToFolder }]} />}
     />
   );
 }

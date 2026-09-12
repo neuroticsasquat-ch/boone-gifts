@@ -278,7 +278,9 @@ describe("FolderDetail", () => {
       expect(screen.getByText("My Wishlist")).toBeInTheDocument();
     });
 
-    await userEvent.click(screen.getByText("Remove"));
+    // Queried by its accessible name, which names the list it takes out of the
+    // folder (`CONTEXT.md` rule 12).
+    await userEvent.click(screen.getByRole("button", { name: "Remove My Wishlist" }));
   });
 
   it("adds a list to folder", async () => {

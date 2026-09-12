@@ -317,8 +317,7 @@ describe("OccasionDetail", () => {
       })
     );
 
-    await userEvent.click(await screen.findByRole("button", { name: "Occasion actions" }));
-    await userEvent.click(screen.getByRole("button", { name: "Rename" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Rename" }));
     const field = screen.getByLabelText("Occasion name");
     await userEvent.clear(field);
     await userEvent.type(field, "Christmas 2027");
@@ -337,8 +336,7 @@ describe("OccasionDetail", () => {
       })
     );
 
-    await userEvent.click(await screen.findByRole("button", { name: "Occasion actions" }));
-    await userEvent.click(screen.getByRole("button", { name: "Archive" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Archive" }));
 
     // The menu item and the dialog's action share a label, so the confirming
     // click is scoped to the dialog.
@@ -360,8 +358,7 @@ describe("OccasionDetail", () => {
       })
     );
 
-    await userEvent.click(await screen.findByRole("button", { name: "Occasion actions" }));
-    await userEvent.click(screen.getByRole("button", { name: "Archive" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Archive" }));
 
     const dialog = await screen.findByRole("dialog");
     await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
@@ -374,7 +371,9 @@ describe("OccasionDetail", () => {
     renderOccasion({ userId: 2 });
 
     expect(await screen.findByRole("heading", { name: "Boone Family \u00b7 Christmas 2026" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Occasion actions" })).not.toBeInTheDocument();
+    for (const action of ["Rename", "Archive", "Unarchive"]) {
+      expect(screen.queryByRole("button", { name: action })).not.toBeInTheDocument();
+    }
   });
 
   // The backend gates the two fields separately (NEU-1294 decision 4), and the
@@ -385,9 +384,7 @@ describe("OccasionDetail", () => {
       occasionResponse: HttpResponse.json({ ...occasion, created_by_id: 2 }),
     });
 
-    await userEvent.click(await screen.findByRole("button", { name: "Occasion actions" }));
-
-    expect(screen.getByRole("button", { name: "Archive" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Archive" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Rename" })).not.toBeInTheDocument();
   });
 
@@ -395,8 +392,7 @@ describe("OccasionDetail", () => {
     renderOccasion();
     server.use(http.put(`${API}/occasions/3`, () => new HttpResponse(null, { status: 403 })));
 
-    await userEvent.click(await screen.findByRole("button", { name: "Occasion actions" }));
-    await userEvent.click(screen.getByRole("button", { name: "Archive" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Archive" }));
     const dialog = await screen.findByRole("dialog");
     await userEvent.click(within(dialog).getByRole("button", { name: "Archive" }));
 
@@ -411,8 +407,7 @@ describe("OccasionDetail", () => {
     renderOccasion();
     server.use(http.put(`${API}/occasions/3`, () => new HttpResponse(null, { status: 403 })));
 
-    await userEvent.click(await screen.findByRole("button", { name: "Occasion actions" }));
-    await userEvent.click(screen.getByRole("button", { name: "Rename" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Rename" }));
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
 
     expect(
@@ -428,7 +423,6 @@ describe("OccasionDetail", () => {
     // Its lists are still listed: archiving is not unsharing.
     expect(await screen.findByRole("link", { name: /Jane's Wishlist/ })).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "Occasion actions" }));
     expect(screen.getByRole("button", { name: "Unarchive" })).toBeInTheDocument();
   });
 
@@ -481,8 +475,7 @@ describe("OccasionDetail", () => {
   it("keeps the family on screen while the occasion is being renamed", async () => {
     renderOccasion();
 
-    await userEvent.click(await screen.findByRole("button", { name: "Occasion actions" }));
-    await userEvent.click(screen.getByRole("button", { name: "Rename" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Rename" }));
 
     expect(screen.getByText("Boone Family \u00b7")).toBeInTheDocument();
     // The edit covers the occasion half and not the family half.
@@ -500,8 +493,7 @@ describe("OccasionDetail", () => {
       )
     );
 
-    await userEvent.click(await screen.findByRole("button", { name: "Occasion actions" }));
-    await userEvent.click(screen.getByRole("button", { name: "Rename" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Rename" }));
     const field = screen.getByLabelText("Occasion name");
     await userEvent.clear(field);
     await userEvent.type(field, "Christmas 2027");

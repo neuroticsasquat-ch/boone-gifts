@@ -85,7 +85,9 @@ describe("Folders", () => {
       expect(screen.getByText("To Delete")).toBeInTheDocument();
     });
 
-    await userEvent.click(screen.getByText("Delete"));
+    // Queried by its accessible name, which names the folder: a row's action
+    // says more than its visible text (`CONTEXT.md` rule 12).
+    await userEvent.click(screen.getByRole("button", { name: "Delete To Delete" }));
   });
 
   it("shows empty state", async () => {

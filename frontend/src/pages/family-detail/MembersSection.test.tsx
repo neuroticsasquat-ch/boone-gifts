@@ -50,8 +50,10 @@ describe("MembersSection", () => {
 
     // Alice is the viewer; the only controls on the page are Bob's row.
     const zone = membersZone();
-    expect(within(zone).getAllByRole("button", { name: "Make Organizer" })).toHaveLength(1);
-    expect(within(zone).getAllByRole("button", { name: "Remove" })).toHaveLength(1);
+    // Each names the member it acts on, so a roster of rows is not a column of
+    // buttons all announced alike (`CONTEXT.md` rule 12).
+    expect(within(zone).getAllByRole("button", { name: "Make Organizer Bob" })).toHaveLength(1);
+    expect(within(zone).getAllByRole("button", { name: "Remove Bob" })).toHaveLength(1);
     const aliceRow = within(zone).getByText("Alice").closest("li") as HTMLElement;
     expect(within(aliceRow).queryByRole("button")).not.toBeInTheDocument();
   });
@@ -83,7 +85,7 @@ describe("MembersSection", () => {
       expect(screen.getByText("Boone Family")).toBeInTheDocument();
     });
 
-    await userEvent.click(screen.getByRole("button", { name: "Make Member" }));
+    await userEvent.click(screen.getByRole("button", { name: "Make Member Bob" }));
 
     await waitFor(() => {
       expect(capturedBody).toEqual({ role: "member" });
@@ -105,7 +107,7 @@ describe("MembersSection", () => {
       expect(screen.getByText("Boone Family")).toBeInTheDocument();
     });
 
-    await userEvent.click(within(membersZone()).getByRole("button", { name: "Remove" }));
+    await userEvent.click(within(membersZone()).getByRole("button", { name: "Remove Bob" }));
 
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText("Remove Bob from Boone Family?")).toBeInTheDocument();
@@ -136,7 +138,7 @@ describe("MembersSection", () => {
       expect(screen.getByText("Boone Family")).toBeInTheDocument();
     });
 
-    await userEvent.click(within(membersZone()).getByRole("button", { name: "Remove" }));
+    await userEvent.click(within(membersZone()).getByRole("button", { name: "Remove Bob" }));
 
     const dialog = await screen.findByRole("dialog");
     await userEvent.click(within(dialog).getByRole("button", { name: "Remove" }));
@@ -159,7 +161,7 @@ describe("MembersSection", () => {
       expect(screen.getByText("Boone Family")).toBeInTheDocument();
     });
 
-    await userEvent.click(within(membersZone()).getByRole("button", { name: "Remove" }));
+    await userEvent.click(within(membersZone()).getByRole("button", { name: "Remove Bob" }));
 
     const dialog = await screen.findByRole("dialog");
     await userEvent.click(within(dialog).getByRole("button", { name: "Remove" }));
@@ -190,7 +192,7 @@ describe("MembersSection", () => {
 
     // Bob is an organizer; "Make Member" demotes him → 409.
     const zone = membersZone();
-    await userEvent.click(within(zone).getByRole("button", { name: "Make Member" }));
+    await userEvent.click(within(zone).getByRole("button", { name: "Make Member Bob" }));
 
     await waitFor(() => {
       expect(

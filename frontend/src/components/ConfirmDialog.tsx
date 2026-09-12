@@ -1,5 +1,6 @@
 import { useCallback, useId } from "react";
 import { Modal } from "./Modal";
+import { CONFIRM_TONE_CLASSES, type Tone } from "./tone";
 
 /**
  * One way out of the dialog. `Cancel` is always rendered and is never listed
@@ -8,13 +9,7 @@ import { Modal } from "./Modal";
 export type ConfirmAction = {
   id: string;
   label: string;
-  tone: "danger" | "primary" | "neutral";
-};
-
-const TONE_CLASSES: Record<ConfirmAction["tone"], string> = {
-  danger: "bg-red-600 text-white hover:bg-red-700",
-  primary: "bg-blue-600 text-white hover:bg-blue-700",
-  neutral: "bg-gray-200 text-gray-700 hover:bg-gray-300",
+  tone: Tone;
 };
 
 /**
@@ -64,7 +59,7 @@ export function ConfirmDialog({
             type="button"
             onClick={() => onResolve(action.id)}
             disabled={pending}
-            className={`rounded px-4 py-2 text-sm font-medium disabled:opacity-50 ${TONE_CLASSES[action.tone]}`}
+            className={`rounded px-4 py-2 text-sm font-medium disabled:opacity-50 ${CONFIRM_TONE_CLASSES[action.tone]}`}
           >
             {action.label}
           </button>
