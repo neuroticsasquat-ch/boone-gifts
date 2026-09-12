@@ -241,7 +241,11 @@ function renderOccasionDetail() {
     http.post(`${API}/auth/refresh`, () =>
       HttpResponse.json({ access_token: tokenFor(1), token_type: "bearer" })
     ),
-    http.get(`${API}/occasions/3`, () => HttpResponse.json({ ...familyOccasion, family_id: 7 })),
+    // The detail read names the family (NEU-1321); the family occasions list
+    // `familyOccasion` also feeds does not, which is why it is spread here.
+    http.get(`${API}/occasions/3`, () =>
+      HttpResponse.json({ ...familyOccasion, family_id: 7, family_name: "Boone Family" })
+    ),
     http.get(`${API}/occasions/3/lists`, () => HttpResponse.json([])),
     http.get(`${API}/occasions/3/shopping`, () =>
       HttpResponse.json({ budget: { amount: null, spent: "0.00", remaining: null }, items: [] })
@@ -590,7 +594,7 @@ describe("the confirmation policy — what asks, and names what it is acting on"
   it("archiving an occasion from its own page asks", async () => {
     renderOccasionDetail();
 
-    await screen.findByRole("heading", { level: 1, name: "Christmas 2026" });
+    await screen.findByRole("heading", { level: 1, name: "Boone Family \u00b7 Christmas 2026" });
     await userEvent.click(screen.getByRole("button", { name: "Occasion actions" }));
     const dialog = await dialogFrom(screen.getByRole("button", { name: "Archive" }));
 

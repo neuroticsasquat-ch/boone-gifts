@@ -19,7 +19,11 @@ import { useNavigationDepth } from "../contexts/NavigationDepthContext";
 import { ConfirmDialog, type ConfirmAction } from "../components/ConfirmDialog";
 import { OccasionSharingModal } from "../components/OccasionSharingModal";
 import { ShareIntoOccasionButton } from "../components/ShareIntoOccasionButton";
-import type { Occasion } from "../types";
+// `OccasionDetail` is aliased because this module already exports a component
+// of that name — the page — and the type is the payload it renders. `Occasion`
+// stays alongside it: only the header and the back control need the family, and
+// `ListsTab` below is honest about needing no more than the base shape.
+import type { Occasion, OccasionDetail as OccasionDetailPayload } from "../types";
 
 /**
  * The tabs the occasion page carries (project spec §9.2). The bar is driven by
@@ -65,7 +69,12 @@ export function OccasionDetail() {
     queryFn: () => getOccasion(occasionId),
   });
 
-  useTitle(occasion.data?.name ?? "Occasion");
+  // The family qualifies the tab too, so two families' Christmas 2026 stop
+  // being indistinguishable in a row of tabs (NEU-1321). The fallback is
+  // load-bearing: this sits above the pending guard.
+  useTitle(
+    occasion.data ? `${occasion.data.family_name} · ${occasion.data.name}` : "Occasion",
+  );
 
   if (occasion.isPending) return <Spinner />;
   if (occasion.isError) {
@@ -98,7 +107,7 @@ export function OccasionDetail() {
   return <OccasionPage occasion={occasion.data} />;
 }
 
-function OccasionPage({ occasion }: { occasion: Occasion }) {
+function OccasionPage({ occasion }: { occasion: OccasionDetailPayload }) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const depth = useNavigationDepth();
@@ -155,9 +164,10 @@ function OccasionPage({ occasion }: { occasion: Occasion }) {
     if (share === "open" && archived) stripShare();
   }, [share, archived, stripShare]);
 
-  // The family behind the occasion: its name for the header and the back link,
-  // and its members for the organizer gate. Keyed as the family page keys it,
-  // so arriving from there costs no request.
+  // The family behind the occasion, for its **members** and the organizer gate
+  // alone — the name now arrives on the occasion itself. Still required:
+  // `canRename` and `canArchive` are computed from this. Keyed as the family
+  // page keys it, so arriving from there costs no request.
   const family = useQuery({
     queryKey: ["family", occasion.family_id],
     queryFn: () => getFamily(occasion.family_id),
@@ -175,7 +185,11 @@ function OccasionPage({ occasion }: { occasion: Occasion }) {
 
   return (
     <div className="space-y-6">
-      <BackControl fallback={backToFamily(occasion.family_id, family.data?.name)} />
+      {/* `occasion.family_name`, not `family.data?.name`: the family query below
+          does not resolve until after this has painted, so reading it here would
+          show the `Family` placeholder for a round trip, every visit (NEU-1321
+          decision 7). `FamilyArchive` still needs that placeholder and keeps it. */}
+      <BackControl fallback={backToFamily(occasion.family_id, occasion.family_name)} />
 
       <OccasionHeader occasion={occasion} canRename={canRename} canArchive={canArchive} />
 
@@ -229,7 +243,7 @@ function OccasionHeader({
   canRename,
   canArchive,
 }: {
-  occasion: Occasion;
+  occasion: OccasionDetailPayload;
   canRename: boolean;
   canArchive: boolean;
 }) {
@@ -305,6 +319,12 @@ function OccasionHeader({
     <div className="rounded-lg bg-white p-6 shadow">
       {renaming ? (
         <form onSubmit={handleRename} className="flex items-center gap-2">
+          {/* The form replaces the whole heading row, so without this the family
+              would leave the page the moment an organizer started typing — this
+              ticket's own bug in a transient state, and at depth > 0 the control
+              above reads only "← Back". Static, because the rename covers the
+              occasion half of the heading and not the family. */}
+          <span className="shrink-0 text-sm text-gray-500">{occasion.family_name} &middot;</span>
           <label className="sr-only" htmlFor="occasion-name">
             Occasion name
           </label>
@@ -336,7 +356,17 @@ function OccasionHeader({
       ) : (
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
-            <h1 className="text-2xl font-bold text-gray-900">{occasion.name}</h1>
+            {/* One <h1>, announced whole as "Boone Family · Christmas 2026" —
+                the family is what identifies *this* Christmas 2026 among
+                several. Unlinked and subordinate: the family's destination on
+                this page is the back control above (CONTEXT.md rule 3). */}
+            <h1 className="text-2xl font-bold text-gray-900">
+              {/* The space between the two halves is its own node: the accessible
+                  name trims each element child, so a trailing space inside the
+                  span is dropped and the heading announces as one run-on word. */}
+              <span className="font-normal text-gray-500">{occasion.family_name} &middot;</span>{" "}
+              {occasion.name}
+            </h1>
             {occasion.is_archived && (
               <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
                 Archived
