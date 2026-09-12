@@ -784,6 +784,24 @@ describe("ListDetail — list recipients", () => {
     expect(await screen.findByText(/for Beth · kept by Owner/)).toBeInTheDocument();
   });
 
+  // Criterion 7: a blank owner name must never reach the header as a preposition
+  // with nothing after it. The keeper half comes from the attribution rather
+  // than from `owner_name`, so it drops instead of trailing (NEU-1324).
+  it("drops the keeper half rather than trailing it when the owner has no name", async () => {
+    serveList({ ...withRecipient(viewerListDetail, "Beth"), owner_name: "   " });
+    renderListDetail(viewerToken);
+    expect(await screen.findByText("for Beth")).toBeInTheDocument();
+    expect(screen.queryByText(/kept by/)).not.toBeInTheDocument();
+  });
+
+  it("says nothing at all when a routeless list's owner has no name", async () => {
+    serveList({ ...withRecipient(viewerListDetail, null), owner_name: "" });
+    renderListDetail(viewerToken);
+    // The page still paints; it simply carries no attribution line.
+    await screen.findByRole("heading", { name: viewerListDetail.name });
+    expect(screen.queryByText(/^from/)).not.toBeInTheDocument();
+  });
+
   it("never shows the keeper's warning to a viewer", async () => {
     serveList(withRecipient(viewerListDetail, "Beth"));
     renderListDetail(viewerToken);

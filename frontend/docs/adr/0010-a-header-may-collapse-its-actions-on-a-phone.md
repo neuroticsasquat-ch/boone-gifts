@@ -4,6 +4,8 @@
 **Ticket:** [NEU-1323](https://linear.app/neuroticsasquatch/issue/NEU-1323)
 **Spec:** [`docs/specs/NEU-1323-a-linked-eyebrow-and-collapsible-headers.md`](../specs/NEU-1323-a-linked-eyebrow-and-collapsible-headers.md)
 **Amends:** [ADR 0009 — Actions on a thing are visible](0009-actions-are-visible.md)
+**Amended by:** [ADR 0011](0011-a-disclosure-carries-a-chevron.md) — the trigger's *treatment*.
+Every behavioural decision below still stands.
 
 ## Context
 

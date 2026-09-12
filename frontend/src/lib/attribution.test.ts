@@ -55,7 +55,7 @@ describe("attributionFor", () => {
   });
 
   it("treats a blank recipient name as no recipient", () => {
-    expect(attributionFor(list({ recipient_name: "   " })).kind).toBe("owner");
+    expect(attributionFor(list({ recipient_name: "   " }))?.kind).toBe("owner");
   });
 
   it("names the sharing person on a direct share", () => {
@@ -162,6 +162,107 @@ describe("attributionFor", () => {
       subject: "Tom",
       keeper: null,
     });
+  });
+
+  // A blank owner name would render the literal "from " with nothing after it,
+  // and NEU-1324 makes the owner branch far more reachable than it was.
+  it("says nothing rather than a dangling preposition when the owner has no name", () => {
+    expect(attributionFor(list({ owner_name: "   " }))).toBeNull();
+  });
+
+  it("drops the keeper half rather than trailing it when the owner has no name", () => {
+    // Branch 1's other read of `owner_name`: "for Beth" is still true and still
+    // the point of the line, so the row keeps it and loses only the half it
+    // cannot fill.
+    expect(attributionFor(list({ recipient_name: "Beth", owner_name: "  " }))).toEqual({
+      kind: "absent",
+      subject: "Beth",
+      keeper: null,
+    });
+  });
+});
+
+/**
+ * The surface tells the function what it has already established, and one step
+ * of the precedence list steps aside. Everything else about the ranking is the
+ * block above, unchanged — which is the point: one list, read one way.
+ */
+describe("attributionFor — withinFamily", () => {
+  const occasionOnly = list({ shared_via: [occasion(3, "Christmas 2026", BOONE)] });
+
+  // The default is the regression guard on every existing caller: none of them
+  // passes the option, and none of them may move.
+  it("names the family when the option is omitted", () => {
+    expect(attributionFor(occasionOnly)).toEqual({
+      kind: "family",
+      subject: "Boone Family",
+      keeper: null,
+    });
+    expect(attributionFor(occasionOnly, {})).toEqual(attributionFor(occasionOnly));
+    expect(attributionFor(occasionOnly, { withinFamily: false })).toEqual(
+      attributionFor(occasionOnly),
+    );
+  });
+
+  // The whole rule, in one case: on a page already headed "Boone Family", the
+  // family identifies nobody and the owner is what was missing.
+  it("names the owner on a list that reached the surface through this family alone", () => {
+    expect(attributionFor(occasionOnly, { withinFamily: true })).toEqual({
+      kind: "owner",
+      subject: "Tom",
+      keeper: null,
+    });
+  });
+
+  it("still names the family's own owner when several families carried the list", () => {
+    // Two families is still "the family branch stepped aside" — the option is
+    // about the surface, not about how many routes happen to exist.
+    expect(
+      attributionFor(
+        list({
+          shared_via: [
+            occasion(3, "Christmas 2026", BOONE),
+            occasion(4, "Christmas 2026", EXTENDED),
+          ],
+        }),
+        { withinFamily: true },
+      ),
+    ).toEqual({ kind: "owner", subject: "Tom", keeper: null });
+  });
+
+  // The option skips exactly one branch. It does not outrank the two above it.
+  it("does not outrank a direct share", () => {
+    expect(
+      attributionFor(
+        list({
+          shared_via: [direct(2, "Carol Boone"), occasion(3, "Christmas 2026", BOONE)],
+        }),
+        { withinFamily: true },
+      ),
+    ).toEqual({ kind: "owner", subject: "Carol Boone", keeper: null });
+  });
+
+  it("does not outrank a recipient", () => {
+    expect(
+      attributionFor(
+        list({
+          recipient_name: "Beth",
+          shared_via: [occasion(3, "Christmas 2026", BOONE)],
+        }),
+        { withinFamily: true },
+      ),
+    ).toEqual({ kind: "absent", subject: "Beth", keeper: "Tom" });
+  });
+
+  // The family is the only true thing left, so the row falls back to it rather
+  // than to nothing — the one place `withinFamily` un-skips the branch it skipped.
+  it("falls back to the family it stepped over when the owner has no name", () => {
+    expect(
+      attributionFor(
+        list({ owner_name: "", shared_via: [occasion(3, "Christmas 2026", BOONE)] }),
+        { withinFamily: true },
+      ),
+    ).toEqual({ kind: "family", subject: "Boone Family", keeper: null });
   });
 });
 

@@ -84,9 +84,14 @@ src/
     ActionBar.tsx         # Every action on the thing a header or row is about,
                           # as visible controls (rule 12, ADR 0009). Replaced
                           # the `⋯` overflow menu. Tones come from tone.ts.
-                          # `collapseOnMobile` is rule 12's one exception — a
-                          # labelled `Actions` disclosure below `md`, opt-in,
-                          # and granted to two headers (ADR 0010)
+                          # `collapseOnMobile` is rule 12's one exception — an
+                          # `Actions ⌄` disclosure below `md`, opt-in, and
+                          # granted to two headers (ADR 0010). The trigger wears
+                          # no border and no fill and takes no Tone: it acts on
+                          # the bar, not on the list, and dressed as `neutral` it
+                          # was byte-for-byte the buttons it hides. The chevron
+                          # flips with the state and is aria-hidden — the word is
+                          # the whole accessible name (ADR 0011)
     tone.ts               # danger | primary | neutral, and the two class maps
                           # ActionBar and ConfirmDialog read them through
     BackControl.tsx       # The one page-level way back — `← Back` when the app
@@ -160,7 +165,14 @@ src/
                      # once for the dialog and the create form both;
                      # list-grouping.ts — how Shared with me subdivides under Group by;
                      # attribution.ts, recipient.ts, list-for.ts — who a list is for,
-                     # and how that reads on a row; occasion-choice.ts — the
+                     # and how that reads on a row. `attributionFor`'s
+                     # `withinFamily` option names what the *surface* has already
+                     # established: set it and the family branch steps aside, so
+                     # an occasion-only list reads "from Jane" instead of
+                     # repeating the page's own family. One caller sets it — the
+                     # occasion page's Lists tab — and a folder deliberately does
+                     # not (NEU-1324). It returns null when a blank owner_name
+                     # leaves nothing true to say; occasion-choice.ts — the
                      # sharing control's one-, several-, no-occasion rule;
                      # money.ts — formatMoney, the one place money becomes text;
                      # request-failure.ts — failureMessage, the one place a
@@ -191,7 +203,7 @@ src/
 | `/people/:id` | `ConnectionProfile` | |
 | `/people/families/:id` | `FamilyDetail` | Members, **active** occasions, invites, rename, delete, leave |
 | `/people/families/:id/archive` | `FamilyArchive` | That family's archived occasions, each linking to `/occasions/:id`. Any member may look |
-| `/occasions/:id` | `OccasionDetail` | A family occasion: header, tab bar (**Lists · My shopping**) held in the URL as `?tab=`, `push` — so a tab is linkable and Back closes it — and the lists shared to it. The heading names the family as a **linked eyebrow** above the occasion name — a link on this page and a plain prefix in every heading that points *at* an occasion. The header's rename and archive are organizer-only, and their bar collapses below `md` (ADR 0010) |
+| `/occasions/:id` | `OccasionDetail` | A family occasion: header, tab bar (**Lists · My shopping**) held in the URL as `?tab=`, `push` — so a tab is linkable and Back closes it — and the lists shared to it. The heading names the family as a **linked eyebrow** above the occasion name — a link on this page and a plain prefix in every heading that points *at* an occasion. The Lists tab names each list's **owner** rather than its family — the heading has already said the family (NEU-1324). The header's rename and archive are organizer-only, and their bar collapses below `md` behind an `Actions ⌄` disclosure (ADR 0010, 0011) |
 | `/folders/:id` | `FolderDetail` | One user's folder, with the same two tabs, under the same `?tab=` (`push`). There is no `/folders` index — `Folders.tsx` stays unrouted; a **Group by: Folder** heading on `/lists` is the one link here |
 | `/account` | `Account` | Via the user menu |
 | `/admin/invites`, `/admin/users` | `AdminInvites`, `AdminUsers` | Admin-only |
@@ -263,7 +275,14 @@ family stops disambiguating one Christmas 2026 from another and becomes the pare
 this one (NEU-1323). The rename form carries the same eyebrow, link and all, because at depth > 0 the
 control above reads only `← Back`. **Lists** is every list shared to the occasion that the viewer can see, from
 `/occasions/{id}/lists`, which filters by `can_view_list` so a list the viewer cannot see is *absent*
-rather than greyed; **My shopping** is `components/MyShopping.tsx` scoped to this occasion. The bar is
+rather than greyed. Each row names a **person**: it passes `withinFamily` to `ListAttributionLine`,
+so a list that reached the viewer through this occasion alone reads "from Jane" where every other
+surface reads "Boone Family" — rule 3's test one level down, on the page that has already said the
+family. A row the viewer owns reads "for Beth" or, marked for nobody, **"Mine"** — which is what
+tells your list from the four others at a glance (NEU-1324). A **direct** share still outranks both.
+**My shopping** is `components/MyShopping.tsx` scoped to this occasion, and is the one list-of-lists
+that still names nobody: its payload carries no owner, recipient or routes at all, so fixing it needs
+a backend change (deferred by NEU-1324). The bar is
 driven by a `TABS` array and the body by the active key, which is what made the second tab an entry
 plus a panel rather than a reshaping. The header's action bar carries rename and archive, **organizer
 only** and gated on the family's members exactly as the family page's controls are — the backend
@@ -455,7 +474,7 @@ $142 of $200 spent · $58 left            [ Edit budget ]
 
 A list can name a recipient, and since NEU-1241 that means exactly one thing: **a person who does not use the app**. The co-resident case the old "they use this app" radio described is the account-people picker instead (see below), so a recipient name is on its own the whole predicate — claims are hidden from the keeper and the keeper cannot claim, always.
 
-`RecipientFields.tsx` is the shared "this list is for someone else" control (create form and edit header); `lib/recipient.ts` holds its value type and payload mapping, `lib/attribution.ts` turns a list into its display line, and `ListAttribution.tsx` renders it — "from Jane" for a list someone shared, "for Beth · kept by Tom" for one kept on behalf of a person with no account. The keeper's warning under the name field is unconditional: it is the only case left.
+`RecipientFields.tsx` is the shared "this list is for someone else" control (create form and edit header); `lib/recipient.ts` holds its value type and payload mapping, `lib/attribution.ts` turns a list into its display line, and `ListAttribution.tsx` renders it — "from Jane" for a list someone shared, "for Beth · kept by Tom" for one kept on behalf of a person with no account, and "Mine" on the viewer's own row when it is marked for nobody. The keeper's warning under the name field is unconditional: it is the only case left.
 
 ## Who is this list for?
 
@@ -601,13 +620,13 @@ section that claims to hold everything shared with the viewer.
   organizer-only act; unarchiving is, and that is enforced where it happens.
 
 ## Testing
-- 894 test cases across 61 files, run inside the container via `task test`
+- 912 test cases across 61 files, run inside the container via `task test`
 - MSW mocks live in `src/test/mocks/handlers.ts` (default `/auth/refresh → 401`); setup in `src/test/setup.ts`
 - **The suite renders at a desktop width.** jsdom has no layout, so `src/test/viewport.ts` answers
   `matchMedia` by hand: `(min-width: 768px)` matches and nothing else does, which is the arm every
   existing assertion was written against. A case that wants a phone calls `mockViewport("mobile")`
   first; `setup.ts` restores the default after every test. Only `ActionBar` branches on this
-  (ADR 0010) — CSS is still how the rest of the app answers a width question
+  (ADR 0010, 0011) — CSS is still how the rest of the app answers a width question
 
 ## Critical conventions
 - **Docker**: `node_modules` lives in a named volume so the bind mount can't shadow it. After `task add`, rebuild the image.

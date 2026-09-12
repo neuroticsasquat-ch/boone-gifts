@@ -80,8 +80,12 @@ function list(overrides: Partial<Record<string, unknown>> = {}) {
     // How the row reached the viewer, as every list surface reports it since
     // NEU-1290: the array of routes, never a scalar and never null. A list on
     // this page arrived through this occasion by definition, and this one also
-    // came straight from Jane — so direct wins and the row names her, which is
-    // what this page wants ("rather than repeating the family overhead").
+    // came straight from Jane — so direct wins and the row names her.
+    //
+    // That second route is why this page looked right for so long: it is the
+    // *un*typical list. The occasion-only case beneath — which is what a list
+    // shared into an occasion normally is — read "Boone Family" until NEU-1324,
+    // repeating the page's own heading at a row whose job was to name a person.
     shared_via: [
       {
         kind: "occasion",
@@ -239,6 +243,65 @@ describe("OccasionDetail", () => {
     expect(jane).toHaveTextContent("from Jane");
     // The viewer's own list is not attributed back to the viewer.
     expect(await screen.findByRole("link", { name: /My Wishlist/ })).not.toHaveTextContent("from");
+  });
+
+  // The ordinary case, and the one the fixture above deliberately is not: a list
+  // that reached the viewer through this occasion and no other way. The page is
+  // already headed "Boone Family", so repeating it identifies nobody — the row
+  // owes the viewer the owner's name (NEU-1324).
+  it("names the owner of a list that reached the viewer through this occasion alone", async () => {
+    renderOccasion({
+      lists: [
+        list({
+          shared_via: [
+            {
+              kind: "occasion",
+              occasion: { id: 3, name: "Christmas 2026" },
+              family: { id: 1, name: "Boone Family" },
+            },
+          ],
+        }),
+      ],
+    });
+
+    const row = await screen.findByRole("link", { name: /Jane's Wishlist/ });
+    expect(row).toHaveTextContent("from Jane");
+    expect(row).not.toHaveTextContent("Boone Family");
+  });
+
+  // The other half of the same complaint: an owned row with nothing to say used
+  // to say nothing at all, which on a screen of five people's lists is the one
+  // row you cannot pick out.
+  it("marks the viewer's own unmarked list as theirs", async () => {
+    renderOccasion({
+      lists: [
+        list(),
+        list({ id: 11, name: "My Wishlist", owner_id: 1, owner_name: "Alice", shared_via: [] }),
+      ],
+    });
+
+    expect(await screen.findByRole("link", { name: /My Wishlist/ })).toHaveTextContent("Mine");
+  });
+
+  it("keeps naming the recipient on the viewer's own kept list", async () => {
+    // "Mine" is a fallback, never a replacement: a list kept for someone still
+    // says who for.
+    renderOccasion({
+      lists: [
+        list({
+          id: 11,
+          name: "Beth's List",
+          owner_id: 1,
+          owner_name: "Alice",
+          recipient_name: "Beth",
+          shared_via: [],
+        }),
+      ],
+    });
+
+    const row = await screen.findByRole("link", { name: /Beth's List/ });
+    expect(row).toHaveTextContent("for Beth");
+    expect(row).not.toHaveTextContent("Mine");
   });
 
   // Until NEU-1308 this read "No lists are shared to this occasion yet." and

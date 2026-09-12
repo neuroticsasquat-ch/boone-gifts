@@ -28,6 +28,10 @@ export interface ListLike {
   shared_via?: ShareRoute[];
 }
 
+/**
+ * What a row says about a list, or `null` when it can honestly say nothing —
+ * see {@link attributionFor}.
+ */
 export type ListAttribution =
   /** No recipient: the person the list came from — the sharing user when the
    *  list carries one, else its owner. "from {subject}" */
@@ -40,8 +44,9 @@ export type ListAttribution =
    *  — see {@link familySubject}. */
   | { kind: "family"; subject: string; keeper: null }
   /** A recipient with no account, whose list someone else keeps.
-   *  "for {subject} · kept by {keeper}" */
-  | { kind: "absent"; subject: string; keeper: string };
+   *  "for {subject} · kept by {keeper}" — or just "for {subject}" when the
+   *  keeper has no name to give, which is the only state `keeper` is null in. */
+  | { kind: "absent"; subject: string; keeper: string | null };
 
 /**
  * How a *viewer* sees this list. `kind` selects the preposition and tells the
@@ -61,11 +66,28 @@ export type ListAttribution =
  * the backend refuses to rank routes (NEU-1290) and `lib/list-grouping.ts` needs
  * the whole array, so ranking anywhere else would be a second statement of one
  * rule.
+ *
+ * **`withinFamily` names what the surface has already established**, not what to
+ * hide: pass it where the page itself is a family — today the occasion page's
+ * Lists tab and nowhere else — and the family branch steps aside, so a list
+ * shared only into that occasion reads "from Jane" instead of repeating the
+ * heading's own "Boone Family" at somebody whose name it was supposed to give.
+ * A folder is deliberately *not* such a surface: it is the viewer's grouping,
+ * carries no family, and routinely spans two. Off by default, so every caller
+ * that says nothing keeps the label `/lists` has always shown (NEU-1324).
+ *
+ * Returns **null** when there is nothing true left to say — a list with no
+ * recipient, no route and an owner whose name is blank. A missing line beats
+ * "from " with nothing after it.
  */
-export function attributionFor(list: ListLike): ListAttribution {
+export function attributionFor(
+  list: ListLike,
+  { withinFamily = false }: { withinFamily?: boolean } = {},
+): ListAttribution | null {
+  const owner = ownerNameOf(list);
   const recipient = recipientNameOf(list);
   if (recipient !== null) {
-    return { kind: "absent", subject: recipient, keeper: list.owner_name };
+    return { kind: "absent", subject: recipient, keeper: owner };
   }
   const routes = list.shared_via ?? [];
   // A direct share names the account that shared it, which *is* this list's
@@ -76,13 +98,21 @@ export function attributionFor(list: ListLike): ListAttribution {
   }
   // A share points at an occasion (project spec §5.1), and it is the family
   // behind that occasion the row is labelled with — the occasion arm always
-  // carries one.
+  // carries one. Unless the surface is already inside that family, in which
+  // case naming it again names nobody and the owner is the answer.
   const families = familySubject(routes);
-  if (families !== null) {
+  if (families !== null && !withinFamily) {
     return { kind: "family", subject: families, keeper: null };
   }
-  // The owner's own name stands in on a list that carries no route at all.
-  return { kind: "owner", subject: list.owner_name, keeper: null };
+  // The owner's own name stands in on a list that carries no route at all —
+  // and on the occasion page, on one that carries only this family's.
+  if (owner !== null) {
+    return { kind: "owner", subject: owner, keeper: null };
+  }
+  // A nameless owner: say the thing that is still true rather than a dangling
+  // preposition. The family is only in hand here because `withinFamily` stepped
+  // over it, and a row with neither says nothing at all.
+  return families === null ? null : { kind: "family", subject: families, keeper: null };
 }
 
 /**
@@ -119,6 +149,14 @@ function familySubject(routes: ShareRoute[]): string | null {
 export function recipientLabel(list: ListLike): string | null {
   const name = recipientNameOf(list) ?? accountPersonNameOf(list);
   return name === null ? null : `for ${name}`;
+}
+
+/** The owner's name, or null when the list carries none. Trimmed and collapsed
+ *  like every other name here: an owner with a blank name must never reach the
+ *  UI as "from " or "kept by " with nothing after it. */
+function ownerNameOf(list: ListLike): string | null {
+  const name = list.owner_name?.trim();
+  return name ? name : null;
 }
 
 /** The account person's name, or null when the list is for no one in particular.

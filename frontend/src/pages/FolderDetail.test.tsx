@@ -515,14 +515,19 @@ describe("FolderDetail — the Add a List picker", () => {
     renderFolderDetail();
 
     const rows = await picker();
-    // Someone else's: the family behind the occasion it came through.
+    // Someone else's: the family behind the occasion it came through. A folder
+    // establishes no family of its own — it is the viewer's grouping and
+    // routinely spans two — so this stays the family here (NEU-1324).
     expect(await rows.findByText("Boone Family")).toBeInTheDocument();
     // The viewer's own, kept for someone: "for Beth", never "from Tom Boone".
     expect(rows.getByText("for Beth")).toBeInTheDocument();
     expect(rows.queryByText("from Tom Boone")).not.toBeInTheDocument();
-    // And the viewer's own for nobody carries no second line at all.
+    // And the viewer's own for nobody says so. It read as a bare title until
+    // NEU-1324 — the one row on a mixed screen that named nothing at all —
+    // and "Mine" is its relationship to the viewer, not their name read back.
     const own = rows.getByText("Birthday List").parentElement as HTMLElement;
-    expect(own.querySelectorAll("p")).toHaveLength(1);
+    expect(own.querySelectorAll("p")).toHaveLength(2);
+    expect(within(own).getByText("Mine")).toBeInTheDocument();
   });
 
   /**
