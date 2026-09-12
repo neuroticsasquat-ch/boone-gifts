@@ -25,10 +25,10 @@ export function AcceptFamilyInvite() {
       .then((result) => {
         queryClient.invalidateQueries({ queryKey: ["familyInvites"] });
         queryClient.invalidateQueries({ queryKey: ["families"] });
-        // ["lists","family"] backs the family-lists view — refresh so the new family's lists appear
-        queryClient.invalidateQueries({ queryKey: ["lists", "family"] });
+        // The new family's lists arrive through the combined shared scope
+        queryClient.invalidateQueries({ queryKey: ["lists", "shared"] });
         toast.success(`You've joined the ${result.family.name} family.`);
-        navigate("/family-lists", { replace: true });
+        navigate("/lists", { replace: true });
       })
       .catch((err: unknown) => {
         if (isAxiosError(err) && err.response?.status === 409) {
@@ -48,8 +48,8 @@ export function AcceptFamilyInvite() {
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="w-full max-w-sm bg-white shadow rounded p-6 text-center">
           <p className="text-gray-700 mb-4">{message}</p>
-          <Link to="/families" className="text-blue-600 hover:underline">
-            Go to your families
+          <Link to="/people" className="text-blue-600 hover:underline">
+            Go to People
           </Link>
         </div>
       </div>

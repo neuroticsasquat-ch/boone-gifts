@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, it, expect } from "vitest";
 import { MemoryRouter, Routes, Route } from "react-router";
 import { http, HttpResponse } from "msw";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { server } from "../test/mocks/server";
 import { AuthProvider } from "../contexts/AuthContext";
 import { Register } from "./Register";
@@ -17,16 +18,21 @@ const fakeAccessToken = [
 ].join(".");
 
 function renderRegister(query: string) {
+  // AuthProvider clears the query cache at the identity boundary (ADR 0004), so it needs
+  // a QueryClientProvider above it, exactly as App.tsx gives it one.
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <AuthProvider>
-      <MemoryRouter initialEntries={[`/register${query}`]}>
-        <Routes>
-          <Route path="/register" element={<Register />} />
-          <Route path="/" element={<div>App home</div>} />
-          <Route path="/login" element={<div>Login page</div>} />
-        </Routes>
-      </MemoryRouter>
-    </AuthProvider>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <MemoryRouter initialEntries={[`/register${query}`]}>
+          <Routes>
+            <Route path="/register" element={<Register />} />
+            <Route path="/lists" element={<div>App home</div>} />
+            <Route path="/login" element={<div>Login page</div>} />
+          </Routes>
+        </MemoryRouter>
+      </AuthProvider>
+    </QueryClientProvider>
   );
 }
 
@@ -135,6 +141,85 @@ describe("Register — error cases", () => {
     renderRegister("?token=bad");
 
     expect(await screen.findByText(/invalid invite link/i)).toBeInTheDocument();
+  });
+
+  it("says it could not reach the server, and does not blame the invite link", async () => {
+    server.use(
+      http.get(`${API}/auth/invite-info`, () =>
+        HttpResponse.json({ email: "mom@example.com", family_name: "Smith Family" })
+      ),
+      http.post(`${API}/auth/register`, () => HttpResponse.error())
+    );
+
+    renderRegister("?family_invite=fam-1");
+    await screen.findByText(/Smith Family/);
+    await userEvent.type(screen.getByLabelText(/^name/i), "Mom");
+    await userEvent.type(screen.getByLabelText(/^password/i), "password123");
+    await userEvent.type(screen.getByLabelText(/confirm/i), "password123");
+    await userEvent.click(screen.getByRole("button", { name: /register/i }));
+
+    expect(await screen.findByText(/couldn't reach the server/i)).toBeInTheDocument();
+    expect(screen.queryByText(/check your invite link/i)).not.toBeInTheDocument();
+  });
+
+  it("says it is rate limiting for a 429, without the backend's own string", async () => {
+    // `"Rate limit exceeded: 5 per 1 minute"` reaching the screen is how this
+    // page leaked an implementation detail at a user.
+    server.use(
+      http.get(`${API}/auth/invite-info`, () =>
+        HttpResponse.json({ email: "mom@example.com", family_name: "Smith Family" })
+      ),
+      http.post(`${API}/auth/register`, () =>
+        HttpResponse.json({ detail: "Rate limit exceeded: 5 per 1 minute" }, { status: 429 })
+      )
+    );
+
+    renderRegister("?family_invite=fam-1");
+    await screen.findByText(/Smith Family/);
+    await userEvent.type(screen.getByLabelText(/^name/i), "Mom");
+    await userEvent.type(screen.getByLabelText(/^password/i), "password123");
+    await userEvent.type(screen.getByLabelText(/confirm/i), "password123");
+    await userEvent.click(screen.getByRole("button", { name: /register/i }));
+
+    expect(await screen.findByText(/too many attempts/i)).toBeInTheDocument();
+    expect(screen.queryByText(/rate limit exceeded/i)).not.toBeInTheDocument();
+  });
+
+  it("blames our own end for a 500, without the backend's detail", async () => {
+    server.use(
+      http.get(`${API}/auth/invite-info`, () =>
+        HttpResponse.json({ email: "mom@example.com", family_name: "Smith Family" })
+      ),
+      http.post(`${API}/auth/register`, () =>
+        HttpResponse.json({ detail: "Internal Server Error" }, { status: 500 })
+      )
+    );
+
+    renderRegister("?family_invite=fam-1");
+    await screen.findByText(/Smith Family/);
+    await userEvent.type(screen.getByLabelText(/^name/i), "Mom");
+    await userEvent.type(screen.getByLabelText(/^password/i), "password123");
+    await userEvent.type(screen.getByLabelText(/confirm/i), "password123");
+    await userEvent.click(screen.getByRole("button", { name: /register/i }));
+
+    expect(await screen.findByText(/went wrong on our end/i)).toBeInTheDocument();
+    expect(screen.queryByText(/internal server error/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/check your invite link/i)).not.toBeInTheDocument();
+  });
+
+  it("does not condemn the invite when invite-info can't reach the server", async () => {
+    // The identical lie, on the identical page, one code path over: a user on a
+    // flaky connection was told their invite was bad.
+    server.use(http.get(`${API}/auth/invite-info`, () => HttpResponse.error()));
+
+    renderRegister("?token=adm-1");
+
+    expect(await screen.findByText(/couldn't reach the server/i)).toBeInTheDocument();
+    expect(screen.queryByText(/invalid invite link/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /go to login/i })).toHaveAttribute(
+      "href",
+      "/login"
+    );
   });
 
   it("shows an inline error when the passwords don't match", async () => {

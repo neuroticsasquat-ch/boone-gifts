@@ -17,7 +17,6 @@ function renderWithAuth(
     register: async () => {},
     changePassword: async () => {},
     updateProfile: async () => {},
-    toggleSimpleMode: async () => {},
   };
 
   return render(
@@ -28,7 +27,7 @@ function renderWithAuth(
             <Route path="/admin" element={<div>Admin Content</div>} />
           </Route>
           <Route path="/login" element={<div>Login Page</div>} />
-          <Route path="/" element={<div>Dashboard</div>} />
+          <Route path="/lists" element={<div>Lists Page</div>} />
         </Routes>
       </MemoryRouter>
     </AuthContext.Provider>,
@@ -37,7 +36,7 @@ function renderWithAuth(
 
 describe("AdminRoute", () => {
   it("renders children when user is admin", () => {
-    renderWithAuth({ id: 1, email: "admin@test.com", name: "Admin", role: "admin", simple_mode: false });
+    renderWithAuth({ id: 1, email: "admin@test.com", name: "Admin", role: "admin" });
     expect(screen.getByText("Admin Content")).toBeInTheDocument();
   });
 
@@ -47,9 +46,9 @@ describe("AdminRoute", () => {
     expect(screen.queryByText("Admin Content")).not.toBeInTheDocument();
   });
 
-  it("redirects to dashboard when authenticated but not admin", () => {
-    renderWithAuth({ id: 2, email: "member@test.com", name: "Member", role: "member", simple_mode: false });
-    expect(screen.getByText("Dashboard")).toBeInTheDocument();
+  it("redirects to /lists when authenticated but not admin", () => {
+    renderWithAuth({ id: 2, email: "member@test.com", name: "Member", role: "member" });
+    expect(screen.getByText("Lists Page")).toBeInTheDocument();
     expect(screen.queryByText("Admin Content")).not.toBeInTheDocument();
   });
 

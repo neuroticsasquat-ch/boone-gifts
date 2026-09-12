@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { useTitle } from "../hooks/useTitle";
 import { CogIcon } from "../components/Icons";
+import { SharedAccountCard } from "./account/SharedAccountCard";
 
 interface AxiosLikeError {
   response?: { status?: number; data?: { detail?: string } };
@@ -13,7 +14,7 @@ function isAxiosLikeError(err: unknown): err is AxiosLikeError {
 
 export function Account() {
   useTitle("Account");
-  const { user, updateProfile, changePassword, toggleSimpleMode } = useAuth();
+  const { user, updateProfile, changePassword } = useAuth();
   const [name, setName] = useState(user?.name ?? "");
   const [nameError, setNameError] = useState<string | null>(null);
   const [nameSuccess, setNameSuccess] = useState(false);
@@ -24,8 +25,6 @@ export function Account() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [passwordSubmitting, setPasswordSubmitting] = useState(false);
-  const [modeSubmitting, setModeSubmitting] = useState(false);
-  const [modeError, setModeError] = useState<string | null>(null);
 
   async function handleNameSubmit(e: FormEvent) {
     e.preventDefault();
@@ -69,18 +68,6 @@ export function Account() {
       }
     } finally {
       setPasswordSubmitting(false);
-    }
-  }
-
-  async function handleToggleMode() {
-    setModeError(null);
-    setModeSubmitting(true);
-    try {
-      await toggleSimpleMode();
-    } catch {
-      setModeError("Could not update view mode. Try again.");
-    } finally {
-      setModeSubmitting(false);
     }
   }
 
@@ -173,22 +160,7 @@ export function Account() {
         </form>
       </div>
 
-      <div className="bg-white shadow rounded p-6 mt-6">
-        <h2 className="text-lg font-semibold mb-4">View mode</h2>
-        {modeError && <p className="text-red-600 text-sm mb-4">{modeError}</p>}
-        <p className="text-sm text-gray-600 mb-4">
-          {user?.simple_mode
-            ? "Simple mode is on. You see My Lists and Family Lists only."
-            : "Full mode is on. You see all sections."}
-        </p>
-        <button
-          onClick={handleToggleMode}
-          disabled={modeSubmitting}
-          className="w-full bg-blue-600 text-white rounded py-2 hover:bg-blue-700 disabled:opacity-50"
-        >
-          {modeSubmitting ? "Saving…" : user?.simple_mode ? "Switch to full mode" : "Switch to simple mode"}
-        </button>
-      </div>
+      <SharedAccountCard />
     </div>
   );
 }

@@ -1,12 +1,25 @@
 /* eslint-disable react/only-export-components */
-import { createContext, useState, useCallback, useEffect, type ReactNode } from "react";
-import { apiClient, setAccessToken, clearAccessToken } from "../api/client";
+import {
+  createContext,
+  useState,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  type ReactNode,
+} from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  apiClient,
+  setAccessToken,
+  clearAccessToken,
+  setSessionEndedHandler,
+} from "../api/client";
 import {
   logout as apiLogout,
   register as apiRegister,
   changePassword as apiChangePassword,
   updateProfile as apiUpdateProfile,
-  toggleSimpleMode as apiToggleSimpleMode,
 } from "../api/auth";
 import type { AuthUser, AccessTokenResponse } from "../types";
 
@@ -18,7 +31,6 @@ export interface AuthContextType {
   register: (token: string, name: string, password: string, email: string) => Promise<void>;
   updateProfile: (name: string) => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
-  toggleSimpleMode: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null);
@@ -32,13 +44,53 @@ function decodePayload(token: string): AuthUser {
     email: payload.email,
     name: payload.name ?? "",
     role: payload.role,
-    simple_mode: payload.simple_mode ?? false,
   };
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
+
+  // The cache is keyed by resource, never by viewer (ADR 0004), so one person's entries
+  // would otherwise be served to the next. Keyed on the id and not the user object:
+  // updateProfile renaming someone is not a change of viewer.
+  //
+  // A viewer leaving empties the cache outright. A viewer arriving sweeps what is left
+  // unobserved instead: a mutation that outlived the departing viewer's last screen can
+  // still write its response in after that clear (mutations are not cancelled by it), and
+  // an arrival is the last moment to catch that before the next person is served it. The
+  // sweep spares observed and in-flight queries, which an outright clear would strand.
+  //
+  // A layout effect, not a passive one, and both halves depend on it:
+  //   - The screens the arriving viewer mounts read the cache while they render. A passive
+  //     effect fires after that render is painted, so the previous viewer's data reaches
+  //     the new one's screen before it is dropped.
+  //   - React Query subscribes an observer in a passive effect, which for a child runs
+  //     BEFORE this one. So by the time a passive sweep ran, a screen mounted in the same
+  //     commit had already claimed the stale entry, making it active and sparing it from
+  //     the sweep entirely — it was then served for the full staleTime.
+  // Running here, before paint and before any child subscribes, closes both. Queries
+  // observed from an earlier commit are still active and still spared.
+  const viewerId = useRef(user?.id);
+  useLayoutEffect(() => {
+    const departing = viewerId.current;
+    viewerId.current = user?.id;
+    if (departing === user?.id) return;
+    if (departing !== undefined) {
+      queryClient.clear();
+    } else if (user?.id !== undefined) {
+      queryClient.removeQueries({ type: "inactive" });
+    }
+  }, [user?.id, queryClient]);
+
+  // The 401 interceptor cannot reach React state, so it calls back in here when a refresh
+  // gives up. Clearing the user both empties the cache above and lands the viewer on
+  // /login instead of stranding them on a mounted page with a dead token.
+  useEffect(() => {
+    setSessionEndedHandler(() => setUser(null));
+    return () => setSessionEndedHandler(null);
+  }, []);
 
   // Silent refresh on mount — restores session if cookie exists
   useEffect(() => {
@@ -111,14 +163,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  const toggleSimpleMode = useCallback(async () => {
-    const { access_token } = await apiToggleSimpleMode(user!.simple_mode);
-    setAccessToken(access_token);
-    setUser(decodePayload(access_token));
-  }, [user]);
-
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout, register, updateProfile, changePassword, toggleSimpleMode }}>
+    <AuthContext.Provider value={{ user, isLoading, login, logout, register, updateProfile, changePassword }}>
       {children}
     </AuthContext.Provider>
   );

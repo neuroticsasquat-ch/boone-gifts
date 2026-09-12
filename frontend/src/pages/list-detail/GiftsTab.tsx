@@ -1,9 +1,25 @@
-import { useState, useRef, useEffect, useMemo, type FormEvent } from "react";
+import { useState, useRef, useMemo, type FormEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { createGift, updateGift, deleteGift, claimGift, unclaimGift } from "../../api/gifts";
+import * as Sentry from "@sentry/react";
+import { isAxiosError } from "axios";
+import { createGift, updateGift, deleteGift, claimGift, unclaimGift, purchaseGift, unpurchaseGift } from "../../api/gifts";
 import { fetchUrlMeta } from "../../api/meta";
-import type { GiftListDetailOwner, GiftListDetailViewer, GiftOwnerView, Gift } from "../../types";
+import type { ClaimOccasion, GiftListDetailOwner, GiftListDetailViewer, GiftOwnerView, Gift } from "../../types";
+import { formatMoney } from "../../lib/money";
+import { useTimeout } from "../../hooks/useTimeout";
+import { useEnumSearchParam } from "../../hooks/useSearchParamState";
+import { ConfirmDialog, type ConfirmAction } from "../../components/ConfirmDialog";
 import toast from "react-hot-toast";
+
+/** The gift sort, shared by the owner and viewer branches under one `sort` key:
+ *  `GiftsTab` renders exactly one of them, so the two are never live at once
+ *  and the key has one meaning per rendered page (spec Decision 7). */
+const GIFT_SORTS = ["added", "price_asc", "price_desc"] as const;
+type GiftSort = (typeof GIFT_SORTS)[number];
+
+/** The viewer branch's filter. No owner equivalent — an owner sees no claims. */
+const GIFT_FILTERS = ["all", "available", "mine"] as const;
+type GiftFilter = (typeof GIFT_FILTERS)[number];
 
 interface GiftsTabProps {
   list: GiftListDetailOwner | GiftListDetailViewer;
@@ -31,7 +47,13 @@ function OwnerGifts({
   listId: number;
   queryClient: ReturnType<typeof useQueryClient>;
 }) {
-  const [giftSort, setGiftSort] = useState<"added" | "price_asc" | "price_desc">("added");
+  // A sort is a **preference about a page you are already on**, so it replaces:
+  // one Back press leaves a list you glanced at (spec §6.3).
+  const [giftSort, setGiftSort] = useEnumSearchParam<GiftSort>("sort", {
+    mode: "replace",
+    values: GIFT_SORTS,
+    fallback: "added",
+  });
 
   const sortedGifts = useMemo(() => {
     if (giftSort === "added") return list.gifts;
@@ -55,7 +77,7 @@ function OwnerGifts({
           <div className="flex justify-end">
             <select
               value={giftSort}
-              onChange={(e) => setGiftSort(e.target.value as "added" | "price_asc" | "price_desc")}
+              onChange={(e) => setGiftSort(e.target.value as GiftSort)}
               className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600"
             >
               <option value="added">As added</option>
@@ -87,8 +109,16 @@ function ViewerGifts({
   queryClient: ReturnType<typeof useQueryClient>;
   userId: number;
 }) {
-  const [giftFilter, setGiftFilter] = useState<"all" | "available" | "mine">("all");
-  const [giftSort, setGiftSort] = useState<"added" | "price_asc" | "price_desc">("added");
+  const [giftFilter, setGiftFilter] = useEnumSearchParam<GiftFilter>("filter", {
+    mode: "replace",
+    values: GIFT_FILTERS,
+    fallback: "all",
+  });
+  const [giftSort, setGiftSort] = useEnumSearchParam<GiftSort>("sort", {
+    mode: "replace",
+    values: GIFT_SORTS,
+    fallback: "added",
+  });
 
   const filteredGifts = useMemo(() => {
     let gifts = list.gifts;
@@ -126,7 +156,7 @@ function ViewerGifts({
           <div className="flex gap-2 flex-wrap">
             <select
               value={giftFilter}
-              onChange={(e) => setGiftFilter(e.target.value as "all" | "available" | "mine")}
+              onChange={(e) => setGiftFilter(e.target.value as GiftFilter)}
               className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600"
             >
               <option value="all">All gifts</option>
@@ -135,7 +165,7 @@ function ViewerGifts({
             </select>
             <select
               value={giftSort}
-              onChange={(e) => setGiftSort(e.target.value as "added" | "price_asc" | "price_desc")}
+              onChange={(e) => setGiftSort(e.target.value as GiftSort)}
               className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600"
             >
               <option value="added">As added</option>
@@ -145,7 +175,16 @@ function ViewerGifts({
           </div>
           <ul className="divide-y divide-gray-200 rounded-lg bg-white shadow">
             {filteredGifts.map((gift) => (
-              <ViewerGiftRow key={gift.id} gift={gift} listId={listId} queryClient={queryClient} userId={userId} isArchived={list.is_archived} />
+              <ViewerGiftRow
+                key={gift.id}
+                gift={gift}
+                listId={listId}
+                queryClient={queryClient}
+                userId={userId}
+                isArchived={list.is_archived}
+                candidates={list.claim_candidates}
+                options={list.claim_options}
+              />
             ))}
           </ul>
         </>
@@ -157,6 +196,7 @@ function ViewerGifts({
 // --- Shared Components ---
 
 function GiftInfo({ name, description, url, price }: { name: string; description: string | null; url: string | null; price: string | null }) {
+  const priceText = formatMoney(price);
   return (
     <div className="min-w-0 md:flex-1">
       <div className="flex items-baseline justify-between gap-3">
@@ -167,7 +207,7 @@ function GiftInfo({ name, description, url, price }: { name: string; description
         ) : (
           <p className="font-semibold text-gray-900 break-words">{name}</p>
         )}
-        {price && <span className="hidden md:inline text-sm text-gray-500 shrink-0">${price}</span>}
+        {priceText && <span className="hidden md:inline text-sm text-gray-500 shrink-0">{priceText}</span>}
       </div>
       {description && <p className="text-sm text-gray-500 break-words">{description}</p>}
     </div>
@@ -189,7 +229,7 @@ function AddGiftForm({
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
   const [isFetching, setIsFetching] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const urlDebounce = useTimeout();
   const fetchIdRef = useRef(0);
   const nameRef = useRef("");
   const descriptionRef = useRef("");
@@ -212,12 +252,6 @@ function AddGiftForm({
     },
   });
 
-  useEffect(() => {
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, []);
-
   function updateName(value: string) {
     setName(value);
     nameRef.current = value;
@@ -236,13 +270,13 @@ function AddGiftForm({
   function handleUrlChange(value: string) {
     setUrl(value);
 
-    if (debounceRef.current) clearTimeout(debounceRef.current);
+    urlDebounce.clear();
 
     if (!value.startsWith("http://") && !value.startsWith("https://")) return;
 
     const currentFetchId = ++fetchIdRef.current;
 
-    debounceRef.current = setTimeout(async () => {
+    urlDebounce.start(async () => {
       setIsFetching(true);
       try {
         const meta = await fetchUrlMeta(value);
@@ -273,7 +307,7 @@ function AddGiftForm({
     updateName("");
     updateDescription("");
     updatePrice("");
-    if (debounceRef.current) clearTimeout(debounceRef.current);
+    urlDebounce.clear();
     setIsFetching(false);
   }
 
@@ -377,6 +411,7 @@ function OwnerGiftRow({
   queryClient: ReturnType<typeof useQueryClient>;
 }) {
   const [editing, setEditing] = useState(false);
+  const priceText = formatMoney(gift.price);
 
   if (editing) {
     return <EditGiftRow gift={gift} listId={listId} queryClient={queryClient} onDone={() => setEditing(false)} />;
@@ -386,7 +421,7 @@ function OwnerGiftRow({
     <li className="flex flex-col gap-2 px-4 py-3 md:flex-row md:items-center md:justify-between">
       <GiftInfo name={gift.name} description={gift.description} url={gift.url} price={gift.price} />
       <div className="flex items-center justify-between md:justify-end gap-2 shrink-0 md:ml-4">
-        {gift.price && <span className="text-sm text-gray-500 md:hidden">${gift.price}</span>}
+        {priceText && <span className="text-sm text-gray-500 md:hidden">{priceText}</span>}
         <div className="flex gap-2 ml-auto md:ml-0">
           <button
             onClick={() => setEditing(true)}
@@ -541,31 +576,80 @@ function DeleteGiftButton({
 
 // --- Viewer Gift Components ---
 
+// "Never mind" is the wording the unclaim confirmation has always used, and
+// NEU-1319's audit kept it — what that audit changed is *when* the dialog is
+// raised at all, not how it reads once it is.
+const UNCLAIM_ACTIONS: ConfirmAction[] = [{ id: "unclaim", label: "Never mind", tone: "danger" }];
+
+/**
+ * What unclaiming a purchased gift costs, named. The amount is optional at the
+ * row — a claimer can tick "bought" and skip the figure, which is a first-class
+ * answer rather than a missing value — so the sentence that mentions one is
+ * only used when there is one to mention.
+ */
+function unclaimLoss(gift: Gift): string {
+  const paid = formatMoney(gift.amount_paid);
+  return paid === null
+    ? "You marked this bought. That will be forgotten."
+    : `You marked this bought. That, and the ${paid} you recorded, will be forgotten.`;
+}
+
 function ViewerGiftRow({
   gift,
   listId,
   queryClient,
   userId,
   isArchived,
+  candidates,
+  options,
 }: {
   gift: Gift;
   listId: number;
   queryClient: ReturnType<typeof useQueryClient>;
   userId: number;
   isArchived: boolean;
+  candidates: ClaimOccasion[];
+  options: ClaimOccasion[];
 }) {
+  // The whole prompting rule. Two or more candidates is the *only* shape with a
+  // genuine choice in it; 0 and 1 are the overwhelmingly common path and stay
+  // exactly as fast as they are today — one click, no question asked.
+  const mustAsk = candidates.length >= 2;
+  const [choosing, setChoosing] = useState(false);
+  const [confirmingUnclaim, setConfirmingUnclaim] = useState(false);
+
   const claimMutation = useMutation({
-    mutationFn: () => claimGift(listId, gift.id),
+    mutationFn: (occasionId?: number) => claimGift(listId, gift.id, occasionId),
     onSuccess: () => {
+      setChoosing(false);
       queryClient.invalidateQueries({ queryKey: ["list", listId] });
+      // The claim, and the occasion it was filed under, move that occasion's
+      // my_claimed_count and last_activity_at on the /lists strip.
+      queryClient.invalidateQueries({ queryKey: ["occasions"] });
     },
-    onError: () => toast.error("Failed to claim gift."),
+    onError: (err) => {
+      // 400 `ambiguous_occasion` means this client failed to prompt when it
+      // should have — a bug signal, not a routine branch. The one innocent way
+      // to reach it is a share added while the page sat open, turning one
+      // candidate into two, so refetch and let the user click again.
+      if (isAxiosError(err) && err.response?.status === 400 && err.response.data?.detail === "ambiguous_occasion") {
+        // Reported, not just recovered from. A share added while the page sat
+        // open is the one innocent way here; every other way is this client
+        // having stopped prompting, which nothing else would ever catch.
+        Sentry.captureException(err, { tags: { claim_filing: "ambiguous_occasion" } });
+        queryClient.invalidateQueries({ queryKey: ["list", listId] });
+        toast.error("This list reaches more occasions than it did a moment ago. Try again to choose one.");
+        return;
+      }
+      toast.error("Failed to claim gift.");
+    },
   });
 
   const unclaimMutation = useMutation({
     mutationFn: () => unclaimGift(listId, gift.id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["list", listId] });
+      queryClient.invalidateQueries({ queryKey: ["occasions"] });
     },
     onError: () => toast.error("Failed to unclaim gift."),
   });
@@ -576,6 +660,13 @@ function ViewerGiftRow({
   const isTaken = gift.claimed_by_id !== null && !isMine;
   const isAvailable = gift.claimed_by_id === null;
 
+  // Unclaiming a plain claim is one click from undone and invisible to
+  // everybody, so it asks nothing. Unclaiming a *purchased* one destroys the
+  // purchase and the amount recorded against it — `unclaim_gift` deletes the
+  // row, so there is no purchase state left to reset — and that is what the
+  // dialog is for (`CONTEXT.md` rule 11).
+  const isPurchased = gift.purchased_at !== null;
+
   let rowStyle = "";
   let actionButton: React.ReactNode = null;
 
@@ -584,11 +675,7 @@ function ViewerGiftRow({
     if (!isArchived) {
       actionButton = (
         <button
-          onClick={() => {
-            if (window.confirm("Are you sure you no longer want to get this gift?")) {
-              unclaimMutation.mutate();
-            }
-          }}
+          onClick={() => (isPurchased ? setConfirmingUnclaim(true) : unclaimMutation.mutate())}
           disabled={isPending}
           className="rounded bg-yellow-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-yellow-700 disabled:opacity-50"
         >
@@ -601,14 +688,16 @@ function ViewerGiftRow({
   } else if (isAvailable && !isArchived) {
     actionButton = (
       <button
-        onClick={() => claimMutation.mutate()}
-        disabled={isPending}
+        onClick={() => (mustAsk ? setChoosing(true) : claimMutation.mutate(undefined))}
+        disabled={isPending || choosing}
         className="rounded bg-green-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
       >
         {claimMutation.isPending ? "Saving…" : "I'll get this"}
       </button>
     );
   }
+
+  const priceText = formatMoney(gift.price);
 
   return (
     <li className={`px-4 py-2 ${rowStyle}`}>
@@ -622,7 +711,293 @@ function ViewerGiftRow({
           {actionButton}
         </div>
       </div>
-      {gift.price && <p className="text-xs text-gray-400 mt-0.5">${gift.price}</p>}
+      {priceText && <p className="text-xs text-gray-400 mt-0.5">{priceText}</p>}
+      {/* Gated on `mustAsk` as well as `choosing`: a refetch — including the one
+          the 400 handler fires — can drop the candidates below two while the
+          picker is open, and a picker with nothing left to choose strands the
+          user on a permanently disabled Save. Closing it returns them to a
+          button that now claims in one click, which is the right answer. */}
+      {choosing && mustAsk && (
+        <ClaimOccasionPrompt
+          giftId={gift.id}
+          candidates={candidates}
+          options={options}
+          isSaving={claimMutation.isPending}
+          onCancel={() => setChoosing(false)}
+          onChoose={(occasionId) => claimMutation.mutate(occasionId)}
+        />
+      )}
+      {/* Shown on an archived list too, read-only: archiving takes the actions
+          away, not the record of what the claimer already bought. */}
+      {isMine && (
+        <PurchaseControl
+          gift={gift}
+          listId={listId}
+          queryClient={queryClient}
+          disabled={isPending || isArchived}
+        />
+      )}
+      <ConfirmDialog
+        open={confirmingUnclaim}
+        title="Are you sure you no longer want to get this gift?"
+        body={unclaimLoss(gift)}
+        actions={UNCLAIM_ACTIONS}
+        onResolve={(id) => {
+          if (id === "unclaim") unclaimMutation.mutate();
+          setConfirmingUnclaim(false);
+        }}
+      />
     </li>
+  );
+}
+
+/** How an occasion reads when two families both have one called "Christmas
+ * 2026" — family first, matching the sharing summary line. An archived occasion
+ * says so, the way an archived share target does on the sharing modal. */
+function claimOccasionLabel(occasion: ClaimOccasion): string {
+  const base = `${occasion.family.name} · ${occasion.name}`;
+  return occasion.is_archived ? `${base} — archived` : base;
+}
+
+/** The one question asked before a claim with a genuine choice behind it
+ * commits: which occasion to file it under (project spec §6.2).
+ *
+ * Reached only from `claim_candidates.length >= 2`. The filing is the claimer's
+ * private record of their own spend and nobody else can see it, so this asks
+ * once and never again for that gift — correcting it afterwards belongs to the
+ * occasion's shopping tab (NEU-1274).
+ *
+ * **Nothing is pre-selected.** Picking the first candidate for the user would
+ * be a guess recorded as a fact, and the sharing control already refuses the
+ * identical shape client-side: choosing before committing, never after.
+ *
+ * `claim_options` is the wider `allowed` set, so an occasion that is no longer
+ * suggested — an archived one — is still reachable behind "Show past
+ * occasions". That is what makes the late-January claim filable under the
+ * Christmas it was actually for (NEU-1269 spec §2.2).
+ */
+function ClaimOccasionPrompt({
+  giftId,
+  candidates,
+  options,
+  isSaving,
+  onChoose,
+  onCancel,
+}: {
+  giftId: number;
+  candidates: ClaimOccasion[];
+  options: ClaimOccasion[];
+  isSaving: boolean;
+  onChoose: (occasionId: number) => void;
+  onCancel: () => void;
+}) {
+  const [chosen, setChosen] = useState("");
+  const [showingPast, setShowingPast] = useState(false);
+
+  const past = useMemo(() => {
+    const suggested = new Set(candidates.map((o) => o.id));
+    return options.filter((o) => !suggested.has(o.id));
+  }, [candidates, options]);
+
+  const choosable = showingPast ? [...candidates, ...past] : candidates;
+  const selectId = `claim-occasion-${giftId}`;
+
+  return (
+    <div className="mt-1 space-y-1">
+      <label htmlFor={selectId} className="block text-xs text-gray-600">
+        Which occasion is this for?
+      </label>
+      <select
+        id={selectId}
+        value={chosen}
+        onChange={(e) => setChosen(e.target.value)}
+        className="block w-full max-w-xs rounded border border-gray-300 px-2 py-1 text-sm sm:w-auto"
+      >
+        <option value="">Choose an occasion…</option>
+        {choosable.map((occasion) => (
+          <option key={occasion.id} value={occasion.id}>
+            {claimOccasionLabel(occasion)}
+          </option>
+        ))}
+      </select>
+      {past.length > 0 && !showingPast && (
+        <button
+          type="button"
+          onClick={() => setShowingPast(true)}
+          className="block text-xs text-blue-600 hover:underline"
+        >
+          Show past occasions
+        </button>
+      )}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => onChoose(Number(chosen))}
+          disabled={chosen === "" || isSaving}
+          className="rounded bg-green-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+        >
+          {isSaving ? "Saving…" : "Save"}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={isSaving}
+          className="rounded bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-700 hover:bg-gray-300 disabled:opacity-50"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** The claimer's own purchase state on a gift they have claimed: the tick, what
+ * they paid, and the prompt that asks.
+ *
+ * Ticking **reveals** the prompt rather than recording the purchase — Save and
+ * Skip are what commit it, so an amount the user meant to type is never lost to
+ * a tick they wandered away from. Skip stays one click (project spec §6.3), and
+ * unticking an unanswered prompt abandons it.
+ *
+ * Correcting a recorded amount is untick-then-tick: the server keeps
+ * `amount_paid` through an untick, so re-ticking seeds the prompt with it.
+ * There is deliberately no in-place edit here — post-hoc correction belongs to
+ * the occasion's shopping tab (project spec §6.2, NEU-1274), which has the
+ * claim id this payload does not carry.
+ *
+ * Rendered only for the claimer, and only ever inside the viewer row: the list's
+ * owner sees no claim state at all, and `GiftOwnerView` carries none to render.
+ */
+function PurchaseControl({
+  gift,
+  listId,
+  queryClient,
+  disabled,
+}: {
+  gift: Gift;
+  listId: number;
+  queryClient: ReturnType<typeof useQueryClient>;
+  disabled: boolean;
+}) {
+  const isPurchased = gift.purchased_at !== null;
+  const [prompting, setPrompting] = useState(false);
+  const [amount, setAmount] = useState("");
+
+  const purchaseMutation = useMutation({
+    // `undefined` is Skip — the field goes unset and the server leaves any
+    // amount already recorded alone. An explicit null clears it.
+    mutationFn: (amountPaid: string | null | undefined) => purchaseGift(listId, gift.id, amountPaid),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["list", listId] });
+      // Buying moves my_bought_count and last_activity_at on the /lists strip,
+      // and claiming then going straight back is the flow it exists for.
+      queryClient.invalidateQueries({ queryKey: ["occasions"] });
+      setPrompting(false);
+    },
+    onError: () => toast.error("Failed to record the purchase."),
+  });
+
+  const unpurchaseMutation = useMutation({
+    mutationFn: () => unpurchaseGift(listId, gift.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["list", listId] });
+      queryClient.invalidateQueries({ queryKey: ["occasions"] });
+    },
+    onError: () => toast.error("Failed to update the purchase."),
+  });
+
+  const isSaving = purchaseMutation.isPending || unpurchaseMutation.isPending;
+
+  function openPrompt() {
+    // Seeded from what the claimer themselves recorded, never from the owner's
+    // asking price: a budget pre-filled with someone else's number reads as
+    // fact and is a guess.
+    setAmount(gift.amount_paid ?? "");
+    setPrompting(true);
+  }
+
+  function handleToggle() {
+    // Unticking a prompt that has not been answered abandons it. Nothing was
+    // recorded by the tick, so there is nothing to undo on the server.
+    if (prompting) {
+      setPrompting(false);
+    } else if (isPurchased) {
+      unpurchaseMutation.mutate();
+    } else {
+      openPrompt();
+    }
+  }
+
+  function handleSave() {
+    const trimmed = amount.trim();
+    purchaseMutation.mutate(trimmed === "" ? null : trimmed);
+  }
+
+  const amountFieldId = `purchase-amount-${gift.id}`;
+  const paidText = formatMoney(gift.amount_paid);
+  const priceText = formatMoney(gift.price);
+
+  return (
+    <div className="mt-1">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <label className="flex items-center gap-2 text-xs text-gray-600">
+          <input
+            type="checkbox"
+            checked={isPurchased || prompting}
+            onChange={handleToggle}
+            disabled={disabled || isSaving}
+            className="h-4 w-4 rounded border-gray-300 text-blue-600 cursor-pointer disabled:cursor-not-allowed"
+          />
+          Bought
+        </label>
+        {isPurchased &&
+          (paidText ? (
+            <span className="text-xs text-gray-600">you paid {paidText}</span>
+          ) : (
+            // An understated total must read as an understatement, never as
+            // fact (project spec §7).
+            <span className="text-xs text-gray-400">no amount recorded</span>
+          ))}
+      </div>
+
+      {prompting && (
+        <div className="mt-1 space-y-1">
+          <label htmlFor={amountFieldId} className="block text-xs text-gray-600">
+            What did you pay?
+          </label>
+          <div className="flex items-center gap-2">
+            <input
+              id={amountFieldId}
+              type="text"
+              inputMode="decimal"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="w-24 rounded border border-gray-300 px-2 py-1 text-sm"
+            />
+            {/* The owner's asking price, as a hint beside the field and never
+                inside it (project spec §6.3). */}
+            {priceText && <span className="text-xs text-gray-400">listed at {priceText}</span>}
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={isSaving}
+              className="rounded bg-blue-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              {purchaseMutation.isPending ? "Saving…" : "Save"}
+            </button>
+            <button
+              type="button"
+              onClick={() => purchaseMutation.mutate(undefined)}
+              disabled={isSaving}
+              className="rounded bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-700 hover:bg-gray-300 disabled:opacity-50"
+            >
+              Skip
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

@@ -49,7 +49,7 @@ export async function updateMemberRole(
 
 export async function createInvite(
   familyId: number,
-  data: { email: string },
+  data: { email: string; role?: string },
 ): Promise<FamilyInvite> {
   const response = await apiClient.post<FamilyInvite>(`/families/${familyId}/invites`, data);
   return response.data;

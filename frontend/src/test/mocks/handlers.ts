@@ -17,8 +17,33 @@ export const handlers = [
   http.get("https://boone-gifts-api.localhost/families/:familyId/invites", () => {
     return HttpResponse.json([]);
   }),
-  // Default handler: no incoming family invites (PendingFamilyInvites mounts on Families page)
+  // Default handler: no occasions (the family page's occasions section fetches
+  // these whenever a family page renders)
+  http.get("https://boone-gifts-api.localhost/families/:familyId/occasions", () => {
+    return HttpResponse.json([]);
+  }),
+  // Default handler: no occasions anywhere (the occasion strip fetches the
+  // index on every /lists render)
+  http.get("https://boone-gifts-api.localhost/occasions", () => {
+    return HttpResponse.json([]);
+  }),
+  // Default handler: no incoming family invites (ActionableBanner mounts on Lists and People)
   http.get("https://boone-gifts-api.localhost/families/invites", () => {
     return HttpResponse.json([]);
+  }),
+  // Default handler: nothing to be nudged about (ActionableBanner asks on every
+  // Lists and People render, same as the invites above)
+  http.get("https://boone-gifts-api.localhost/occasions/archive-prompts", () => {
+    return HttpResponse.json([]);
+  }),
+  // Default handler: no folders (the Lists page's folder filter fetches these
+  // on every render)
+  http.get("https://boone-gifts-api.localhost/folders", () => {
+    return HttpResponse.json([]);
+  }),
+  // Default handler: a plain, un-shared account (the Account page's shared-account
+  // card fetches this whenever the page renders)
+  http.get("https://boone-gifts-api.localhost/account", () => {
+    return HttpResponse.json({ is_shared_account: false, people: [] });
   }),
 ];

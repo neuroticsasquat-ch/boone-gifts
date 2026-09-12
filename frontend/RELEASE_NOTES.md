@@ -1,3 +1,142 @@
+# Release notes
+
+## 0.6.0 — 2026-09-12
+
+### Auth
+
+- Say what actually failed instead of blaming the password ([NEU-1320](https://linear.app/neuroticsasquatch/issue/NEU-1320)) ([#224](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/224))
+
+### Confirmations
+
+- Replace three confirmation patterns with one dialog ([NEU-1293](https://linear.app/neuroticsasquatch/issue/NEU-1293)) ([#211](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/211))
+- Confirm what is irreversible or affects others ([NEU-1319](https://linear.app/neuroticsasquatch/issue/NEU-1319)) ([#225](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/225))
+
+### Families
+
+- Rezone the family page around managing a family ([NEU-1300](https://linear.app/neuroticsasquatch/issue/NEU-1300)) ([#214](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/214))
+
+### Folders
+
+- Offer shared lists from the folder picker, attributed ([NEU-1318](https://linear.app/neuroticsasquatch/issue/NEU-1318)) ([#223](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/223))
+
+### Lists
+
+- Label a shared row from every route it arrived by ([NEU-1291](https://linear.app/neuroticsasquatch/issue/NEU-1291)) ([#210](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/210))
+- Put the occasions you're shopping for on the landing page ([NEU-1298](https://linear.app/neuroticsasquatch/issue/NEU-1298)) ([#212](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/212))
+- Link an occasion heading to the occasion it names ([NEU-1299](https://linear.app/neuroticsasquatch/issue/NEU-1299)) ([#213](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/213))
+
+### Navigation
+
+- Hold the view state of a page in its URL ([NEU-1301](https://linear.app/neuroticsasquatch/issue/NEU-1301)) ([#215](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/215))
+- Take the viewer back the way they came ([NEU-1302](https://linear.app/neuroticsasquatch/issue/NEU-1302)) ([#216](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/216))
+
+### Occasions
+
+- Ask about occasions that have gone quiet ([NEU-1315](https://linear.app/neuroticsasquatch/issue/NEU-1315)) ([#221](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/221))
+
+### People
+
+- Filter both sections, and move Remove behind a confirmed menu ([NEU-1309](https://linear.app/neuroticsasquatch/issue/NEU-1309)) ([#220](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/220))
+- Derive a person's page from the shared scope ([NEU-1316](https://linear.app/neuroticsasquatch/issue/NEU-1316)) ([#222](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/222))
+
+### Sharing
+
+- Put families first and disable people an occasion reaches ([NEU-1284](https://linear.app/neuroticsasquatch/issue/NEU-1284))
+- Move the sharing control into a modal with one filter ([NEU-1306](https://linear.app/neuroticsasquatch/issue/NEU-1306)) ([#217](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/217))
+- Reuse the sharing modal on New List and share nothing by default ([NEU-1307](https://linear.app/neuroticsasquatch/issue/NEU-1307)) ([#218](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/218))
+- Share a list into an occasion from the occasion ([NEU-1308](https://linear.app/neuroticsasquatch/issue/NEU-1308)) ([#219](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/219))
+
+## 0.5.0 — 2026-09-09
+
+### Budgets
+
+- Show and edit your own budget on every shopping tab ([NEU-1276](https://linear.app/neuroticsasquatch/issue/NEU-1276)) ([#195](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/195))
+
+### Claims
+
+- Record what a claimed gift cost when you tick it bought ([NEU-1270](https://linear.app/neuroticsasquatch/issue/NEU-1270)) ([#191](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/191))
+- Ask which occasion a claim is for only when it's a real choice ([NEU-1271](https://linear.app/neuroticsasquatch/issue/NEU-1271)) ([#192](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/192))
+- Give each occasion and folder a My shopping tab ([NEU-1274](https://linear.app/neuroticsasquatch/issue/NEU-1274)) ([#194](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/194))
+
+### Folders
+
+- Rename occasions to folders ([NEU-1259](https://linear.app/neuroticsasquatch/issue/NEU-1259)) ([#185](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/185))
+
+### General
+
+- Drop the query cache when the viewer changes ([NEU-1281](https://linear.app/neuroticsasquatch/issue/NEU-1281)) ([#196](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/196))
+- Drop the query cache before paint, not after (NEU-1281 follow-up) ([#197](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/197))
+
+### Gifts
+
+- Format every money value through one shared helper ([NEU-1272](https://linear.app/neuroticsasquatch/issue/NEU-1272)) ([#193](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/193))
+
+### Hooks
+
+- Clear component timers on unmount ([NEU-1282](https://linear.app/neuroticsasquatch/issue/NEU-1282))
+
+### Lists
+
+- Pre-check family sharing and name the unshared list ([NEU-1262](https://linear.app/neuroticsasquatch/issue/NEU-1262)) ([#187](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/187))
+- Group Shared with me by occasion, person or folder ([NEU-1277](https://linear.app/neuroticsasquatch/issue/NEU-1277)) ([#198](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/198))
+- Give archived lists, folders and occasions one way in ([NEU-1278](https://linear.app/neuroticsasquatch/issue/NEU-1278)) ([#199](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/199))
+- Report a failed family read on the archive view (NEU-1278 follow-up) ([#200](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/200))
+- Show what the viewer still has to buy on a shared row ([NEU-1280](https://linear.app/neuroticsasquatch/issue/NEU-1280)) ([#203](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/203))
+
+### Navigation
+
+- Retire simple mode ([NEU-1261](https://linear.app/neuroticsasquatch/issue/NEU-1261)) ([#186](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/186))
+
+### Occasions
+
+- Give the family page its occasions and their controls ([NEU-1264](https://linear.app/neuroticsasquatch/issue/NEU-1264)) ([#188](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/188))
+- Give the occasion its page and the lists shared to it ([NEU-1267](https://linear.app/neuroticsasquatch/issue/NEU-1267)) ([#190](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/190))
+
+### Routes
+
+- Validate numeric route ids at the route ([NEU-1283](https://linear.app/neuroticsasquatch/issue/NEU-1283)) ([#202](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/202))
+
+### Sharing
+
+- Choose the occasion a family sees a list through ([NEU-1266](https://linear.app/neuroticsasquatch/issue/NEU-1266)) ([#189](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/189))
+
+## 0.4.0 — 2026-09-08
+
+### Account
+
+- Declare a shared account and name the people on it ([NEU-1232](https://linear.app/neuroticsasquatch/issue/NEU-1232)) ([#177](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/177))
+
+### General
+
+- Add /family-invites/:token route for existing-user invite links
+- Stop CI tests resolving against the Coder workspace API URL
+
+### List-detail
+
+- List detail without tabs ([NEU-1236](https://linear.app/neuroticsasquatch/issue/NEU-1236)) ([#173](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/173))
+- Combined "Who can see this list" picker ([NEU-1239](https://linear.app/neuroticsasquatch/issue/NEU-1239)) ([#174](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/174))
+
+### Lists
+
+- Actionable banner on Lists ([NEU-1233](https://linear.app/neuroticsasquatch/issue/NEU-1233)) ([#169](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/169))
+- Label each shared list with how it reached me ([NEU-1235](https://linear.app/neuroticsasquatch/issue/NEU-1235)) ([#171](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/171))
+- Occasion filter, header controls and empty states ([NEU-1238](https://linear.app/neuroticsasquatch/issue/NEU-1238)) ([#172](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/172))
+- Ask who a list is for on a shared account ([NEU-1237](https://linear.app/neuroticsasquatch/issue/NEU-1237)) ([#178](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/178))
+- Delete the "they use this app" radio ([NEU-1241](https://linear.app/neuroticsasquatch/issue/NEU-1241)) ([#179](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/179))
+
+### Nav
+
+- Two-tab nav shell and retired routes ([NEU-1231](https://linear.app/neuroticsasquatch/issue/NEU-1231)) ([#168](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/168))
+
+### Occasions
+
+- Add a list to an occasion from the header menu ([NEU-1240](https://linear.app/neuroticsasquatch/issue/NEU-1240)) ([#176](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/176))
+
+### People
+
+- Merge connections and families into one People page ([NEU-1234](https://linear.app/neuroticsasquatch/issue/NEU-1234)) ([#170](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/170))
+- Choose role and simple mode when inviting to a family ([#180](https://github.com/neuroticsasquat-ch/boone-gifts-frontend/pull/180))
+
 ## [0.3.0] - 2026-06-29
 
 ### 🚀 Features

@@ -14,9 +14,23 @@ export function clearAccessToken(): void {
   accessToken = null;
 }
 
+let onSessionEnded: (() => void) | null = null;
+
+/** Registered by AuthProvider. The interceptor cannot reach React state directly,
+ *  and the token accessors above already work this way. */
+export function setSessionEndedHandler(handler: (() => void) | null): void {
+  onSessionEnded = handler;
+}
+
 export const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? "https://boone-gifts-api.localhost",
   withCredentials: true,
+  // A host that accepts the connection and never answers leaves the request
+  // hanging forever, which is the same confidently-wrong experience
+  // `lib/request-failure.ts` exists to remove, minus the words. A timed-out
+  // request carries no `response`, so it classifies as unreachable with no new
+  // branch. App-wide by design, and cheap because `App.tsx` sets `retry: false`.
+  timeout: 15_000,
 });
 
 // Attach access token to every request
@@ -81,6 +95,7 @@ apiClient.interceptors.response.use(
       return apiClient(originalRequest);
     } catch (refreshError) {
       clearAccessToken();
+      onSessionEnded?.();
       processQueue(refreshError);
       return Promise.reject(refreshError);
     } finally {

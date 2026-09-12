@@ -60,10 +60,3 @@ export async function changePassword(
   });
   return response.data;
 }
-
-export async function toggleSimpleMode(current: boolean): Promise<AccessTokenResponse> {
-  const response = await apiClient.put<AccessTokenResponse>("/auth/profile", {
-    simple_mode: !current,
-  });
-  return response.data;
-}

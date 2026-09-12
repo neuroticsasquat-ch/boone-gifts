@@ -2,6 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { MemoryRouter } from "react-router";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { server } from "../test/mocks/server";
 import { Account } from "./Account";
@@ -11,24 +12,26 @@ const API = "https://boone-gifts-api.localhost";
 
 function renderAccount(overrides: Partial<AuthContextType> = {}) {
   const value: AuthContextType = {
-    user: { id: 1, email: "user@test.com", name: "Test User", role: "member", simple_mode: false },
+    user: { id: 1, email: "user@test.com", name: "Test User", role: "member" },
     isLoading: false,
     login: vi.fn(),
     logout: vi.fn(),
     register: vi.fn(),
     changePassword: vi.fn(),
     updateProfile: vi.fn(),
-    toggleSimpleMode: vi.fn(),
     ...overrides,
   };
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return {
     value,
     ...render(
-      <MemoryRouter>
-        <AuthContext.Provider value={value}>
-          <Account />
-        </AuthContext.Provider>
-      </MemoryRouter>
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <AuthContext.Provider value={value}>
+            <Account />
+          </AuthContext.Provider>
+        </MemoryRouter>
+      </QueryClientProvider>
     ),
   };
 }
@@ -106,35 +109,5 @@ describe("Account", () => {
     await waitFor(() => {
       expect(screen.getByText(/current password is incorrect/i)).toBeInTheDocument();
     });
-  });
-
-  it("renders View mode card with correct copy for full-mode user", () => {
-    renderAccount({ user: { id: 1, email: "user@test.com", name: "Test User", role: "member", simple_mode: false } });
-    expect(screen.getByText("View mode")).toBeInTheDocument();
-    expect(screen.getByText(/full mode is on/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /switch to simple mode/i })).toBeInTheDocument();
-  });
-
-  it("renders View mode card with correct copy for simple-mode user", () => {
-    renderAccount({ user: { id: 1, email: "user@test.com", name: "Test User", role: "member", simple_mode: true } });
-    expect(screen.getByText(/simple mode is on/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /switch to full mode/i })).toBeInTheDocument();
-  });
-
-  it("calls toggleSimpleMode on button click and shows loading state", async () => {
-    let resolve!: () => void;
-    const toggleSimpleMode = vi.fn().mockReturnValue(new Promise<void>((r) => { resolve = r; }));
-    renderAccount({ toggleSimpleMode });
-
-    await userEvent.click(screen.getByRole("button", { name: /switch to simple mode/i }));
-
-    // Loading state while the promise is pending
-    expect(screen.getByRole("button", { name: /saving/i })).toBeDisabled();
-
-    resolve();
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: /switch to simple mode/i })).not.toBeDisabled();
-    });
-    expect(toggleSimpleMode).toHaveBeenCalledOnce();
   });
 });
