@@ -2,25 +2,36 @@ import { useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import { forgotPassword } from "../api/auth";
 import { useTitle } from "../hooks/useTitle";
+import { failureMessage } from "../lib/request-failure";
 
 export function ForgotPassword() {
   useTitle("Forgot Password");
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    setError(null);
     setSubmitting(true);
     try {
       await forgotPassword(email);
-    } catch {
-      // Intentionally swallow — backend already returns 200 for unknown emails to
-      // avoid user enumeration, and we mirror that behavior on rate-limit / network
-      // failures so the user can't infer anything from the UI.
+      setSubmitted(true);
+    } catch (err) {
+      // Anti-enumeration reaches exactly as far as what the backend's answer
+      // could reveal, and no further. The only email-dependent answer it gives
+      // is 200, so a rejection (`null`) still falls through to the generic
+      // success screen — but whether the request arrived, whether we were rate
+      // limited by IP, and whether our own mail path broke say nothing about
+      // whether the address has an account, and "check your inbox" is a lie the
+      // user acts on by waiting.
+      const msg = failureMessage(err);
+      if (msg) setError(msg);
+      else setSubmitted(true);
+    } finally {
+      setSubmitting(false);
     }
-    setSubmitted(true);
-    setSubmitting(false);
   }
 
   return (
@@ -42,6 +53,7 @@ export function ForgotPassword() {
             </>
           ) : (
             <form onSubmit={handleSubmit}>
+              {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
               <p className="text-gray-700 text-sm mb-4">
                 Enter your email and we'll send you a link to set a new password.
               </p>

@@ -67,6 +67,39 @@ describe("ResetPassword", () => {
     expect(receivedBody).toEqual({ token: "abc-123", new_password: "new-password-123" });
   });
 
+  it("keeps the form and says so when the server can't be reached", async () => {
+    // Requesting a new link cannot fix a network outage, and the new link would
+    // fail the same way — so the dead-link screen is the rejection arm only.
+    server.use(http.post(`${API}/auth/reset-password`, () => HttpResponse.error()));
+
+    renderPageWithToken("abc-123");
+    await userEvent.type(screen.getByLabelText(/^new password/i), "new-password-123");
+    await userEvent.type(screen.getByLabelText(/confirm/i), "new-password-123");
+    await userEvent.click(screen.getByRole("button", { name: /set new password/i }));
+
+    expect(await screen.findByText(/couldn't reach the server/i)).toBeInTheDocument();
+    expect(screen.queryByText(/invalid or expired/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /request a new link/i })
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/^new password/i)).toBeInTheDocument();
+  });
+
+  it("keeps the form and blames our own end for a 500", async () => {
+    server.use(
+      http.post(`${API}/auth/reset-password`, () => HttpResponse.json({}, { status: 500 }))
+    );
+
+    renderPageWithToken("abc-123");
+    await userEvent.type(screen.getByLabelText(/^new password/i), "new-password-123");
+    await userEvent.type(screen.getByLabelText(/confirm/i), "new-password-123");
+    await userEvent.click(screen.getByRole("button", { name: /set new password/i }));
+
+    expect(await screen.findByText(/went wrong on our end/i)).toBeInTheDocument();
+    expect(screen.queryByText(/invalid or expired/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/^new password/i)).toBeInTheDocument();
+  });
+
   it("shows an error with a forgot-password link when the backend returns 400", async () => {
     server.use(
       http.post(`${API}/auth/reset-password`, () =>

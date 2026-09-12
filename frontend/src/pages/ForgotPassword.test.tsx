@@ -43,10 +43,13 @@ describe("ForgotPassword", () => {
     expect(receivedEmail).toBe("user@test.com");
   });
 
-  it("shows the same success message when the backend returns an error", async () => {
+  it("shows the same success message when the backend rejects the request", async () => {
+    // The anti-enumeration case, and the one a future reader is most likely to
+    // break: the only email-dependent answer the backend gives is 200, so a 4xx
+    // must stay indistinguishable from success.
     server.use(
       http.post(`${API}/auth/forgot-password`, () =>
-        HttpResponse.json({ detail: "rate limited" }, { status: 429 })
+        HttpResponse.json({ detail: "nope" }, { status: 400 })
       )
     );
 
@@ -57,6 +60,52 @@ describe("ForgotPassword", () => {
     await waitFor(() => {
       expect(screen.getByText(/if an account exists/i)).toBeInTheDocument();
     });
+  });
+
+  it("says it could not reach the server, and keeps the form", async () => {
+    // "Check your inbox" for a request that never left the browser is a lie the
+    // user acts on by waiting.
+    server.use(http.post(`${API}/auth/forgot-password`, () => HttpResponse.error()));
+
+    renderPage();
+    await userEvent.type(screen.getByLabelText(/email/i), "user@test.com");
+    await userEvent.click(screen.getByRole("button", { name: /send reset link/i }));
+
+    expect(await screen.findByText(/couldn't reach the server/i)).toBeInTheDocument();
+    expect(screen.queryByText(/if an account exists/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
+  });
+
+  it("says it is rate limiting for a 429", async () => {
+    // Keyed on the caller's IP, not the email, so saying so reveals nothing.
+    server.use(
+      http.post(`${API}/auth/forgot-password`, () =>
+        HttpResponse.json({ detail: "Rate limit exceeded: 5 per 1 minute" }, { status: 429 })
+      )
+    );
+
+    renderPage();
+    await userEvent.type(screen.getByLabelText(/email/i), "user@test.com");
+    await userEvent.click(screen.getByRole("button", { name: /send reset link/i }));
+
+    expect(await screen.findByText(/too many attempts/i)).toBeInTheDocument();
+    expect(screen.queryByText(/if an account exists/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
+  });
+
+  it("blames our own end for a 500, and keeps the form", async () => {
+    // Our failure, and it means no email was sent.
+    server.use(
+      http.post(`${API}/auth/forgot-password`, () => HttpResponse.json({}, { status: 500 }))
+    );
+
+    renderPage();
+    await userEvent.type(screen.getByLabelText(/email/i), "user@test.com");
+    await userEvent.click(screen.getByRole("button", { name: /send reset link/i }));
+
+    expect(await screen.findByText(/went wrong on our end/i)).toBeInTheDocument();
+    expect(screen.queryByText(/if an account exists/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
   });
 
   it("links back to login", () => {

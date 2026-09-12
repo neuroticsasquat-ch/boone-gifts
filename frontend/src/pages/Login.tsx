@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useNavigate, useLocation, Link } from "react-router";
 import { useAuth } from "../hooks/useAuth";
 import { useTitle } from "../hooks/useTitle";
+import { failureMessage } from "../lib/request-failure";
 
 export function Login() {
   useTitle("Log In");
@@ -20,12 +21,20 @@ export function Login() {
     setSubmitting(true);
     try {
       await login(email, password);
-      navigate(from, { replace: true });
-    } catch {
-      setError("Invalid email or password");
+    } catch (err) {
+      // A 4xx is the server rejecting these credentials; anything else is a
+      // failure that has nothing to do with the password. The wording below
+      // stays uniform across "no such email" and "wrong password" on purpose —
+      // distinguishing them would tell an attacker which addresses have
+      // accounts (CONTEXT.md rule 10).
+      setError(failureMessage(err) ?? "Invalid email or password");
+      return;
     } finally {
       setSubmitting(false);
     }
+    // Outside the `try`: a throw from routing is not a login failure, and
+    // leaving it inside means a successful login can render an error.
+    navigate(from, { replace: true });
   }
 
   return (

@@ -37,7 +37,7 @@ Dev web on `http://localhost:5173`, API on `http://localhost:8000`, Mailpit on `
 
 **Entry**: `src/main.tsx` → `App.tsx` (providers: QueryClient, Auth, Router, Sentry ErrorBoundary).
 
-**Auth**: access token in memory (module-level variable in `api/client.ts`), refresh token in a backend-managed HttpOnly cookie. Silent refresh on mount restores sessions; a 401 triggers refresh and retry, skipping `/auth/` URLs to avoid loops, with a failed-request queue for concurrent 401s. When that refresh gives up, the interceptor calls the handler `AuthProvider` registered via `setSessionEndedHandler`, which clears the user and lands the viewer on `/login` rather than leaving a mounted page with a dead token.
+**Auth**: access token in memory (module-level variable in `api/client.ts`), refresh token in a backend-managed HttpOnly cookie. Silent refresh on mount restores sessions; a 401 triggers refresh and retry, skipping `/auth/` URLs to avoid loops, with a failed-request queue for concurrent 401s. When that refresh gives up, the interceptor calls the handler `AuthProvider` registered via `setSessionEndedHandler`, which clears the user and lands the viewer on `/login` rather than leaving a mounted page with a dead token. The instance carries a **15-second `timeout`**, so a host that accepts the connection and never answers fails rather than hanging: a timed-out request carries no `response`, which is exactly how `lib/request-failure.ts` recognises an unreachable server (`CONTEXT.md` rule 10).
 
 **The query cache is dropped whenever the viewer changes** — an effect in `AuthProvider` keyed on `user?.id`, covering logout, an account switch, and a token-expiry re-login alike. This is *why* no `queryKey` carries a user id: don't "fix" the keys by adding one. A viewer *departing* triggers `queryClient.clear()`; a viewer *arriving* removes only unobserved entries (`removeQueries({ type: "inactive" })`), because a mutation can write its response in after the departure clear, while clearing an in-flight query would leave its observer pending forever. It is a **`useLayoutEffect`** and must stay one — a passive effect runs after paint, and after a mounting screen's own passive effect has claimed the stale entry and made it active, which spares it from the sweep. Keyed on the id, not the user object, so `updateProfile` renaming someone is not a change of viewer. `AuthProvider` therefore requires a `QueryClientProvider` above it — `App.tsx` and every test that renders it must supply one. See [ADR 0004](docs/adr/0004-the-query-cache-is-cleared-at-the-identity-boundary.md).
 
@@ -155,6 +155,9 @@ src/
                      # and how that reads on a row; occasion-choice.ts — the
                      # sharing control's one-, several-, no-occasion rule;
                      # money.ts — formatMoney, the one place money becomes text;
+                     # request-failure.ts — failureMessage, the one place a
+                     # transport or server failure becomes text, and null for
+                     # "the server answered and rejected you";
                      # shopping.ts — ShoppingScope and the shoppingKey cache key
   types/index.ts     # Types mirroring the backend Pydantic schemas
   test/

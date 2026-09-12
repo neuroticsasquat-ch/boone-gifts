@@ -147,3 +147,13 @@ behaviour).
    and the control never takes the viewer off the site. Every destination has one word: **Lists**,
    **People**, or the family's own name. A *wrong address* keeps its own fixed way back (rule 7) and
    is not history-aware, because the page it names was never asked for.
+
+10. **A failure names its own cause, and a request the server never answered is not a rejection.**
+    A page may only tell the user their credentials, their invite or their link were rejected when
+    the server actually said so. A request that never arrived, one the server refused to process
+    yet, and one our own side failed on are three different facts, and each is said plainly —
+    because the message is the only thing the user can act on, and the destructive action a wrong
+    message invites is resetting a password that was always correct. The cross-cutting sentences are
+    written once (`lib/request-failure.ts`) and name nothing page-specific; anything the server
+    rejected outright is the page's own business. This is rule 7 one layer out: a wrong address is
+    not a missing thing, a slow one is not either, and neither is an unreachable server.
