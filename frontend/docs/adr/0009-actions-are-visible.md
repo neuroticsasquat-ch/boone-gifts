@@ -3,6 +3,9 @@
 **Status:** Accepted (2026-09-12)
 **Ticket:** [NEU-1322](https://linear.app/neuroticsasquatch/issue/NEU-1322)
 **Spec:** [`docs/specs/NEU-1322-actions-are-visible.md`](../specs/NEU-1322-actions-are-visible.md)
+**Amended by:** [ADR 0010](0010-a-header-may-collapse-its-actions-on-a-phone.md) (a header may
+collapse a *group* of actions below `md`), [ADR 0011](0011-a-disclosure-carries-a-chevron.md)
+(the disclosure is a word **and** a chevron). Nothing below was rewritten — read them in order.
 
 ## Context
 

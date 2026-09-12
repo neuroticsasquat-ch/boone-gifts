@@ -192,8 +192,11 @@ describe("ActionBar — collapseOnMobile", () => {
     for (const name of ["Sharing…", "Edit", "Delete"]) {
       expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
     }
-    // The finding ADR 0009 keeps: the trigger is a word, not a glyph.
-    expect(open().textContent).toBe("Actions");
+    // The finding ADR 0009 keeps, narrowed by ADR 0011: a word *and* a glyph,
+    // never a glyph alone. Still an exact match, so a future trigger that lost
+    // the word — or grew a second one — fails here rather than sliding past a
+    // substring.
+    expect(open().textContent).toBe("Actions ⌄");
   });
 
   it("reveals every action, in order and in tone, on one press", async () => {
@@ -204,7 +207,7 @@ describe("ActionBar — collapseOnMobile", () => {
 
     expect(open()).toHaveAttribute("aria-expanded", "true");
     // Danger is still last and still an outline; the panel is the same bar.
-    expect(labels()).toEqual(["Actions", "Sharing…", "Edit", "Delete"]);
+    expect(labels()).toEqual(["Actions ⌃", "Sharing…", "Edit", "Delete"]);
     for (const name of ["Sharing…", "Edit", "Delete"]) {
       expect(screen.getByRole("button", { name })).toBeEnabled();
     }
@@ -237,6 +240,51 @@ describe("ActionBar — collapseOnMobile", () => {
 
     expect(open()).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+  });
+
+  // ADR 0011. The trigger says two things the buttons do not: that it opens, and
+  // that it is not one of them.
+  it("names itself with the word alone — the chevron is decoration", () => {
+    mockViewport("mobile");
+    render(<ActionBar collapseOnMobile items={actions()} />);
+
+    // `aria-expanded` already states the same fact, and a screen reader must not
+    // hear it twice — so the glyph must not reach the accessible name.
+    expect(open()).toHaveAccessibleName("Actions");
+    expect(open().querySelector("[aria-hidden='true']")).toHaveTextContent("⌄");
+  });
+
+  it("flips the chevron with the state it announces", async () => {
+    mockViewport("mobile");
+    render(<ActionBar collapseOnMobile items={actions()} />);
+
+    const chevron = () => open().querySelector("[aria-hidden='true']");
+    expect(chevron()).toHaveTextContent("⌄");
+    expect(open()).toHaveAttribute("aria-expanded", "false");
+
+    await userEvent.click(open());
+
+    expect(chevron()).toHaveTextContent("⌃");
+    expect(open()).toHaveAttribute("aria-expanded", "true");
+    // The word never goes anywhere, at either state.
+    expect(open()).toHaveAccessibleName("Actions");
+  });
+
+  // The complaint itself: the control that *opens* the bar wore byte-for-byte
+  // the treatment of the five it hides. Asserted against a button in the same
+  // bar rather than against class literals, so restyling both together cannot
+  // silently pass this.
+  it("wears neither the border nor the fill of the buttons it reveals", async () => {
+    mockViewport("mobile");
+    render(<ActionBar collapseOnMobile items={actions()} />);
+
+    await userEvent.click(open());
+    const action = screen.getByRole("button", { name: "Edit" });
+
+    for (const chrome of ["border", "bg-"]) {
+      expect(action.className).toContain(chrome);
+      expect(open().className).not.toContain(chrome);
+    }
   });
 
   // The whole-bar rule, inside the panel: two mutations must never race on the

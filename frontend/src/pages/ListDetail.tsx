@@ -310,19 +310,27 @@ function ViewerHeader({
     ) : (
       label
     );
-  const ownerLink = linkToOwner(list.owner_name);
+
+  // Both halves come from the attribution rather than from `owner_name`, so a
+  // blank owner drops the half it cannot fill instead of trailing a preposition
+  // — "for Beth", never "for Beth · kept by " (NEU-1324). `undefined` when there
+  // is nothing at all to say; `ListHeader` renders no line for it.
+  let subtitle;
+  if (attribution === null) {
+    subtitle = undefined;
+  } else if (attribution.kind !== "absent") {
+    subtitle = <>from {linkToOwner(attribution.subject)}</>;
+  } else if (attribution.keeper === null) {
+    subtitle = <>for {attribution.subject}</>;
+  } else {
+    subtitle = <>for {attribution.subject} &middot; kept by {linkToOwner(attribution.keeper)}</>;
+  }
 
   return (
     <ListHeader
       name={list.name}
       description={list.description}
-      subtitle={
-        attribution.kind === "absent" ? (
-          <>for {attribution.subject} &middot; kept by {ownerLink}</>
-        ) : (
-          <>from {linkToOwner(attribution.subject)}</>
-        )
-      }
+      subtitle={subtitle}
       isArchived={list.is_archived}
       // No owner controls, but the folder action stays: filing someone else's
       // list under a folder of your own is the main use of the feature, and

@@ -508,12 +508,13 @@ function ListsTab({ occasion, onShare }: { occasion: Occasion; onShare: () => vo
               <p className="font-medium text-gray-900">{list.name}</p>
               {/* The viewer's own list reads as their own row does elsewhere —
                   "from Tom" on your own list would be nonsense. Every other list
-                  reached this page through this occasion, so the row names the
-                  person it came from rather than repeating the family overhead. */}
+                  is here because it reached *this* occasion, so the heading has
+                  already said the family and `withinFamily` stops the row saying
+                  it again: what is missing on this page is the person (NEU-1324). */}
               {list.owner_id === user?.id ? (
                 <RecipientLine list={list} />
               ) : (
-                <ListAttributionLine list={list} />
+                <ListAttributionLine list={list} withinFamily />
               )}
             </Link>
           </li>

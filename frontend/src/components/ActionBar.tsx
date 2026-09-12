@@ -39,7 +39,11 @@ const MD = "(min-width: 768px)";
  * header holding a single action never gets it, since there is nothing there to
  * group and hiding it would rebuild the exact fault ADR 0009 was filed against.
  *
- * The disclosure is a word carrying `aria-expanded`, never a glyph, and it
+ * The disclosure is a word **and** a chevron carrying `aria-expanded` — never a
+ * glyph alone (ADR 0009, narrowed by ADR 0011), and never dressed as one of the
+ * buttons it hides: it wears no border and no fill, because a trigger identical
+ * to the controls it reveals is the one thing on the header that behaves
+ * differently and the one thing indistinguishable from its neighbours. It
  * expands **in place** — so `HeaderMenu`'s outside-click effect and its
  * focus-restore dance stay deleted. That dance returned focus to the trigger
  * *before* running an action, since choosing an item unmounted the trigger and a
@@ -110,9 +114,20 @@ export function ActionBar({
         onClick={() => setOpen((isOpen) => !isOpen)}
         // No `aria-controls`. The panel immediately follows its trigger, which
         // is what a disclosure needs and all it needs.
-        className={`rounded px-3 py-1 text-sm font-medium disabled:opacity-50 ${ACTION_TONE_CLASSES.neutral}`}
+        //
+        // Neither border nor fill, and so no `Tone` (ADR 0011). `tone.ts` is the
+        // vocabulary for how loud an *action* is, and this acts on the bar, not
+        // on the list — wearing `neutral` made the control that opens the panel
+        // byte-for-byte one of the five it hides. The greys are the ones already
+        // on this page; nothing new enters the palette.
+        className="inline-flex items-center rounded px-1 py-1 text-sm font-medium text-gray-700 hover:text-gray-900 hover:underline disabled:opacity-50"
       >
-        Actions
+        Actions{" "}
+        {/* For the eye only. `aria-expanded` already states this to assistive
+            technology, and a screen reader must not hear the same fact twice —
+            so the accessible name stays exactly "Actions", which is what
+            `expectNoGlyphControls()` still holds this control to. */}
+        <span aria-hidden="true">{open ? "⌃" : "⌄"}</span>
       </button>
       {open && buttons}
     </div>
