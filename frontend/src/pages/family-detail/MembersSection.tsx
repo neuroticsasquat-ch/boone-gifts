@@ -4,6 +4,7 @@ import { isAxiosError } from "axios";
 import toast from "react-hot-toast";
 import { removeMember, updateMemberRole } from "../../api/families";
 import { ConfirmDialog, type ConfirmAction } from "../../components/ConfirmDialog";
+import { ActionBar } from "../../components/ActionBar";
 import type { FamilyMember } from "../../types";
 
 interface MembersSectionProps {
@@ -100,27 +101,33 @@ export function MembersSection({ familyId, familyName, members, currentUserId, i
                 <p className="text-sm text-gray-500 capitalize">{member.role}</p>
               </div>
               {isOrganizer && !isSelf && (
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() =>
-                      updateRoleMutation.mutate({
-                        userId: member.user_id,
-                        role: member.role === "member" ? "organizer" : "member",
-                      })
-                    }
-                    disabled={updateRoleMutation.isPending}
-                    className="rounded bg-blue-100 px-3 py-1 text-sm font-medium text-blue-700 hover:bg-blue-200 disabled:opacity-50"
-                  >
-                    {member.role === "member" ? "Make Organizer" : "Make Member"}
-                  </button>
-                  <button
-                    onClick={() => setRemoving(member)}
-                    disabled={removeMutation.isPending}
-                    className="rounded bg-red-100 px-3 py-1 text-sm font-medium text-red-700 hover:bg-red-200 disabled:opacity-50"
-                  >
-                    Remove
-                  </button>
-                </div>
+                <ActionBar
+                  items={[
+                    {
+                      label: member.role === "member" ? "Make Organizer" : "Make Member",
+                      onClick: () =>
+                        updateRoleMutation.mutate({
+                          userId: member.user_id,
+                          role: member.role === "member" ? "organizer" : "member",
+                        }),
+                      ariaLabel:
+                        member.role === "member"
+                          ? `Make Organizer ${member.name}`
+                          : `Make Member ${member.name}`,
+                      pending:
+                        updateRoleMutation.isPending &&
+                        updateRoleMutation.variables?.userId === member.user_id,
+                    },
+                    {
+                      label: "Remove",
+                      tone: "danger",
+                      ariaLabel: `Remove ${member.name}`,
+                      onClick: () => setRemoving(member),
+                      pending: removeMutation.isPending && removeMutation.variables === member.user_id,
+                      pendingLabel: "Removing…",
+                    },
+                  ]}
+                />
               )}
             </li>
           );

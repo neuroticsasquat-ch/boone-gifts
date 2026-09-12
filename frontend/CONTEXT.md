@@ -170,3 +170,15 @@ behaviour).
     limit and not a lower one. Unclaiming asks only when there is a recorded purchase to lose;
     unticking a purchase never does, because the amount survives it. The dialog itself is settled and
     is not the subject of this rule — see ADR 0008.
+
+12. **An action on the thing a header or a row is about is always visible.** Rule 11's twin: rule 11
+    governs when an action *asks*, this one whether it is *seen*. Nothing that acts on a list, a
+    folder, an occasion, a connection or a member is reached by first revealing it — hiding one
+    behind a glyph is the fault NEU-1322 named, and the glyph in question hid a menu of a single
+    item on two of the four pages that used it. A row's action says more than its visible text
+    where the row alone identifies it, so a roster is not fifty buttons all announced as "Remove".
+    Danger treatment is reserved for what cannot be undone, which is why archiving — reversible and
+    private, and so exempt from rule 11 — is never painted as danger. This governs action groups on
+    a header or a row and nothing else: `GiftsTab`'s claim and purchase controls are a page's
+    content, `ActionableBanner` is a CTA, and the admin pages and `SharedAccountCard` are off the
+    main product surface. See ADR 0009.

@@ -9,7 +9,7 @@ import { useAuth } from "../hooks/useAuth";
 import { useNumericId } from "../components/NumericId";
 import { useTitle } from "../hooks/useTitle";
 import { Spinner } from "../components/Spinner";
-import { HeaderMenu } from "../components/HeaderMenu";
+import { ActionBar } from "../components/ActionBar";
 import { BackControl, BACK_TO_PEOPLE, backToFamily } from "../components/BackControl";
 import { ListAttributionLine, RecipientLine } from "../components/ListAttribution";
 import { MyShopping } from "../components/MyShopping";
@@ -373,13 +373,11 @@ function OccasionHeader({
               </span>
             )}
           </div>
-          {/* The menu itself appears for anyone who can do *something* with it,
+          {/* The bar itself appears for anyone who can do *something* with it,
               and carries only what they can do — a creator who is not an
               organizer gets Archive alone rather than a Rename that 403s. */}
           {(canRename || canArchive) && (
-            <HeaderMenu
-              ariaLabel="Occasion actions"
-              pending={renameMutation.isPending || setArchivedMutation.isPending}
+            <ActionBar
               items={[
                 ...(canRename
                   ? [
@@ -389,6 +387,7 @@ function OccasionHeader({
                           setName(occasion.name);
                           setRenaming(true);
                         },
+                        pending: renameMutation.isPending,
                       },
                     ]
                   : []),
@@ -397,6 +396,8 @@ function OccasionHeader({
                       {
                         label: occasion.is_archived ? "Unarchive" : "Archive",
                         onClick: handleArchiveToggle,
+                        pending: setArchivedMutation.isPending,
+                        pendingLabel: occasion.is_archived ? "Unarchiving…" : "Archiving…",
                       },
                     ]
                   : []),

@@ -152,10 +152,9 @@ function renderListDetail(token: string, list: object = ownerList) {
   );
 }
 
-/** Open the owner header's `⋯` and press one of its items. */
-async function fromListMenu(label: string) {
+/** Press one of the owner header's actions, which stand on the header itself. */
+async function fromListHeader(label: string) {
   await screen.findByText("My Wishlist");
-  await userEvent.click(screen.getByRole("button", { name: "List actions" }));
   await userEvent.click(screen.getByRole("button", { name: label }));
 }
 
@@ -387,7 +386,7 @@ describe("the confirmation policy — what asks nothing", () => {
       }),
     );
 
-    await fromListMenu("Archive");
+    await fromListHeader("Archive");
 
     await noDialogRaised(() => expect(archived).toBe(true));
     // Nothing is announced either. `ListHeader` takes `isArchived`, so the page
@@ -407,7 +406,7 @@ describe("the confirmation policy — what asks nothing", () => {
       }),
     );
 
-    await fromListMenu("Unarchive");
+    await fromListHeader("Unarchive");
 
     await noDialogRaised(() => expect(archived).toBe(false));
   });
@@ -444,7 +443,7 @@ describe("the confirmation policy — what asks nothing", () => {
     );
 
     await screen.findByText("My Wishlist");
-    await userEvent.click(screen.getByRole("button", { name: "Remove" }));
+    await userEvent.click(screen.getByRole("button", { name: "Remove My Wishlist" }));
 
     await noDialogRaised(() => expect(removed).toBe(true));
   });
@@ -462,7 +461,7 @@ describe("the confirmation policy — what asks nothing", () => {
     );
 
     await screen.findByText("Boone Family");
-    await userEvent.click(within(zone("Members")).getByRole("button", { name: "Make Organizer" }));
+    await userEvent.click(within(zone("Members")).getByRole("button", { name: "Make Organizer Bob" }));
 
     await noDialogRaised(() => expect(promoted).toBe(true));
   });
@@ -533,7 +532,7 @@ describe("the confirmation policy — what asks, and names what it is acting on"
   it("deleting a list asks", async () => {
     renderListDetail(tokenFor(1));
 
-    await fromListMenu("Delete");
+    await fromListHeader("Delete");
 
     expect(await screen.findByRole("dialog")).toHaveAccessibleName("Delete this list?");
   });
@@ -563,7 +562,7 @@ describe("the confirmation policy — what asks, and names what it is acting on"
 
     await screen.findByText("Boone Family");
     const dialog = await dialogFrom(
-      within(zone("Members")).getByRole("button", { name: "Remove" })
+      within(zone("Members")).getByRole("button", { name: "Remove Bob" })
     );
 
     expect(dialog).toHaveAccessibleName("Remove Bob from Boone Family?");
@@ -595,7 +594,6 @@ describe("the confirmation policy — what asks, and names what it is acting on"
     renderOccasionDetail();
 
     await screen.findByRole("heading", { level: 1, name: "Boone Family \u00b7 Christmas 2026" });
-    await userEvent.click(screen.getByRole("button", { name: "Occasion actions" }));
     const dialog = await dialogFrom(screen.getByRole("button", { name: "Archive" }));
 
     // The page's own heading names the occasion above the dialog, so the title
@@ -642,8 +640,7 @@ describe("the confirmation policy — what asks, and names what it is acting on"
     renderPeople();
 
     await screen.findByRole("link", { name: "Alice" });
-    await userEvent.click(screen.getByRole("button", { name: "Actions for Alice" }));
-    const dialog = await dialogFrom(screen.getByRole("button", { name: "Remove" }));
+    const dialog = await dialogFrom(screen.getByRole("button", { name: "Remove Alice" }));
 
     expect(dialog).toHaveAccessibleName("Remove Alice?");
   });
@@ -673,7 +670,7 @@ describe("the confirmation policy — cancelling never writes", () => {
     );
 
     await screen.findByText("Boone Family");
-    await userEvent.click(within(zone("Members")).getByRole("button", { name: "Remove" }));
+    await userEvent.click(within(zone("Members")).getByRole("button", { name: "Remove Bob" }));
 
     const dialog = await screen.findByRole("dialog");
     await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));

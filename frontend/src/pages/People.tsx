@@ -14,7 +14,7 @@ import toast from "react-hot-toast";
 import { Spinner } from "../components/Spinner";
 import { HandshakeIcon } from "../components/Icons";
 import { ActionableBanner } from "../components/ActionableBanner";
-import { HeaderMenu } from "../components/HeaderMenu";
+import { ActionBar } from "../components/ActionBar";
 import { ConfirmDialog, type ConfirmAction } from "../components/ConfirmDialog";
 import { matchesFilter, NoMatches } from "../components/sharing-rows";
 import type { Connection, UserSearchResult } from "../types";
@@ -210,15 +210,16 @@ export function People() {
 const REMOVE_ACTIONS: ConfirmAction[] = [{ id: "remove", label: "Remove", tone: "danger" }];
 
 /**
- * One person: the link to them, and the `⋯` holding the one action a row has.
+ * One person: the link to them, and the one action a row has, visible on it
+ * (`CONTEXT.md` rule 12). It was a `⋯` that opened a menu of exactly one item.
  *
  * `confirming` lives here rather than on `People` because the row is the thing
- * that repeats — NEU-1293's precedent — and only one `⋯` can be open, so at
- * most one dialog is ever mounted. The mutation stays at page level: it
- * invalidates four query keys, and `removeMutation.variables` is how a row
- * knows the in-flight removal is its own.
+ * that repeats — NEU-1293's precedent — and a row only raises its dialog from
+ * its own button, so at most one is ever mounted. The mutation stays at page
+ * level: it invalidates four query keys, and `removeMutation.variables` is how
+ * a row knows the in-flight removal is its own.
  *
- * Families get no menu. A family row is a link and nothing else, so a `⋯` there
+ * Families get no action. A family row is a link and nothing else, so one there
  * would mean inventing `Leave Family` on this page (NEU-1319).
  */
 function ConnectionRow({
@@ -240,14 +241,24 @@ function ConnectionRow({
         </Link>
         <p className="text-sm text-gray-500">{conn.user.email}</p>
       </div>
-      <HeaderMenu
-        ariaLabel={`Actions for ${conn.user.name}`}
-        items={[{ label: "Remove", danger: true, onClick: () => setConfirming(true) }]}
-        pending={pending}
+      {/* The accessible name carries the person, so fifty rows do not each
+          offer a button announced as nothing but "Remove". It contains the
+          visible label, so voice control still works on "click Remove". */}
+      <ActionBar
+        items={[
+          {
+            label: "Remove",
+            tone: "danger",
+            ariaLabel: `Remove ${conn.user.name}`,
+            onClick: () => setConfirming(true),
+            pending,
+            pendingLabel: "Removing…",
+          },
+        ]}
       />
       {/* Naming the person is the guard the confirmation exists to be: "Remove
-          this connection?" means nothing when it could be any of fifty rows
-          reached through a `⋯` the viewer may have mis-tapped. The body says
+          this connection?" means nothing when it could be any of fifty rows,
+          and the viewer may have mis-tapped. The body says
           the thing the row cannot — removal cuts list visibility both ways —
           and the second sentence keeps it from overstating its own stakes.
           Confirming does not close it: `pending` holds it open with the

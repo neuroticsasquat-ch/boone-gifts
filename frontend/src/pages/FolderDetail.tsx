@@ -14,6 +14,7 @@ import { useTitle } from "../hooks/useTitle";
 import toast from "react-hot-toast";
 import { Spinner } from "../components/Spinner";
 import { ConfirmDialog, type ConfirmAction } from "../components/ConfirmDialog";
+import { ActionBar } from "../components/ActionBar";
 import { useNumericId } from "../components/NumericId";
 import { BackControl, BACK_TO_LISTS } from "../components/BackControl";
 import { ListAttributionLine, RecipientLine } from "../components/ListAttribution";
@@ -199,27 +200,28 @@ function FolderHeader({
           </div>
           {folder.description && <p className="mt-2 text-gray-600">{folder.description}</p>}
         </div>
-        <div className="flex gap-2 shrink-0">
-          <button
-            onClick={() => archiveMutation.mutate()}
-            disabled={archiveMutation.isPending}
-            className={`rounded px-3 py-1 text-sm font-medium text-white disabled:opacity-50 ${folder.is_archived ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700"}`}
-          >
-            {archiveMutation.isPending ? "…" : folder.is_archived ? "Unarchive" : "Archive"}
-          </button>
-          <button
-            onClick={() => setEditing(true)}
-            className="rounded bg-gray-200 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-300"
-          >
-            Edit
-          </button>
-          <button
-            onClick={() => setConfirmingDelete(true)}
-            disabled={deleteMutation.isPending}
-            className="rounded bg-red-600 px-3 py-1 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
-          >
-            {deleteMutation.isPending ? "Deleting…" : "Delete"}
-          </button>
+        {/* Archive was painted `bg-red-600` here — the app's danger colour,
+            identical to the Delete beside it — on an action rule 11 holds to be
+            so benign it needn't confirm. It is neutral now (ADR 0009). */}
+        <div className="shrink-0">
+          <ActionBar
+            items={[
+              {
+                label: folder.is_archived ? "Unarchive" : "Archive",
+                onClick: () => archiveMutation.mutate(),
+                pending: archiveMutation.isPending,
+                pendingLabel: folder.is_archived ? "Unarchiving…" : "Archiving…",
+              },
+              { label: "Edit", onClick: () => setEditing(true) },
+              {
+                label: "Delete",
+                onClick: () => setConfirmingDelete(true),
+                tone: "danger",
+                pending: deleteMutation.isPending,
+                pendingLabel: "Deleting…",
+              },
+            ]}
+          />
         </div>
       </div>
       <ConfirmDialog
@@ -278,13 +280,20 @@ function FolderLists({
               <ListAttributionLine list={list} />
             )}
           </Link>
-          <button
-            onClick={() => removeMutation.mutate(list.id)}
-            disabled={removeMutation.isPending}
-            className="ml-4 shrink-0 rounded bg-red-600 px-3 py-1 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
-          >
-            Remove
-          </button>
+          <div className="ml-4 shrink-0">
+            <ActionBar
+              items={[
+                {
+                  label: "Remove",
+                  tone: "danger",
+                  ariaLabel: `Remove ${list.name}`,
+                  onClick: () => removeMutation.mutate(list.id),
+                  pending: removeMutation.isPending && removeMutation.variables === list.id,
+                  pendingLabel: "Removing…",
+                },
+              ]}
+            />
+          </div>
         </li>
       ))}
     </ul>
