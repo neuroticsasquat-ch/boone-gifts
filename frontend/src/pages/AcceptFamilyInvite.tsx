@@ -49,7 +49,7 @@ export function AcceptFamilyInvite() {
         <div className="w-full max-w-sm bg-white shadow rounded p-6 text-center">
           <p className="text-gray-700 mb-4">{message}</p>
           <Link to="/people" className="text-blue-600 hover:underline">
-            Go to your families
+            Go to People
           </Link>
         </div>
       </div>

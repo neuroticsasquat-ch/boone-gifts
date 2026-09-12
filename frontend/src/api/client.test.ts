@@ -18,6 +18,15 @@ describe("apiClient", () => {
     setSessionEndedHandler(null);
   });
 
+  it("gives up on a host that never answers", () => {
+    // Asserted as configuration rather than behaviour: driving a real timeout
+    // needs fake timers fighting MSW and axios over one number, and the branch
+    // it feeds — a failure carrying no response — is covered by
+    // `lib/request-failure.test.ts`. Without it a hung request leaves the button
+    // on "Logging in…" with no message at all.
+    expect(apiClient.defaults.timeout).toBe(15_000);
+  });
+
   it("attaches the access token to requests", async () => {
     setAccessToken("test-access-token");
 

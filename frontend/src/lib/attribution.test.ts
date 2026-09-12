@@ -5,6 +5,10 @@ import {
   recipientLabel,
   type ListLike,
 } from "./attribution";
+import type { ShareRoute } from "../types";
+
+const BOONE = { id: 1, name: "Boone Family" };
+const EXTENDED = { id: 2, name: "Extended Boones" };
 
 function list(overrides: Partial<ListLike> = {}): ListLike {
   return {
@@ -12,6 +16,14 @@ function list(overrides: Partial<ListLike> = {}): ListLike {
     recipient_name: null,
     ...overrides,
   };
+}
+
+function direct(id: number, name: string): ShareRoute {
+  return { kind: "direct", person: { id, name } };
+}
+
+function occasion(id: number, name: string, family: { id: number; name: string }): ShareRoute {
+  return { kind: "occasion", occasion: { id, name }, family };
 }
 
 describe("attributionFor", () => {
@@ -47,9 +59,11 @@ describe("attributionFor", () => {
   });
 
   it("names the sharing person on a direct share", () => {
-    expect(
-      attributionFor(list({ shared_via: { kind: "user", id: 2, name: "Jane Boone" } })),
-    ).toEqual({ kind: "owner", subject: "Jane Boone", keeper: null });
+    expect(attributionFor(list({ shared_via: [direct(2, "Jane Boone")] }))).toEqual({
+      kind: "owner",
+      subject: "Jane Boone",
+      keeper: null,
+    });
   });
 
   it("names the family behind the occasion a list was shared to", () => {
@@ -57,14 +71,59 @@ describe("attributionFor", () => {
     // reads "Boone Family", never "from Boone Family". The occasion is how the
     // share was made; the family is who the viewer recognises.
     expect(
+      attributionFor(list({ shared_via: [occasion(3, "Christmas 2026", BOONE)] })),
+    ).toEqual({ kind: "family", subject: "Boone Family", keeper: null });
+  });
+
+  // Direct wins. The durable grant is the one that names the row: it survives
+  // the viewer leaving the family or the occasion share being revoked, and it
+  // is what `/lists` read before routes went plural.
+  it("names the person when a list arrived both directly and through an occasion", () => {
+    expect(
       attributionFor(
         list({
-          shared_via: {
-            kind: "occasion",
-            id: 3,
-            name: "Christmas 2026",
-            family: { id: 1, name: "Boone Family" },
-          },
+          shared_via: [direct(2, "Carol Boone"), occasion(3, "Christmas 2026", BOONE)],
+        }),
+      ),
+    ).toEqual({ kind: "owner", subject: "Carol Boone", keeper: null });
+  });
+
+  // Route order is the backend's, and stable, but it is not a ranking — so the
+  // rule must not depend on which route happens to come first.
+  it("names the person whichever order the routes arrive in", () => {
+    expect(
+      attributionFor(
+        list({
+          shared_via: [occasion(3, "Christmas 2026", BOONE), direct(2, "Carol Boone")],
+        }),
+      ),
+    ).toEqual({ kind: "owner", subject: "Carol Boone", keeper: null });
+  });
+
+  // Two families' occasions both reached the viewer, and there is no honest
+  // single name to pick, so the row names them both. A comma, not the middle
+  // dot: the dot already means "two different facts joined" on this line.
+  it("names every distinct family a list reached the viewer through", () => {
+    expect(
+      attributionFor(
+        list({
+          shared_via: [
+            occasion(3, "Christmas 2026", BOONE),
+            occasion(4, "Christmas 2026", EXTENDED),
+          ],
+        }),
+      ),
+    ).toEqual({ kind: "family", subject: "Boone Family, Extended Boones", keeper: null });
+  });
+
+  it("names one family once, however many of its occasions carried the list", () => {
+    expect(
+      attributionFor(
+        list({
+          shared_via: [
+            occasion(3, "Christmas 2026", BOONE),
+            occasion(4, "Beth's Birthday", BOONE),
+          ],
         }),
       ),
     ).toEqual({ kind: "family", subject: "Boone Family", keeper: null });
@@ -77,20 +136,28 @@ describe("attributionFor", () => {
       attributionFor(
         list({
           recipient_name: "Beth",
-          shared_via: {
-            kind: "occasion",
-            id: 3,
-            name: "Christmas 2026",
-            family: { id: 1, name: "Boone Family" },
-          },
+          shared_via: [occasion(3, "Christmas 2026", BOONE)],
         }),
       ),
     ).toEqual({ kind: "absent", subject: "Beth", keeper: "Tom" });
   });
 
-  it("falls back to the owner when the list carries no source", () => {
-    // An owned list, or a response cached from before `shared_via` existed.
-    expect(attributionFor(list({ shared_via: null }))).toEqual({
+  it("prefers the absent-person form however many ways the list arrived", () => {
+    // The recipient outranks every route, not merely the one that would have
+    // labelled the row.
+    expect(
+      attributionFor(
+        list({
+          recipient_name: "Beth",
+          shared_via: [direct(2, "Carol Boone"), occasion(3, "Christmas 2026", BOONE)],
+        }),
+      ),
+    ).toEqual({ kind: "absent", subject: "Beth", keeper: "Tom" });
+  });
+
+  it("falls back to the owner when the list carries no routes", () => {
+    // An owned list: the API sends an empty array rather than omitting it.
+    expect(attributionFor(list({ shared_via: [] }))).toEqual({
       kind: "owner",
       subject: "Tom",
       keeper: null,

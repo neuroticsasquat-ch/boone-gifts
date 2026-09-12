@@ -1,14 +1,50 @@
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { deleteUser, getUsers, updateUser } from "../api/users";
 import { useAuth } from "../hooks/useAuth";
 import { useTitle } from "../hooks/useTitle";
 import toast from "react-hot-toast";
 import type { User } from "../types";
+import { ConfirmDialog, type ConfirmAction } from "../components/ConfirmDialog";
+
+/**
+ * Both actions on this page confirm, so one dialog serves both and holds which
+ * it is asking about — two independent booleans could disagree about that.
+ */
+type PendingConfirm =
+  | { kind: "toggle"; id: number; currentlyActive: boolean }
+  | { kind: "delete"; id: number; name: string };
+
+const DELETE_ACTIONS: ConfirmAction[] = [{ id: "delete", label: "Delete", tone: "danger" }];
+
+function toggleLabel(currentlyActive: boolean) {
+  return currentlyActive ? "Deactivate" : "Reactivate";
+}
+
+/** What the one dialog says, per action. `null` keeps the closed dialog's last
+ *  shape rather than reaching for a placeholder — it renders nothing anyway. */
+function confirmContentFor(confirming: PendingConfirm | null) {
+  if (confirming?.kind === "delete") {
+    return {
+      title: `Permanently delete ${confirming.name} and all their data?`,
+      body: "This cannot be undone.",
+      actions: DELETE_ACTIONS,
+    };
+  }
+  const label = toggleLabel(confirming?.kind === "toggle" ? confirming.currentlyActive : false);
+  return {
+    title: `${label} this user?`,
+    body: undefined,
+    actions: [{ id: "toggle", label, tone: "danger" }] satisfies ConfirmAction[],
+  };
+}
 
 export function AdminUsers() {
   useTitle("Users");
   const { user: currentUser } = useAuth();
   const queryClient = useQueryClient();
+
+  const [confirming, setConfirming] = useState<PendingConfirm | null>(null);
 
   const users = useQuery({ queryKey: ["admin-users"], queryFn: getUsers });
 
@@ -31,17 +67,25 @@ export function AdminUsers() {
   });
 
   function handleToggle(id: number, currentlyActive: boolean) {
-    const action = currentlyActive ? "Deactivate" : "Reactivate";
-    if (window.confirm(`${action} this user?`)) {
-      toggleMutation.mutate({ id, is_active: !currentlyActive });
-    }
+    setConfirming({ kind: "toggle", id, currentlyActive });
   }
 
   function handleDelete(id: number, name: string) {
-    if (window.confirm(`Permanently delete ${name} and all their data? This cannot be undone.`)) {
-      deleteMutation.mutate(id);
-    }
+    setConfirming({ kind: "delete", id, name });
   }
+
+  function handleResolve(actionId: string | null) {
+    if (actionId !== null && confirming !== null) {
+      if (confirming.kind === "delete") {
+        deleteMutation.mutate(confirming.id);
+      } else {
+        toggleMutation.mutate({ id: confirming.id, is_active: !confirming.currentlyActive });
+      }
+    }
+    setConfirming(null);
+  }
+
+  const confirmContent = confirmContentFor(confirming);
 
   return (
     <div className="space-y-8">
@@ -120,6 +164,14 @@ export function AdminUsers() {
           </>
         )}
       </section>
+
+      <ConfirmDialog
+        open={confirming !== null}
+        title={confirmContent.title}
+        body={confirmContent.body}
+        actions={confirmContent.actions}
+        onResolve={handleResolve}
+      />
     </div>
   );
 }

@@ -9,7 +9,8 @@ import { getShareTargets } from "../../api/lists";
  * and "Families" tabs as the place an owner reads their sharing state.
  *
  * Owner-only, and always editable: it names who the list actually reaches and
- * carries the Change control that opens the sharing panel.
+ * carries the Change control that opens the sharing modal — by pushing
+ * `?share=open`, since an open modal is a place you can be (CONTEXT.md rule 8).
  */
 export function SharingSummary({
   listId,
@@ -28,7 +29,7 @@ export function SharingSummary({
   const isLoading = shares.isLoading || connections.isLoading || targets.isLoading;
   const namesByUserId = new Map((connections.data ?? []).map((c) => [c.user.id, c.user.name]));
   // Occasions first, then people — "Shared with Boone Family · Christmas 2026,
-  // Jane", the same order the sharing panel reads in (project spec §5.2). A
+  // Jane", the same order the sharing modal reads in (project spec §5.2). A
   // share points at an occasion, so naming the family alone would say more than
   // the list actually reaches (project spec §8).
   const names = [

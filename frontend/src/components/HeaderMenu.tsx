@@ -8,10 +8,13 @@ export type HeaderMenuItem = {
 };
 
 /**
- * A page header's `⋯` menu, so the header can lead with the thing itself rather
- * than with its controls. List detail's owner menu holds the folder action plus
- * edit, archive and delete; a viewer's holds the folder action alone; the
- * occasion page's holds rename and archive for an organizer.
+ * The app's one overflow menu, wherever a `⋯` is the right way to hold actions
+ * back — in a page header, so the header can lead with the thing itself rather
+ * than with its controls, or on a row, so a list of people is a list of people
+ * rather than a column of red buttons. List detail's owner menu holds the
+ * folder action plus edit, archive and delete; a viewer's holds the folder
+ * action alone; the occasion page's holds rename and archive for an organizer;
+ * a People row's holds `Remove`.
  *
  * `ariaLabel` names *what* the menu acts on ("List actions", "Occasion
  * actions"), because a page may hold more than one and "More actions" would
@@ -28,6 +31,7 @@ export function HeaderMenu({
 }) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -40,7 +44,12 @@ export function HeaderMenu({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [open]);
 
+  // Focus goes back to `⋯` before the action runs, not after: choosing an item
+  // unmounts it, and an action that opens a ConfirmDialog captures whatever is
+  // focused at that moment as the element to restore to when the dialog closes.
+  // Without this the capture lands on `<body>` and the focus return is lost.
   function run(action: () => void) {
+    triggerRef.current?.focus();
     setOpen(false);
     action();
   }
@@ -48,6 +57,7 @@ export function HeaderMenu({
   return (
     <div className="relative" ref={menuRef}>
       <button
+        ref={triggerRef}
         onClick={() => setOpen(!open)}
         disabled={pending}
         aria-label={ariaLabel}

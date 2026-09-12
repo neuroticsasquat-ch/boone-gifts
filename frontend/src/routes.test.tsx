@@ -1,4 +1,5 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { createMemoryRouter, RouterProvider, type RouteObject } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -82,6 +83,45 @@ describe("routes", () => {
     renderAt("/lists/archive");
 
     expect(await screen.findByRole("heading", { name: "Archive" })).toBeInTheDocument();
+  });
+
+  // The depth counter through the real tree, not a harness: the provider is a
+  // pathless root route, so a page reached by a push sees depth > 0 and its back
+  // control becomes a plain Back that returns to the pusher (NEU-1302).
+  it("counts a push through the tree, so Back returns to the pusher", async () => {
+    server.use(
+      http.get(`${API}/lists/1`, () =>
+        HttpResponse.json({
+          id: 1,
+          name: "My Wishlist",
+          description: null,
+          owner_id: 1,
+          owner_name: "Tom Boone",
+          is_archived: false,
+          gifts: [],
+          created_at: "2026-01-01T00:00:00Z",
+          updated_at: "2026-01-01T00:00:00Z",
+        })
+      ),
+      http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+      http.get(`${API}/account`, () => HttpResponse.json({ is_shared: false, people: [] })),
+    );
+
+    const router = renderAt("/lists");
+    await screen.findByRole("navigation", { name: "Primary navigation" });
+
+    // Through the router rather than a list row, so the case is about the
+    // counter and not about what `/lists` happens to render.
+    await act(() => router.navigate("/lists/1"));
+    expect(await screen.findByRole("heading", { name: "My Wishlist" })).toBeInTheDocument();
+
+    // Not `← Back to Lists`: the app knows where the viewer came from, so the
+    // control stops naming a destination it is not going to.
+    await userEvent.click(screen.getByRole("button", { name: "\u2190 Back" }));
+
+    expect(router.state.location.pathname).toBe("/lists");
   });
 });
 

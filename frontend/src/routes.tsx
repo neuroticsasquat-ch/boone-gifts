@@ -1,5 +1,6 @@
 import type { RouteObject } from "react-router";
-import { Navigate } from "react-router";
+import { Navigate, Outlet } from "react-router";
+import { NavigationDepthProvider } from "./contexts/NavigationDepthContext";
 import { Layout } from "./components/Layout";
 import { NumericId } from "./components/NumericId";
 import { ProtectedRoute } from "./components/ProtectedRoute";
@@ -24,60 +25,75 @@ import { AdminInvites } from "./pages/AdminInvites";
 import { AdminUsers } from "./pages/AdminUsers";
 
 export const routes: RouteObject[] = [
+  // The depth counter every back control reads has to live inside the router,
+  // because it watches navigations, and `App.tsx` puts `AuthProvider` above
+  // `RouterProvider` — so one pathless root route is where it goes. At the root
+  // rather than inside `<Layout>`, because `family-invites/:token` sits outside
+  // the shell and arriving at a family from an invite is an in-app push that has
+  // to count.
   {
-    path: "/login",
-    element: <Login />,
-  },
-  {
-    path: "/register",
-    element: <Register />,
-  },
-  {
-    path: "/forgot-password",
-    element: <ForgotPassword />,
-  },
-  {
-    path: "/reset-password",
-    element: <ResetPassword />,
-  },
-  {
-    element: <ProtectedRoute />,
+    element: (
+      <NavigationDepthProvider>
+        <Outlet />
+      </NavigationDepthProvider>
+    ),
     children: [
-      // Not a shim for the retired Dashboard — `/` is where a returning user
-      // with a live session lands when they open the bare domain, so it has to
-      // go somewhere. Post-login landing is `/lists`.
-      { index: true, element: <Navigate to="/lists" replace /> },
-      { path: "family-invites/:token", element: <AcceptFamilyInvite /> },
       {
-        element: <Layout />,
+        path: "/login",
+        element: <Login />,
+      },
+      {
+        path: "/register",
+        element: <Register />,
+      },
+      {
+        path: "/forgot-password",
+        element: <ForgotPassword />,
+      },
+      {
+        path: "/reset-password",
+        element: <ResetPassword />,
+      },
+      {
+        element: <ProtectedRoute />,
         children: [
-          { path: "lists", element: <Lists /> },
-          { path: "lists/new", element: <CreateList /> },
-          // Archived lists and folders have one way in, and it is this page —
-          // the dashboard no longer has an archived state to be put into
-          // (NEU-1278). A static segment outranks `lists/:id`, the same way
-          // `lists/new` already does.
-          { path: "lists/archive", element: <ListsArchive /> },
-          { path: "lists/:id", element: <NumericId back="/lists"><ListDetail /></NumericId> },
-          { path: "people", element: <People /> },
-          { path: "people/families/:id", element: <NumericId back="/people"><FamilyDetail /></NumericId> },
-          // The same for a family's archived occasions, reached from the
-          // occasions section on the family page.
-          { path: "people/families/:id/archive", element: <NumericId back="/people"><FamilyArchive /></NumericId> },
-          { path: "people/:id", element: <NumericId back="/people"><ConnectionProfile /></NumericId> },
-          { path: "occasions/:id", element: <NumericId back="/people"><OccasionDetail /></NumericId> },
-          // A folder page, but no folder *index*: the folder filter on /lists is
-          // where a user meets the concept, and NEU-1277's Group by is what
-          // links here. `Folders.tsx` stays unrouted.
-          { path: "folders/:id", element: <NumericId back="/lists"><FolderDetail /></NumericId> },
-          { path: "account", element: <Account /> },
+          // Not a shim for the retired Dashboard — `/` is where a returning user
+          // with a live session lands when they open the bare domain, so it has to
+          // go somewhere. Post-login landing is `/lists`.
+          { index: true, element: <Navigate to="/lists" replace /> },
+          { path: "family-invites/:token", element: <AcceptFamilyInvite /> },
           {
-            path: "admin",
-            element: <AdminRoute />,
+            element: <Layout />,
             children: [
-              { index: true, element: <div>Admin Dashboard</div> },
-              { path: "invites", element: <AdminInvites /> },
-              { path: "users", element: <AdminUsers /> },
+              { path: "lists", element: <Lists /> },
+              { path: "lists/new", element: <CreateList /> },
+              // Archived lists and folders have one way in, and it is this page —
+              // the dashboard no longer has an archived state to be put into
+              // (NEU-1278). A static segment outranks `lists/:id`, the same way
+              // `lists/new` already does.
+              { path: "lists/archive", element: <ListsArchive /> },
+              { path: "lists/:id", element: <NumericId back="/lists"><ListDetail /></NumericId> },
+              { path: "people", element: <People /> },
+              { path: "people/families/:id", element: <NumericId back="/people"><FamilyDetail /></NumericId> },
+              // The same for a family's archived occasions, reached from the
+              // occasions section on the family page.
+              { path: "people/families/:id/archive", element: <NumericId back="/people"><FamilyArchive /></NumericId> },
+              { path: "people/:id", element: <NumericId back="/people"><ConnectionProfile /></NumericId> },
+              { path: "occasions/:id", element: <NumericId back="/people"><OccasionDetail /></NumericId> },
+              // A folder page, but no folder *index*: the folder filter on /lists is
+              // where a user meets the concept, and NEU-1277's Group by is what
+              // links here. `Folders.tsx` stays unrouted.
+              { path: "folders/:id", element: <NumericId back="/lists"><FolderDetail /></NumericId> },
+              { path: "account", element: <Account /> },
+              {
+                path: "admin",
+                element: <AdminRoute />,
+                children: [
+                  { index: true, element: <div>Admin Dashboard</div> },
+                  { path: "invites", element: <AdminInvites /> },
+                  { path: "users", element: <AdminUsers /> },
+                ],
+              },
             ],
           },
         ],

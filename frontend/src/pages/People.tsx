@@ -14,7 +14,10 @@ import toast from "react-hot-toast";
 import { Spinner } from "../components/Spinner";
 import { HandshakeIcon } from "../components/Icons";
 import { ActionableBanner } from "../components/ActionableBanner";
-import type { UserSearchResult } from "../types";
+import { HeaderMenu } from "../components/HeaderMenu";
+import { ConfirmDialog, type ConfirmAction } from "../components/ConfirmDialog";
+import { matchesFilter, NoMatches } from "../components/sharing-rows";
+import type { Connection, UserSearchResult } from "../types";
 
 /** Loose on purpose — the backend is the real check; this only decides whether
  *  what was typed is worth sending as an address at all. */
@@ -30,6 +33,12 @@ export function People() {
   useTitle("People");
   const queryClient = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
+  // Component state, not URL-held: CONTEXT.md rule 8 carves out scratch input
+  // for the sharing modal's box, and both halves of that rationale are about
+  // the input being free text rather than about it being in a dialog. Nobody
+  // links to `/people?q=car`, and one `replaceState` per keystroke throttles
+  // the same on a page as in a modal.
+  const [filter, setFilter] = useState("");
 
   const families = useQuery({ queryKey: ["families"], queryFn: getFamilies });
   const connections = useQuery({ queryKey: ["connections"], queryFn: getConnections });
@@ -76,6 +85,20 @@ export function People() {
     );
   }
 
+  // `?? []` rather than the non-null assertion the happy path would allow: a
+  // section that failed to load has no data and keeps its own error arm.
+  const visibleFamilies = (families.data ?? []).filter((f) => matchesFilter(filter, f.name));
+  const visibleConnections = (connections.data ?? []).filter((c) =>
+    matchesFilter(filter, c.user.name, c.user.email),
+  );
+  const filtering = filter.trim() !== "";
+  // Once either list is non-empty — a box above two "you have none" sentences is
+  // chrome over nothing. It then outlives the rows it filters: removing the last
+  // match empties both lists, and unmounting the input at that moment would
+  // strand the viewer on `No people match "al"` with nothing left to clear.
+  const showFilter =
+    (families.data?.length ?? 0) + (connections.data?.length ?? 0) > 0 || filtering;
+
   return (
     <div className="space-y-8">
       {heading}
@@ -97,17 +120,43 @@ export function People() {
         </div>
       )}
 
+      {/* Below Add and above the first heading: nothing between the control and
+          the two sections it narrows. Deliberately far from Add's own box,
+          which searches strangers to connect to and must not be mistaken for
+          this one. No debounce — this is a predicate over two arrays already in
+          memory. */}
+      {showFilter && (
+        <input
+          type="text"
+          aria-label="Filter people"
+          placeholder="Filter people…"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          className="block w-full rounded border border-gray-300 px-3 py-2 text-sm"
+        />
+      )}
+
       <section>
         <h2 className="text-lg font-semibold text-gray-900">Families</h2>
         {families.isError && <p className="mt-3 text-red-600">Failed to load families.</p>}
-        {families.data && families.data.length === 0 && (
-          <p className="mt-3 text-gray-500">
-            You aren't in any families yet. Use Add to create one.
-          </p>
+        {/* The "you have none" sentence is never shown while the filter is set:
+            telling someone with eight families to create one is a lie. The
+            heading stays in both arms — a section that vanished when filtered
+            would give no clue that the filter is why. */}
+        {families.data && visibleFamilies.length === 0 && (
+          <div className="mt-3">
+            {filtering ? (
+              <NoMatches noun="families" filter={filter} />
+            ) : (
+              <p className="text-gray-500">
+                You aren't in any families yet. Use Add to create one.
+              </p>
+            )}
+          </div>
         )}
-        {families.data && families.data.length > 0 && (
+        {visibleFamilies.length > 0 && (
           <ul className="mt-3 divide-y divide-gray-200 rounded-lg bg-white shadow">
-            {families.data.map((family) => (
+            {visibleFamilies.map((family) => (
               <li key={family.id} className="flex items-center justify-between px-4 py-3">
                 <Link
                   to={`/people/families/${family.id}`}
@@ -128,38 +177,94 @@ export function People() {
       <section>
         <h2 className="text-lg font-semibold text-gray-900">Individuals</h2>
         {connections.isError && <p className="mt-3 text-red-600">Failed to load connections.</p>}
-        {connections.data && connections.data.length === 0 && (
-          <p className="mt-3 text-gray-500">
-            You aren't connected to anyone yet. Use Add to send a request.
-          </p>
+        {connections.data && visibleConnections.length === 0 && (
+          <div className="mt-3">
+            {filtering ? (
+              // "People" is the page's own word for a connection, even under a
+              // heading that says Individuals to tell a person from a family.
+              <NoMatches noun="people" filter={filter} />
+            ) : (
+              <p className="text-gray-500">
+                You aren't connected to anyone yet. Use Add to send a request.
+              </p>
+            )}
+          </div>
         )}
-        {connections.data && connections.data.length > 0 && (
+        {visibleConnections.length > 0 && (
           <ul className="mt-3 divide-y divide-gray-200 rounded-lg bg-white shadow">
-            {connections.data.map((conn) => (
-              <li key={conn.id} className="flex items-center justify-between px-4 py-3">
-                <div>
-                  <Link
-                    to={`/people/${conn.id}`}
-                    className="font-medium text-blue-600 hover:underline"
-                  >
-                    {conn.user.name}
-                  </Link>
-                  <p className="text-sm text-gray-500">{conn.user.email}</p>
-                </div>
-                <button
-                  onClick={() => removeMutation.mutate(conn.id)}
-                  disabled={removeMutation.isPending && removeMutation.variables === conn.id}
-                  aria-label={`Remove ${conn.user.name}`}
-                  className="rounded bg-red-600 px-3 py-1 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
-                >
-                  Remove
-                </button>
-              </li>
+            {visibleConnections.map((conn) => (
+              <ConnectionRow
+                key={conn.id}
+                conn={conn}
+                pending={removeMutation.isPending && removeMutation.variables === conn.id}
+                onRemove={() => removeMutation.mutate(conn.id)}
+              />
             ))}
           </ul>
         )}
       </section>
     </div>
+  );
+}
+
+const REMOVE_ACTIONS: ConfirmAction[] = [{ id: "remove", label: "Remove", tone: "danger" }];
+
+/**
+ * One person: the link to them, and the `⋯` holding the one action a row has.
+ *
+ * `confirming` lives here rather than on `People` because the row is the thing
+ * that repeats — NEU-1293's precedent — and only one `⋯` can be open, so at
+ * most one dialog is ever mounted. The mutation stays at page level: it
+ * invalidates four query keys, and `removeMutation.variables` is how a row
+ * knows the in-flight removal is its own.
+ *
+ * Families get no menu. A family row is a link and nothing else, so a `⋯` there
+ * would mean inventing `Leave Family` on this page (NEU-1319).
+ */
+function ConnectionRow({
+  conn,
+  pending,
+  onRemove,
+}: {
+  conn: Connection;
+  pending: boolean;
+  onRemove: () => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+
+  return (
+    <li className="flex items-center justify-between px-4 py-3">
+      <div>
+        <Link to={`/people/${conn.id}`} className="font-medium text-blue-600 hover:underline">
+          {conn.user.name}
+        </Link>
+        <p className="text-sm text-gray-500">{conn.user.email}</p>
+      </div>
+      <HeaderMenu
+        ariaLabel={`Actions for ${conn.user.name}`}
+        items={[{ label: "Remove", danger: true, onClick: () => setConfirming(true) }]}
+        pending={pending}
+      />
+      {/* Naming the person is the guard the confirmation exists to be: "Remove
+          this connection?" means nothing when it could be any of fifty rows
+          reached through a `⋯` the viewer may have mis-tapped. The body says
+          the thing the row cannot — removal cuts list visibility both ways —
+          and the second sentence keeps it from overstating its own stakes.
+          Confirming does not close it: `pending` holds it open with the
+          mutation visibly in flight, so a failure lands on a dialog that is
+          still standing and re-armed. */}
+      <ConfirmDialog
+        open={confirming}
+        title={`Remove ${conn.user.name}?`}
+        body="You'll stop seeing each other's shared lists. You can send a new request later."
+        actions={REMOVE_ACTIONS}
+        pending={pending}
+        onResolve={(id) => {
+          if (id === "remove") onRemove();
+          else setConfirming(false);
+        }}
+      />
+    </li>
   );
 }
 

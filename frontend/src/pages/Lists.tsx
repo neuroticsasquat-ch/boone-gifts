@@ -1,21 +1,39 @@
-import { useState, useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { Link } from "react-router";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { getLists } from "../api/lists";
 import { getFolder, getFolders } from "../api/folders";
 import { useTitle } from "../hooks/useTitle";
+import { useEnumSearchParam, useSearchParamState } from "../hooks/useSearchParamState";
 import { Spinner } from "../components/Spinner";
 import { ClipboardIcon, HandshakeIcon } from "../components/Icons";
 import type { GiftList } from "../types";
 import { groupLists, type FolderMembership, type GroupBy } from "../lib/list-grouping";
-import { ListAttributionLine, RecipientLine } from "../components/ListAttribution";
+import { RecipientLine } from "../components/ListAttribution";
+import { SharedRows } from "../components/SharedListRows";
 import { ActionableBanner } from "../components/ActionableBanner";
+import { OccasionStrip } from "./lists/OccasionStrip";
 
-type SortBy = "updated" | "name" | "created";
+const SORTS = ["updated", "name", "created"] as const;
+type SortBy = (typeof SORTS)[number];
+
+const GROUPINGS = ["none", "occasion", "person", "folder"] as const;
 
 /** The filter's "no folder chosen" value. `<select>` values are strings, so the
  *  folder ids alongside it are stringified too. */
 const ALL_LISTS = "all";
+
+/** `?folder=` read as an id, or null when it is not one syntactically.
+ *
+ *  A folder id is a positive integer or it is not an id at all — the same rule
+ *  `NumericId` applies to a route id (ADR 0006), applied to a param. `abc`,
+ *  `-1`, `0` and `1.5` are all treated as absent. Whether a well-formed id names
+ *  a folder the *viewer owns* cannot be known until `getFolders()` resolves, and
+ *  is the second stage, below. */
+function parseFolderParam(raw: string | null): number | null {
+  if (raw === null || !/^[1-9][0-9]*$/.test(raw)) return null;
+  return Number(raw);
+}
 
 function sortLists(lists: GiftList[], sortBy: SortBy) {
   return [...lists].sort((a, b) => {
@@ -36,64 +54,28 @@ function visibleLists(
   return sortLists(folderIds ? lists.filter((list) => folderIds.has(list.id)) : [], sortBy);
 }
 
-/** `• N to buy` — how many of the viewer's own claims on this list they have
- *  yet to buy. Nothing at zero, and nothing when the field is absent: most
- *  shared lists are ones the viewer has never claimed from, and a "0 to buy" on
- *  every one of them would be noise.
- *
- *  Not decorative. A claim on a directly-shared list belongs to no occasion and,
- *  unless the viewer files that list in a folder, to no folder either — so it
- *  appears on no shopping tab at all, and this badge is its only route back
- *  (project spec §9.4). */
-function ToBuyBadge({ count }: { count: number | undefined }) {
-  // Zero and absent both render nothing, for different reasons. Zero is the
-  // common case and a "0 to buy" on every unclaimed list is noise. Absent is
-  // the contract saying this row has no such count — an owned row, or a scope
-  // that carries none — and there is simply no number to draw. The backend
-  // makes the field required on viewer rows so that "absent" can never quietly
-  // stand for "nothing left to buy" there; the equivalent loud failure is not
-  // available to a row renderer, since throwing would cost the viewer the whole
-  // Lists page rather than one badge.
-  if (!count) return null;
-  return <span className="shrink-0 text-sm font-medium text-blue-600">{`• ${count} to buy`}</span>;
-}
-
-/** The rows of one shared section — the whole section when it is flat, one
- *  bucket of it when the viewer has grouped it. Every shared row on the page
- *  comes through here, which is what puts the badge under every grouping,
- *  "Not in a …" buckets included, and keeps it off the owned rows: those are
- *  rendered separately and never reach this component. */
-function SharedRows({ lists }: { lists: GiftList[] }) {
-  return (
-    <ul className="mt-3 divide-y divide-gray-200 rounded-lg bg-white shadow">
-      {lists.map((list) => (
-        <li key={list.id}>
-          <Link to={`/lists/${list.id}`} className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-gray-50">
-            {/* `min-w-0` against the badge's `shrink-0`: on a narrow viewport the
-                attribution line wraps within what is left rather than squeezing
-                the badge, so the two never crowd each other. */}
-            <div className="min-w-0">
-              <p className="font-medium text-gray-900">{list.name}</p>
-              <ListAttributionLine list={list} />
-              <p className="text-xs text-gray-400">
-                {list.claimed_count} of {list.gift_count} claimed
-              </p>
-            </div>
-            <ToBuyBadge count={list.my_unpurchased_claim_count} />
-          </Link>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 export function Lists() {
   useTitle("Lists");
-  const [sortBy, setSortBy] = useState<SortBy>("updated");
-  const [folderId, setFolderId] = useState<number | null>(null);
+  // Every one of these three is a **preference about a page you are already
+  // on**, so all three replace: setting a sort and then pressing Back leaves
+  // /lists rather than undoing the dropdown (project spec §6.3).
+  const [sortBy, setSortBy] = useEnumSearchParam<SortBy>("sort", {
+    mode: "replace",
+    values: SORTS,
+    fallback: "updated",
+  });
   // Off by default, so the shipped flat page is what a viewer who asks for
   // nothing still gets (project spec §9.1).
-  const [groupBy, setGroupBy] = useState<GroupBy>("none");
+  const [groupBy, setGroupBy] = useEnumSearchParam<GroupBy>("group", {
+    mode: "replace",
+    values: GROUPINGS,
+    fallback: "none",
+  });
+  // `folder` is the odd one out — a number, whose valid values are not known
+  // until the folder list resolves — so it carries its own two-stage check
+  // rather than going through `useEnumSearchParam`.
+  const [folderParam, setFolderParam] = useSearchParamState("folder", { mode: "replace" });
+  const parsedFolderId = parseFolderParam(folderParam);
 
   // Active only, always. Nothing archived appears in a default view — the
   // archive is `/lists/archive` and nothing else (NEU-1278, project spec §9.5).
@@ -112,10 +94,36 @@ export function Lists() {
     queryKey: ["folders", { archived: false }],
     queryFn: () => getFolders(),
   });
+  // Stage two: an id the viewer does not own is not a filter. It falls back to
+  // All lists rather than being fetched — `GET /folders/999` would 404, and
+  // `selectedFolder` has no error arm, so the page would sit with `filtering`
+  // true and `folderListIds` null forever: both sections empty, no explanation
+  // (CONTEXT.md rule 3). False while the folders are still loading, which keeps
+  // the id and leaves the page in its existing `sectionsPending` arm rather
+  // than briefly showing everything.
+  const folderDisowned =
+    parsedFolderId !== null
+    && folders.data !== undefined
+    && !folders.data.some((folder) => folder.id === parsedFolderId);
+  const folderId = folderDisowned ? null : parsedFolderId;
+
+  // A key the page is ignoring does not stay in the address: a viewer who
+  // bookmarked or re-shared `?folder=999` would otherwise propagate it onward,
+  // and the next reader could not tell it was already being ignored.
+  useEffect(() => {
+    if (folderParam === null) return;
+    if (parsedFolderId === null || folderDisowned) setFolderParam(null);
+  }, [folderParam, parsedFolderId, folderDisowned, setFolderParam]);
+
   const selectedFolder = useQuery({
     queryKey: ["folder", folderId],
     queryFn: () => getFolder(folderId as number),
-    enabled: folderId !== null,
+    // Held until the folder list has settled, so a `?folder=` the viewer does
+    // not own is never fetched at all — stage two disowns it in the same render
+    // the list arrives in. Gated on the folder list *settling* rather than on
+    // its data: if that read fails there is nothing to judge the id against,
+    // and asking the server directly beats spinning forever.
+    enabled: folderId !== null && !folders.isPending,
   });
 
   // Grouping by folder needs every folder's membership, not just the selected
@@ -193,6 +201,11 @@ export function Lists() {
       {/* Anything awaiting a decision, above the lists. */}
       <ActionableBanner />
 
+      {/* The way in to the occasions the viewer is shopping for. Renders
+          nothing when they have none, and never delays the lists below
+          (ADR 0007). */}
+      <OccasionStrip />
+
       <header>
         <div className="flex items-center justify-between">
           <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900">
@@ -213,7 +226,7 @@ export function Lists() {
               <select
                 value={folderId === null ? ALL_LISTS : String(folderId)}
                 onChange={(e) =>
-                  setFolderId(e.target.value === ALL_LISTS ? null : Number(e.target.value))
+                  setFolderParam(e.target.value === ALL_LISTS ? null : e.target.value)
                 }
                 className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600"
               >
@@ -306,7 +319,8 @@ export function Lists() {
               whatever path it took. The backend has already merged the direct and
               family grants and ordered them (NEU-1227). The source shows as a label
               on the row; it becomes a heading only when the viewer asks for one
-              through Group by, and even then it is not a destination (ADR 0005). */}
+              through Group by, and that heading links only where the page behind
+              it carries more than the grouping does (ADR 0007). */}
           <section>
             <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
               <HandshakeIcon className="h-5 w-5" /> Shared with Me
@@ -332,7 +346,11 @@ export function Lists() {
                 <div className="mt-3 space-y-6">
                   {sharedGroups.map((group) => (
                     <section key={group.key}>
+                      {/* The qualifier stays plain text: an occasion heading
+                          reads "Boone Family · Christmas 2026", and only the
+                          occasion name leads to the occasion (ADR 0007). */}
                       <h3 className="text-sm font-semibold text-gray-700">
+                        {group.qualifier && `${group.qualifier} · `}
                         {group.href ? (
                           <Link to={group.href} className="text-blue-600 hover:underline">{group.heading}</Link>
                         ) : group.heading}

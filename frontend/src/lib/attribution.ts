@@ -7,7 +7,7 @@
  * with no account, whose list someone else keeps (project spec §5.4).
  */
 
-import type { SharedVia } from "../types";
+import type { ShareRoute } from "../types";
 
 /** The fields of a list this module reads. Structural, so every list shape fits. */
 export interface ListLike {
@@ -20,19 +20,24 @@ export interface ListLike {
    * *inside* the account, and to everyone else the account is one identity
    * (project spec §5.1), so no viewer-side line names them. */
   account_person_name?: string | null;
-  /** How a shared list reached the viewer (NEU-1227). Absent on an owned list,
-   * and on the detail responses, which do not carry it. */
-  shared_via?: SharedVia | null;
+  /** Every route by which a shared list reached the viewer (NEU-1290) — empty
+   * on an owned list. Optional here, unlike on `GiftList`, because this
+   * interface is structural and also serves the detail shapes, which carry no
+   * routes at all, and because a response cached across the deploy carries
+   * none either. */
+  shared_via?: ShareRoute[];
 }
 
 export type ListAttribution =
   /** No recipient: the person the list came from — the sharing user when the
    *  list carries one, else its owner. "from {subject}" */
   | { kind: "owner"; subject: string; keeper: null }
-  /** Reached the viewer through an occasion of a family they belong to. The row
-   *  names the **family**, not the occasion: the occasion is how the share was
-   *  made, the family is who the viewer recognises (project spec §9.1). A group
-   *  is a source, not a person, so it reads as a bare label: "{subject}" */
+  /** Reached the viewer through an occasion of a family they belong to, and no
+   *  other way. The row names the **family**, not the occasion: the occasion is
+   *  how the share was made, the family is who the viewer recognises (project
+   *  spec §9.1). A group is a source, not a person, so it reads as a bare
+   *  label: "{subject}". Several families are pre-joined into that one string
+   *  — see {@link familySubject}. */
   | { kind: "family"; subject: string; keeper: null }
   /** A recipient with no account, whose list someone else keeps.
    *  "for {subject} · kept by {keeper}" */
@@ -48,22 +53,58 @@ export type ListAttribution =
  * which replaces only the line that used to name the owner and nothing else
  * (NEU-1235). So a list kept for Beth reads "for Beth · kept by Tom" however it
  * reached the viewer.
+ *
+ * **Direct wins.** A list that arrived both ways is labelled with the person who
+ * shared it. A direct share is the durable grant — it survives the viewer
+ * leaving the family or the occasion share being revoked — and it is the label
+ * `/lists` carried before routes went plural. This is that rule's **only** home:
+ * the backend refuses to rank routes (NEU-1290) and `lib/list-grouping.ts` needs
+ * the whole array, so ranking anywhere else would be a second statement of one
+ * rule.
  */
 export function attributionFor(list: ListLike): ListAttribution {
   const recipient = recipientNameOf(list);
   if (recipient !== null) {
     return { kind: "absent", subject: recipient, keeper: list.owner_name };
   }
+  const routes = list.shared_via ?? [];
+  // A direct share names the account that shared it, which *is* this list's
+  // owner — the route is simply the authoritative statement of it.
+  const direct = routes.find((route) => route.kind === "direct");
+  if (direct) {
+    return { kind: "owner", subject: direct.person.name, keeper: null };
+  }
   // A share points at an occasion (project spec §5.1), and it is the family
   // behind that occasion the row is labelled with — the occasion arm always
   // carries one.
-  if (list.shared_via?.kind === "occasion") {
-    return { kind: "family", subject: list.shared_via.family.name, keeper: null };
+  const families = familySubject(routes);
+  if (families !== null) {
+    return { kind: "family", subject: families, keeper: null };
   }
-  // A direct share names the account that shared it, which *is* this list's owner
-  // — `shared_via` is simply the authoritative statement of it. The owner's own
-  // name stands in on a list that carries no source at all.
-  return { kind: "owner", subject: list.shared_via?.name ?? list.owner_name, keeper: null };
+  // The owner's own name stands in on a list that carries no route at all.
+  return { kind: "owner", subject: list.owner_name, keeper: null };
+}
+
+/**
+ * Every distinct family behind these routes, comma-joined — or null when none of
+ * them is an occasion route.
+ *
+ * A list can arrive through two families' occasions at once, and there is no
+ * honest single name to pick, so the row names them all. **Comma, not the middle
+ * dot**: the dot on this line already means "two different facts joined"
+ * ("for Beth · kept by Tom") and heads a grouping bucket as
+ * "Boone Family · Christmas 2026", where a comma reads as a list of like things
+ * and degrades to a bare name in the one-family case with no special-casing.
+ *
+ * Names are de-duplicated — two occasions of one family read as that family once
+ * — and kept in route order, which the API keeps stable by ascending occasion id.
+ */
+function familySubject(routes: ShareRoute[]): string | null {
+  const names = new Set<string>();
+  for (const route of routes) {
+    if (route.kind === "occasion") names.add(route.family.name);
+  }
+  return names.size === 0 ? null : [...names].join(", ");
 }
 
 /**

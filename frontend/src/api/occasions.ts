@@ -1,11 +1,31 @@
 import { apiClient } from "./client";
 import type {
+  ArchivePrompt,
   BudgetRollup,
   GiftList,
   Occasion,
   OccasionCreated,
+  OccasionSummary,
   ShoppingPayload,
 } from "../types";
+
+/**
+ * Every occasion the caller can see, across every family they belong to —
+ * including occasions with no lists shared to them, which §5.1 argues are the
+ * ones most likely to need action.
+ *
+ * Rows arrive ordered `last_activity_at DESC, id DESC`; the `id` tiebreak is
+ * what makes "the first four" stable across requests. Callers render array
+ * order and **do not re-sort**: the server owns the definition of
+ * `last_activity_at` and is the only place that can order on it without a
+ * consumer re-deriving it.
+ */
+export async function getOccasionIndex(archived = false): Promise<OccasionSummary[]> {
+  const response = await apiClient.get<OccasionSummary[]>("/occasions", {
+    params: { archived: String(archived) },
+  });
+  return response.data;
+}
 
 export async function getFamilyOccasions(
   familyId: number,
@@ -35,7 +55,13 @@ export async function createOccasion(
   return response.data;
 }
 
-/** Rename or (un)archive. Organizer-only; the backend returns 403 otherwise. */
+/**
+ * Rename or (un)archive. **Gated per field**, not per call (NEU-1294 decision
+ * 4): a rename needs an organizer of the family, while setting `is_archived` —
+ * in either direction — needs an organizer **or** the occasion's creator. The
+ * backend returns 403 otherwise, so a caller sending both fields must satisfy
+ * the stricter of the two.
+ */
 export async function updateOccasion(
   id: number,
   data: { name?: string; is_archived?: boolean },
@@ -94,4 +120,31 @@ export async function setOccasionBudget(id: number, amount: string): Promise<Bud
 export async function clearOccasionBudget(id: number): Promise<BudgetRollup> {
   const response = await apiClient.delete<BudgetRollup>(`/occasions/${id}/budget`);
   return response.data;
+}
+
+/**
+ * The occasions the backend is asking this caller about — quiet for 60 days,
+ * and theirs to close out because they created the occasion or organize its
+ * family. Takes no parameter of any kind: the thresholds and the eligibility
+ * are the server's.
+ *
+ * Rows arrive ordered `id DESC`. Callers render array order and **do not
+ * re-sort**, the same rule the occasion index carries. A caller with nothing to
+ * answer gets `200 []`, never a 404.
+ */
+export async function getArchivePrompts(): Promise<ArchivePrompt[]> {
+  const response = await apiClient.get<ArchivePrompt[]>("/occasions/archive-prompts");
+  return response.data;
+}
+
+/**
+ * Record "not yet" for one occasion. No body — the 30 days is the server's
+ * rule, and the snooze expires rather than being reset by activity.
+ *
+ * There is no 409: staleness is deliberately not re-checked on dismissal
+ * (NEU-1294 decision 5), so a row that went active while it sat on screen still
+ * answers 204. Do not write an error arm for a race that cannot happen.
+ */
+export async function dismissArchivePrompt(occasionId: number): Promise<void> {
+  await apiClient.post(`/occasions/${occasionId}/archive-prompt/dismiss`);
 }

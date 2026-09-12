@@ -1,10 +1,13 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, it, expect } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { server } from "../test/mocks/server";
 import { AuthProvider } from "../contexts/AuthContext";
+import { NavigationDepthProvider } from "../contexts/NavigationDepthContext";
+import { ArrivedFrom } from "../test/arrived-from";
 import { NumericId } from "../components/NumericId";
 import { FamilyArchive } from "./FamilyArchive";
 
@@ -53,7 +56,9 @@ function archivedOccasions(occasions: ReturnType<typeof occasion>[]) {
   );
 }
 
-function renderArchive() {
+/** `arriveFrom` starts the session on another page, so that pushing into the
+ *  archive from it is a real in-app push and the back control is at depth > 0. */
+function renderArchive({ arriveFrom }: { arriveFrom?: string } = {}) {
   server.use(
     http.post(`${API}/auth/refresh`, () =>
       HttpResponse.json({ access_token: authToken, token_type: "bearer" })
@@ -64,17 +69,20 @@ function renderArchive() {
   return render(
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <MemoryRouter initialEntries={["/people/families/1/archive"]}>
-          <Routes>
-            <Route
-              path="/people/families/:id/archive"
-              element={
-                <NumericId back="/people">
-                  <FamilyArchive />
-                </NumericId>
-              }
-            />
-          </Routes>
+        <MemoryRouter initialEntries={[arriveFrom ?? "/people/families/1/archive"]}>
+          <NavigationDepthProvider>
+            <Routes>
+              <Route
+                path="/people/families/:id/archive"
+                element={
+                  <NumericId back="/people">
+                    <FamilyArchive />
+                  </NumericId>
+                }
+              />
+              <Route path="*" element={<ArrivedFrom to="/people/families/1/archive" />} />
+            </Routes>
+          </NavigationDepthProvider>
         </MemoryRouter>
       </AuthProvider>
     </QueryClientProvider>
@@ -95,7 +103,7 @@ describe("FamilyArchive", () => {
     expect(screen.getByRole("link", { name: "Gran's 80th" })).toHaveAttribute("href", "/occasions/3");
   });
 
-  it("goes back to the family page it was reached from", async () => {
+  it("names the family when it was deep-linked into", async () => {
     family();
     archivedOccasions([]);
 
@@ -105,6 +113,18 @@ describe("FamilyArchive", () => {
       "href",
       "/people/families/1",
     );
+  });
+
+  it("returns to the page it was opened from, and says only Back", async () => {
+    family();
+    archivedOccasions([]);
+
+    renderArchive({ arriveFrom: "/people/families/1" });
+    await userEvent.click(screen.getByRole("button", { name: "arrive" }));
+
+    await userEvent.click(await screen.findByRole("button", { name: "← Back" }));
+
+    expect(screen.getByRole("button", { name: "arrive" })).toBeInTheDocument();
   });
 
   it("says so when nothing has been archived", async () => {

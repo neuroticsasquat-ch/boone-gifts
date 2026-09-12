@@ -1,48 +1,20 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, beforeEach } from "vitest";
-import { MemoryRouter, Route, Routes } from "react-router";
-import toast, { Toaster } from "react-hot-toast";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import toast from "react-hot-toast";
 import { http, HttpResponse } from "msw";
 import { server } from "../../test/mocks/server";
-import { AuthProvider } from "../../contexts/AuthContext";
-import { NumericId } from "../../components/NumericId";
-import { FamilyDetail } from "../FamilyDetail";
+import { memberToken, organizerToken, renderFamilyDetail } from "./harness";
 
 const API = "https://boone-gifts-api.localhost";
 
-// JWT for user id=1 (organizer)
-const organizerToken = [
-  btoa(JSON.stringify({ alg: "HS256", typ: "JWT" })),
-  btoa(JSON.stringify({ sub: "1", email: "organizer@test.com", name: "Alice", role: "member", exp: 9999999999 })),
-  "fake-signature",
-].join(".");
-
-// JWT for user id=2 (plain member)
-const memberToken = [
-  btoa(JSON.stringify({ alg: "HS256", typ: "JWT" })),
-  btoa(JSON.stringify({ sub: "2", email: "member@test.com", name: "Bob", role: "member", exp: 9999999999 })),
-  "fake-signature",
-].join(".");
-
-const sampleFamily = {
-  id: 1,
-  name: "Boone Family",
-  created_by_id: 1,
-  members: [
-    { user_id: 1, name: "Alice", role: "organizer" },
-    { user_id: 2, name: "Bob", role: "member" },
-  ],
-};
-
-function occasion(id: number, name: string, isArchived = false) {
+function occasion(id: number, name: string, isArchived = false, createdById = 1) {
   return {
     id,
     family_id: 1,
     name,
     is_archived: isArchived,
-    created_by_id: 1,
+    created_by_id: createdById,
     created_at: "2026-09-01T00:00:00Z",
     updated_at: "2026-09-01T00:00:00Z",
   };
@@ -54,37 +26,6 @@ function serveOccasions(active: ReturnType<typeof occasion>[], archived: ReturnT
     const wantsArchived = new URL(request.url).searchParams.get("archived") === "true";
     return HttpResponse.json(wantsArchived ? archived : active);
   });
-}
-
-function renderFamilyDetail(token: string) {
-  server.use(
-    http.post(`${API}/auth/refresh`, () =>
-      HttpResponse.json({ access_token: token, token_type: "bearer" })
-    ),
-    http.get(`${API}/families/1`, () => HttpResponse.json(sampleFamily)),
-  );
-
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <MemoryRouter initialEntries={["/people/families/1"]}>
-          <Routes>
-            <Route
-              path="/people/families/:id"
-              element={
-                <NumericId back="/people">
-                  <FamilyDetail />
-                </NumericId>
-              }
-            />
-            <Route path="/people" element={<div>People Page</div>} />
-          </Routes>
-          <Toaster />
-        </MemoryRouter>
-      </AuthProvider>
-    </QueryClientProvider>
-  );
 }
 
 /** The <li> for one occasion, so per-row controls can be queried unambiguously. */
@@ -312,11 +253,92 @@ describe("OccasionsSection", () => {
 
     await userEvent.click(within(rowFor("Christmas 2026")).getByRole("button", { name: "Archive" }));
 
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Archive" }));
+
     await waitFor(() => {
       expect(capturedBody).toEqual({ is_archived: true });
     });
     await waitFor(() => {
       expect(screen.queryByText("Christmas 2026")).not.toBeInTheDocument();
+    });
+  });
+
+  it("archive: the dialog names the row it was raised from, and cancelling sends nothing", async () => {
+    let called = false;
+    server.use(
+      serveOccasions([occasion(3, "Christmas 2026"), occasion(4, "Gran's 80th")]),
+      http.put(`${API}/occasions/:id`, () => {
+        called = true;
+        return HttpResponse.json(occasion(4, "Gran's 80th", true));
+      }),
+    );
+
+    renderFamilyDetail(organizerToken);
+
+    await waitFor(() => {
+      expect(screen.getByText("Gran's 80th")).toBeInTheDocument();
+    });
+
+    await userEvent.click(within(rowFor("Gran's 80th")).getByRole("button", { name: "Archive" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Archive Gran's 80th?")).toBeInTheDocument();
+    // The same sentence the occasion's own page uses, shared rather than retyped.
+    expect(within(dialog).getByText("Lists already shared to it stay shared.")).toBeInTheDocument();
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(called).toBe(false);
+  });
+
+  // Archiving is gated per field by the backend (NEU-1294 decision 4), so the
+  // member who created an occasion keeps the control the nudge will send them to
+  // — and still cannot rename it.
+  it("a member who created an occasion sees Archive on it and not Rename", async () => {
+    server.use(serveOccasions([occasion(3, "Christmas 2026", false, 2), occasion(4, "Gran's 80th")]));
+
+    renderFamilyDetail(memberToken);
+
+    await waitFor(() => {
+      expect(screen.getByText("Christmas 2026")).toBeInTheDocument();
+    });
+
+    const ownRow = within(rowFor("Christmas 2026"));
+    expect(ownRow.getByRole("button", { name: "Archive" })).toBeInTheDocument();
+    expect(ownRow.queryByRole("button", { name: "Rename" })).not.toBeInTheDocument();
+
+    // Somebody else's occasion in the same family is unchanged.
+    const otherRow = within(rowFor("Gran's 80th"));
+    expect(otherRow.queryByRole("button", { name: "Archive" })).not.toBeInTheDocument();
+  });
+
+  it("a 403 on archive names the archive rule, which the rename rule no longer covers", async () => {
+    server.use(
+      serveOccasions([occasion(3, "Christmas 2026")]),
+      http.put(`${API}/occasions/3`, () =>
+        HttpResponse.json({ detail: "Forbidden" }, { status: 403 })
+      ),
+    );
+
+    renderFamilyDetail(organizerToken);
+
+    await waitFor(() => {
+      expect(screen.getByText("Christmas 2026")).toBeInTheDocument();
+    });
+
+    await userEvent.click(within(rowFor("Christmas 2026")).getByRole("button", { name: "Archive" }));
+
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Archive" }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          "Only an organizer or the person who created this occasion can archive it.",
+        )
+      ).toBeInTheDocument();
     });
   });
 
@@ -340,7 +362,7 @@ describe("OccasionsSection", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText("Only an organizer can rename or archive an occasion.")
+        screen.getByText("Only an organizer can rename an occasion.")
       ).toBeInTheDocument();
     });
   });

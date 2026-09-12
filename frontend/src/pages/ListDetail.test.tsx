@@ -1,11 +1,13 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { MemoryRouter, Route, Routes } from "react-router";
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { server } from "../test/mocks/server";
 import { AuthProvider } from "../contexts/AuthContext";
+import { NavigationDepthProvider } from "../contexts/NavigationDepthContext";
+import { ArrivedFrom } from "../test/arrived-from";
 import { NumericId } from "../components/NumericId";
 import { ListDetail } from "./ListDetail";
 
@@ -53,7 +55,25 @@ const viewerListDetail = {
   updated_at: "2026-01-01",
 };
 
-function renderListDetail(token: string) {
+/** The address the gift filter and sort are held in, plus a Back button. */
+function Address() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  return (
+    <>
+      <p>{`address: ${location.pathname}${location.search}`}</p>
+      <button onClick={() => navigate(-1)}>go back</button>
+    </>
+  );
+}
+
+/** `arriveFrom` starts the session on another page and pushes into the list from
+ *  it, so the back control is at depth > 0. A deeper `entries` would not do:
+ *  that is still an entry location, and still depth 0 (NEU-1302). */
+function renderListDetail(
+  token: string,
+  { entries = ["/lists/1"], arriveFrom }: { entries?: string[]; arriveFrom?: string } = {},
+) {
   // Mock the silent refresh to return the token, which sets up the auth user
   server.use(
     http.post(`${API}/auth/refresh`, () =>
@@ -67,35 +87,43 @@ function renderListDetail(token: string) {
   return render(
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <MemoryRouter initialEntries={["/lists/1"]}>
-          <Routes>
-            <Route
-              path="/lists/:id"
-              element={
-                <NumericId back="/lists">
-                  <ListDetail />
-                </NumericId>
-              }
-            />
-          </Routes>
+        <MemoryRouter
+          initialEntries={arriveFrom ? [arriveFrom] : entries}
+          initialIndex={arriveFrom ? 0 : entries.length - 1}
+        >
+          <NavigationDepthProvider>
+            <Routes>
+              <Route
+                path="/lists/:id"
+                element={
+                  <NumericId back="/lists">
+                    <ListDetail />
+                  </NumericId>
+                }
+              />
+              <Route path="/folders/:id" element={<ArrivedFrom to="/lists/1" />} />
+              <Route path="*" element={null} />
+            </Routes>
+          </NavigationDepthProvider>
+          <Address />
         </MemoryRouter>
       </AuthProvider>
     </QueryClientProvider>
   );
 }
 
-describe("ListDetail sharing panel", () => {
+describe("ListDetail sharing modal", () => {
   // The tab bar is gone: sharing is reached from the header's Change control,
   // and that is the only way in.
-  async function openSharingPanel() {
+  async function openSharingModal() {
     await waitFor(() => {
       expect(screen.getByText("My Wishlist")).toBeInTheDocument();
     });
     await userEvent.click(await screen.findByRole("button", { name: "Change" }));
-    return screen.getByRole("region", { name: "Who can see this list" });
+    return screen.findByRole("dialog", { name: "Who can see this list" });
   }
 
-  it("puts people and families in one panel for the owner", async () => {
+  it("puts people and families in one dialog for the owner", async () => {
     server.use(
       http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
       http.get(`${API}/connections`, () =>
@@ -119,7 +147,7 @@ describe("ListDetail sharing panel", () => {
     );
 
     renderListDetail(ownerToken);
-    const panel = await openSharingPanel();
+    const panel = await openSharingModal();
 
     expect(
       await within(panel).findByRole("checkbox", { name: /share with alice/i })
@@ -141,7 +169,7 @@ describe("ListDetail sharing panel", () => {
       expect(screen.getByText("My Wishlist")).toBeInTheDocument();
     });
     expect(screen.queryByRole("button", { name: "Change" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "Who can see this list" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Who can see this list" })).not.toBeInTheDocument();
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
 });
@@ -511,9 +539,9 @@ describe("ListDetail — no tab bar", () => {
 describe("ListDetail — header actions menu", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  function serveOwnerList() {
+  function serveOwnerList(list: object = ownerListDetail) {
     server.use(
-      http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
+      http.get(`${API}/lists/1`, () => HttpResponse.json(list)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
       http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
@@ -536,7 +564,9 @@ describe("ListDetail — header actions menu", () => {
     expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
   });
 
-  it("archives from the menu once confirmed", async () => {
+  // Archiving is reversible from the "View archive" link on /lists and nobody
+  // else can tell, so it asks nothing (`CONTEXT.md` rule 11, NEU-1319).
+  it("archives from the menu in one click, with no dialog at any point", async () => {
     serveOwnerList();
     let archived: unknown = null;
     server.use(
@@ -545,8 +575,6 @@ describe("ListDetail — header actions menu", () => {
         return HttpResponse.json({ ...ownerListDetail, is_archived: true });
       }),
     );
-    vi.spyOn(window, "confirm").mockReturnValue(true);
-
     renderListDetail(ownerToken);
 
     await screen.findByText("My Wishlist");
@@ -554,6 +582,46 @@ describe("ListDetail — header actions menu", () => {
     await userEvent.click(screen.getByRole("button", { name: "Archive" }));
 
     await waitFor(() => expect(archived).toBe(true));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  // Unchanged behaviour, but it is the same code path as Archive now rather
+  // than the other arm of a branch.
+  it("unarchives from the menu in one click, with no dialog at any point", async () => {
+    serveOwnerList({ ...ownerListDetail, is_archived: true });
+    let archived: unknown = null;
+    server.use(
+      http.put(`${API}/lists/1`, async ({ request }) => {
+        archived = ((await request.json()) as { is_archived?: boolean }).is_archived;
+        return HttpResponse.json(ownerListDetail);
+      }),
+    );
+    renderListDetail(ownerToken);
+
+    await screen.findByText("My Wishlist");
+    await userEvent.click(screen.getByRole("button", { name: "List actions" }));
+    await userEvent.click(screen.getByRole("button", { name: "Unarchive" }));
+
+    await waitFor(() => expect(archived).toBe(false));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("returns focus to the actions menu when the confirmation is dismissed", async () => {
+    serveOwnerList();
+
+    renderListDetail(ownerToken);
+
+    await screen.findByText("My Wishlist");
+    const menu = screen.getByRole("button", { name: "List actions" });
+    await userEvent.click(menu);
+    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    await screen.findByRole("dialog");
+    await userEvent.keyboard("{Escape}");
+
+    // The menu item that opened the dialog is gone by the time it closes, so
+    // focus lands on the `⋯` button it hung off rather than on the document.
+    await waitFor(() => expect(menu).toHaveFocus());
   });
 
   it("deletes from the menu once confirmed", async () => {
@@ -565,13 +633,16 @@ describe("ListDetail — header actions menu", () => {
         return new HttpResponse(null, { status: 204 });
       }),
     );
-    vi.spyOn(window, "confirm").mockReturnValue(true);
-
     renderListDetail(ownerToken);
 
     await screen.findByText("My Wishlist");
     await userEvent.click(screen.getByRole("button", { name: "List actions" }));
     await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveAccessibleName("Delete this list?");
+    expect(within(dialog).getByText("This cannot be undone.")).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
 
     await waitFor(() => expect(deleted).toBe(true));
   });
@@ -651,7 +722,10 @@ describe("ListDetail — add to a folder", () => {
     expect(await within(panel).findByRole("checkbox", { name: /christmas 2026/i })).toBeInTheDocument();
   });
 
-  it("shows the sharing panel and the picker one at a time", async () => {
+  // Sharing left the header's panel slot when it became a modal, so the
+  // invariant that kept the two apart has no reason left: the modal simply
+  // covers the picker, and closing returns the viewer where they were.
+  it("leaves the picker standing under the sharing modal", async () => {
     server.use(
       http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
@@ -662,12 +736,13 @@ describe("ListDetail — add to a folder", () => {
 
     renderListDetail(ownerToken);
 
-    await screen.findByText("My Wishlist");
-    await userEvent.click(await screen.findByRole("button", { name: "Change" }));
-    expect(screen.getByRole("region", { name: "Who can see this list" })).toBeInTheDocument();
-
     await openFromMenu();
-    expect(screen.queryByRole("region", { name: "Who can see this list" })).not.toBeInTheDocument();
+    await userEvent.click(await screen.findByRole("button", { name: "Change" }));
+
+    expect(
+      await screen.findByRole("dialog", { name: "Who can see this list" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Add to a folder" })).toBeInTheDocument();
   });
 });
 
@@ -1189,6 +1264,83 @@ describe("ListDetail — recording what a purchase cost", () => {
     expect(screen.queryByRole("checkbox", { name: "Bought" })).not.toBeInTheDocument();
   });
 
+  // Unclaiming is where the rule turns: `unclaim_gift` deletes the claim row,
+  // so a plain claim is one click from undone and a purchased one loses the
+  // record and the amount with it (`CONTEXT.md` rule 11, NEU-1319).
+  it("unclaims an unpurchased gift in one click, with no dialog at any point", async () => {
+    const unclaimed = vi.fn();
+    serveViewerList(myClaim);
+    server.use(
+      http.delete(`${API}/lists/1/gifts/10/claim`, () => {
+        unclaimed();
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    renderListDetail(viewerToken);
+
+    await userEvent.click(await screen.findByRole("button", { name: "Never mind" }));
+
+    await waitFor(() => expect(unclaimed).toHaveBeenCalled());
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("unclaiming a purchased gift asks, and names the amount recorded", async () => {
+    const unclaimed = vi.fn();
+    serveViewerList({ ...myClaim, purchased_at: "2026-01-03", amount_paid: "32.50" });
+    server.use(
+      http.delete(`${API}/lists/1/gifts/10/claim`, () => {
+        unclaimed();
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    renderListDetail(viewerToken);
+
+    await userEvent.click(await screen.findByRole("button", { name: "Never mind" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveAccessibleName("Are you sure you no longer want to get this gift?");
+    expect(
+      within(dialog).getByText("You marked this bought. That, and the $32.50 you recorded, will be forgotten.")
+    ).toBeInTheDocument();
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(unclaimed).not.toHaveBeenCalled();
+  });
+
+  // A skipped amount is a first-class answer, not a missing value, so the
+  // sentence must not imply a figure exists.
+  it("asks without implying a figure when the purchase carries no amount", async () => {
+    serveViewerList({ ...myClaim, purchased_at: "2026-01-03", amount_paid: null });
+    renderListDetail(viewerToken);
+
+    await userEvent.click(await screen.findByRole("button", { name: "Never mind" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      within(dialog).getByText("You marked this bought. That will be forgotten.")
+    ).toBeInTheDocument();
+    expect(within(dialog).queryByText(/you recorded/)).not.toBeInTheDocument();
+  });
+
+  it("unclaims a purchased gift once confirmed", async () => {
+    const unclaimed = vi.fn();
+    serveViewerList({ ...myClaim, purchased_at: "2026-01-03", amount_paid: "32.50" });
+    server.use(
+      http.delete(`${API}/lists/1/gifts/10/claim`, () => {
+        unclaimed();
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    renderListDetail(viewerToken);
+
+    await userEvent.click(await screen.findByRole("button", { name: "Never mind" }));
+
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Never mind" }));
+
+    await waitFor(() => expect(unclaimed).toHaveBeenCalled());
+  });
+
   it("keeps every trace of the purchase off the owner's copy of the list", async () => {
     server.use(
       http.get(`${API}/lists/1`, () =>
@@ -1459,5 +1611,230 @@ describe("ListDetail — filing a claim under an occasion", () => {
     // The refetched candidates now make the row ask, which is the way through.
     await userEvent.click(await screen.findByRole("button", { name: "I'll get this" }));
     expect(await screen.findByLabelText("Which occasion is this for?")).toBeInTheDocument();
+  });
+});
+
+describe("ListDetail — the gift filter and sort live in the URL", () => {
+  const priced = (overrides: Record<string, unknown>) => ({
+    id: 10, name: "A gift", description: null, url: null, price: "10.00", claimed_by_id: null, ...overrides,
+  });
+
+  function serveList(list: Record<string, unknown>) {
+    server.use(
+      http.get(`${API}/lists/1`, () => HttpResponse.json(list)),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/families`, () => HttpResponse.json([])),
+      http.get(`${API}/folders`, () => HttpResponse.json([])),
+      http.get(`${API}/folders/for-list/1`, () => HttpResponse.json([])),
+    );
+  }
+
+  // Criterion 4, viewer branch.
+  it("hides claimed gifts on load at ?filter=available", async () => {
+    serveList({
+      ...viewerListDetail,
+      gifts: [
+        priced({ id: 10, name: "Still free" }),
+        priced({ id: 11, name: "Already taken", claimed_by_id: 3 }),
+      ],
+    });
+
+    renderListDetail(viewerToken, { entries: ["/lists/1?filter=available"] });
+
+    expect(await screen.findByText("Still free")).toBeInTheDocument();
+    expect(screen.queryByText("Already taken")).not.toBeInTheDocument();
+  });
+
+  // Criterion 4, owner branch — and Decision 7: the two branches share `sort`,
+  // while `filter` belongs to the viewer's alone.
+  it("orders the owner's gifts on load at ?sort=price_asc, with no filter control", async () => {
+    serveList({
+      ...ownerListDetail,
+      gifts: [
+        { id: 10, name: "Dear thing", description: null, url: null, price: "90.00" },
+        { id: 11, name: "Cheap thing", description: null, url: null, price: "5.00" },
+      ],
+    });
+
+    renderListDetail(ownerToken, { entries: ["/lists/1?sort=price_asc"] });
+
+    const rows = await screen.findAllByRole("listitem");
+    expect(rows[0]).toHaveTextContent("Cheap thing");
+    expect(screen.queryByRole("option", { name: "Still available" })).not.toBeInTheDocument();
+  });
+
+  // Criterion 2: a sort is a preference, so Back leaves the list rather than
+  // undoing the dropdown.
+  it("does not grow history when the gift sort changes", async () => {
+    serveList({
+      ...ownerListDetail,
+      gifts: [priced({ id: 10, name: "A gift" })],
+    });
+
+    renderListDetail(ownerToken, { entries: ["/lists", "/lists/1"] });
+
+    const sort = await screen.findByRole("combobox");
+    await userEvent.selectOptions(sort, "price_desc");
+    expect(await screen.findByText("address: /lists/1?sort=price_desc")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "go back" }));
+    expect(await screen.findByText("address: /lists")).toBeInTheDocument();
+  });
+
+  // Criterion 5. The counter ignores REPLACE, and a sort is a replace — so a
+  // viewer who reorders a list they were deep-linked into still gets the named
+  // parent, not a `← Back` pointing at an entry that was never pushed.
+  it("leaves the back control alone, since the sort pushed nothing", async () => {
+    serveList({
+      ...ownerListDetail,
+      gifts: [priced({ id: 10, name: "A gift" })],
+    });
+
+    renderListDetail(ownerToken);
+
+    const sort = await screen.findByRole("combobox");
+    await userEvent.selectOptions(sort, "price_desc");
+    expect(await screen.findByText("address: /lists/1?sort=price_desc")).toBeInTheDocument();
+
+    expect(screen.getByRole("link", { name: "\u2190 Back to Lists" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "\u2190 Back" })).not.toBeInTheDocument();
+  });
+});
+
+describe("ListDetail back control", () => {
+  // Deep-linked — from an email, a new tab, a reload — so there is nothing
+  // behind the page and the control says where it actually goes.
+  it("names the lists when nothing is behind the page", async () => {
+    server.use(http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)));
+
+    renderListDetail(ownerToken);
+
+    expect(await screen.findByRole("link", { name: "\u2190 Back to Lists" })).toHaveAttribute(
+      "href",
+      "/lists",
+    );
+  });
+
+  // Opened from a folder: `/lists` would be a lie, so Back means the folder.
+  it("returns to the folder it was opened from, and says only Back", async () => {
+    server.use(http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)));
+
+    renderListDetail(ownerToken, { arriveFrom: "/folders/5" });
+    await userEvent.click(screen.getByRole("button", { name: "arrive" }));
+
+    await userEvent.click(await screen.findByRole("button", { name: "\u2190 Back" }));
+
+    expect(await screen.findByText("address: /folders/5")).toBeInTheDocument();
+  });
+});
+
+describe("ListDetail — the sharing modal lives at ?share=open", () => {
+  function serveSharing(list: Record<string, unknown> = ownerListDetail) {
+    server.use(
+      http.get(`${API}/lists/1`, () => HttpResponse.json(list)),
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/families`, () =>
+        HttpResponse.json([
+          {
+            id: 7,
+            name: "The Boones",
+            member_ids: [1],
+            occasions: [{ id: 10, name: "Christmas 2026", is_archived: false, shared: true }],
+          },
+        ])
+      ),
+    );
+  }
+
+  const sharingModal = () => screen.queryByRole("dialog", { name: "Who can see this list" });
+
+  // Criterion 2. An open modal is a place you can be, so it is linkable and
+  // Back closes it (CONTEXT.md rule 8).
+  it("pushes ?share=open when Change is pressed, and Back closes it", async () => {
+    serveSharing();
+
+    renderListDetail(ownerToken, { entries: ["/lists", "/lists/1"] });
+
+    await screen.findByText("My Wishlist");
+    await userEvent.click(screen.getByRole("button", { name: "Change" }));
+
+    expect(await screen.findByText("address: /lists/1?share=open")).toBeInTheDocument();
+    expect(sharingModal()).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "go back" }));
+
+    expect(await screen.findByText("address: /lists/1")).toBeInTheDocument();
+    expect(sharingModal()).not.toBeInTheDocument();
+  });
+
+  it("opens straight from a deep link", async () => {
+    serveSharing();
+
+    renderListDetail(ownerToken, { entries: ["/lists/1?share=open"] });
+
+    expect(
+      await screen.findByRole("dialog", { name: "Who can see this list" }),
+    ).toBeInTheDocument();
+  });
+
+  // Criterion 3, depth > 0. Done pops the entry the app pushed, so the next
+  // Back leaves the page rather than reopening the modal — which is what a
+  // close written through the push-mode hook would have done.
+  it("pops on Done, and the next Back leaves the page", async () => {
+    serveSharing();
+
+    renderListDetail(ownerToken, { arriveFrom: "/folders/5" });
+    await userEvent.click(screen.getByRole("button", { name: "arrive" }));
+
+    await screen.findByText("My Wishlist");
+    await userEvent.click(screen.getByRole("button", { name: "Change" }));
+    await screen.findByText("address: /lists/1?share=open");
+
+    await userEvent.click(screen.getByRole("button", { name: /^done$/i }));
+    expect(await screen.findByText("address: /lists/1")).toBeInTheDocument();
+    expect(sharingModal()).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "go back" }));
+    expect(await screen.findByText("address: /folders/5")).toBeInTheDocument();
+  });
+
+  // Criterion 3, depth 0. Nothing of ours is behind a deep link, so closing
+  // replace-strips instead — and the entry before it is untouched.
+  it("strips ?share without navigating when nothing was pushed", async () => {
+    serveSharing();
+
+    renderListDetail(ownerToken, { entries: ["/lists", "/lists/1?share=open"] });
+
+    await screen.findByText("My Wishlist");
+    await userEvent.click(await screen.findByRole("button", { name: /^done$/i }));
+
+    expect(await screen.findByText("address: /lists/1")).toBeInTheDocument();
+    expect(sharingModal()).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "go back" }));
+    expect(await screen.findByText("address: /lists")).toBeInTheDocument();
+  });
+
+  it("heals a value it does not recognise out of the address", async () => {
+    serveSharing();
+
+    renderListDetail(ownerToken, { entries: ["/lists/1?share=banana"] });
+
+    expect(await screen.findByText("address: /lists/1")).toBeInTheDocument();
+    expect(sharingModal()).not.toBeInTheDocument();
+  });
+
+  // The modal is owner-only, but the address can be pasted by anyone — and
+  // ownership is not known until the list resolves.
+  it("strips a non-owner's ?share=open and mounts no dialog", async () => {
+    serveSharing(viewerListDetail);
+
+    renderListDetail(viewerToken, { entries: ["/lists/1?share=open"] });
+
+    await screen.findByText("My Wishlist");
+    expect(await screen.findByText("address: /lists/1")).toBeInTheDocument();
+    expect(sharingModal()).not.toBeInTheDocument();
   });
 });

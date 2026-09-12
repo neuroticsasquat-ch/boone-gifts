@@ -55,7 +55,9 @@ describe("AcceptFamilyInvite", () => {
     await waitFor(() => {
       expect(screen.getByText(/no longer valid/i)).toBeInTheDocument();
     });
-    expect(screen.getByRole("link", { name: /go to your families/i })).toHaveAttribute(
+    // "your families" named a section of /people rather than the page, which is
+    // the fault NEU-1302 retired; the destination has one word now.
+    expect(screen.getByRole("link", { name: "Go to People" })).toHaveAttribute(
       "href",
       "/people"
     );

@@ -7,7 +7,19 @@ import { fetchUrlMeta } from "../../api/meta";
 import type { ClaimOccasion, GiftListDetailOwner, GiftListDetailViewer, GiftOwnerView, Gift } from "../../types";
 import { formatMoney } from "../../lib/money";
 import { useTimeout } from "../../hooks/useTimeout";
+import { useEnumSearchParam } from "../../hooks/useSearchParamState";
+import { ConfirmDialog, type ConfirmAction } from "../../components/ConfirmDialog";
 import toast from "react-hot-toast";
+
+/** The gift sort, shared by the owner and viewer branches under one `sort` key:
+ *  `GiftsTab` renders exactly one of them, so the two are never live at once
+ *  and the key has one meaning per rendered page (spec Decision 7). */
+const GIFT_SORTS = ["added", "price_asc", "price_desc"] as const;
+type GiftSort = (typeof GIFT_SORTS)[number];
+
+/** The viewer branch's filter. No owner equivalent — an owner sees no claims. */
+const GIFT_FILTERS = ["all", "available", "mine"] as const;
+type GiftFilter = (typeof GIFT_FILTERS)[number];
 
 interface GiftsTabProps {
   list: GiftListDetailOwner | GiftListDetailViewer;
@@ -35,7 +47,13 @@ function OwnerGifts({
   listId: number;
   queryClient: ReturnType<typeof useQueryClient>;
 }) {
-  const [giftSort, setGiftSort] = useState<"added" | "price_asc" | "price_desc">("added");
+  // A sort is a **preference about a page you are already on**, so it replaces:
+  // one Back press leaves a list you glanced at (spec §6.3).
+  const [giftSort, setGiftSort] = useEnumSearchParam<GiftSort>("sort", {
+    mode: "replace",
+    values: GIFT_SORTS,
+    fallback: "added",
+  });
 
   const sortedGifts = useMemo(() => {
     if (giftSort === "added") return list.gifts;
@@ -59,7 +77,7 @@ function OwnerGifts({
           <div className="flex justify-end">
             <select
               value={giftSort}
-              onChange={(e) => setGiftSort(e.target.value as "added" | "price_asc" | "price_desc")}
+              onChange={(e) => setGiftSort(e.target.value as GiftSort)}
               className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600"
             >
               <option value="added">As added</option>
@@ -91,8 +109,16 @@ function ViewerGifts({
   queryClient: ReturnType<typeof useQueryClient>;
   userId: number;
 }) {
-  const [giftFilter, setGiftFilter] = useState<"all" | "available" | "mine">("all");
-  const [giftSort, setGiftSort] = useState<"added" | "price_asc" | "price_desc">("added");
+  const [giftFilter, setGiftFilter] = useEnumSearchParam<GiftFilter>("filter", {
+    mode: "replace",
+    values: GIFT_FILTERS,
+    fallback: "all",
+  });
+  const [giftSort, setGiftSort] = useEnumSearchParam<GiftSort>("sort", {
+    mode: "replace",
+    values: GIFT_SORTS,
+    fallback: "added",
+  });
 
   const filteredGifts = useMemo(() => {
     let gifts = list.gifts;
@@ -130,7 +156,7 @@ function ViewerGifts({
           <div className="flex gap-2 flex-wrap">
             <select
               value={giftFilter}
-              onChange={(e) => setGiftFilter(e.target.value as "all" | "available" | "mine")}
+              onChange={(e) => setGiftFilter(e.target.value as GiftFilter)}
               className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600"
             >
               <option value="all">All gifts</option>
@@ -139,7 +165,7 @@ function ViewerGifts({
             </select>
             <select
               value={giftSort}
-              onChange={(e) => setGiftSort(e.target.value as "added" | "price_asc" | "price_desc")}
+              onChange={(e) => setGiftSort(e.target.value as GiftSort)}
               className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600"
             >
               <option value="added">As added</option>
@@ -550,6 +576,24 @@ function DeleteGiftButton({
 
 // --- Viewer Gift Components ---
 
+// "Never mind" is the wording the unclaim confirmation has always used, and
+// NEU-1319's audit kept it — what that audit changed is *when* the dialog is
+// raised at all, not how it reads once it is.
+const UNCLAIM_ACTIONS: ConfirmAction[] = [{ id: "unclaim", label: "Never mind", tone: "danger" }];
+
+/**
+ * What unclaiming a purchased gift costs, named. The amount is optional at the
+ * row — a claimer can tick "bought" and skip the figure, which is a first-class
+ * answer rather than a missing value — so the sentence that mentions one is
+ * only used when there is one to mention.
+ */
+function unclaimLoss(gift: Gift): string {
+  const paid = formatMoney(gift.amount_paid);
+  return paid === null
+    ? "You marked this bought. That will be forgotten."
+    : `You marked this bought. That, and the ${paid} you recorded, will be forgotten.`;
+}
+
 function ViewerGiftRow({
   gift,
   listId,
@@ -572,12 +616,16 @@ function ViewerGiftRow({
   // exactly as fast as they are today — one click, no question asked.
   const mustAsk = candidates.length >= 2;
   const [choosing, setChoosing] = useState(false);
+  const [confirmingUnclaim, setConfirmingUnclaim] = useState(false);
 
   const claimMutation = useMutation({
     mutationFn: (occasionId?: number) => claimGift(listId, gift.id, occasionId),
     onSuccess: () => {
       setChoosing(false);
       queryClient.invalidateQueries({ queryKey: ["list", listId] });
+      // The claim, and the occasion it was filed under, move that occasion's
+      // my_claimed_count and last_activity_at on the /lists strip.
+      queryClient.invalidateQueries({ queryKey: ["occasions"] });
     },
     onError: (err) => {
       // 400 `ambiguous_occasion` means this client failed to prompt when it
@@ -601,6 +649,7 @@ function ViewerGiftRow({
     mutationFn: () => unclaimGift(listId, gift.id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["list", listId] });
+      queryClient.invalidateQueries({ queryKey: ["occasions"] });
     },
     onError: () => toast.error("Failed to unclaim gift."),
   });
@@ -611,6 +660,13 @@ function ViewerGiftRow({
   const isTaken = gift.claimed_by_id !== null && !isMine;
   const isAvailable = gift.claimed_by_id === null;
 
+  // Unclaiming a plain claim is one click from undone and invisible to
+  // everybody, so it asks nothing. Unclaiming a *purchased* one destroys the
+  // purchase and the amount recorded against it — `unclaim_gift` deletes the
+  // row, so there is no purchase state left to reset — and that is what the
+  // dialog is for (`CONTEXT.md` rule 11).
+  const isPurchased = gift.purchased_at !== null;
+
   let rowStyle = "";
   let actionButton: React.ReactNode = null;
 
@@ -619,11 +675,7 @@ function ViewerGiftRow({
     if (!isArchived) {
       actionButton = (
         <button
-          onClick={() => {
-            if (window.confirm("Are you sure you no longer want to get this gift?")) {
-              unclaimMutation.mutate();
-            }
-          }}
+          onClick={() => (isPurchased ? setConfirmingUnclaim(true) : unclaimMutation.mutate())}
           disabled={isPending}
           className="rounded bg-yellow-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-yellow-700 disabled:opacity-50"
         >
@@ -685,13 +737,23 @@ function ViewerGiftRow({
           disabled={isPending || isArchived}
         />
       )}
+      <ConfirmDialog
+        open={confirmingUnclaim}
+        title="Are you sure you no longer want to get this gift?"
+        body={unclaimLoss(gift)}
+        actions={UNCLAIM_ACTIONS}
+        onResolve={(id) => {
+          if (id === "unclaim") unclaimMutation.mutate();
+          setConfirmingUnclaim(false);
+        }}
+      />
     </li>
   );
 }
 
 /** How an occasion reads when two families both have one called "Christmas
  * 2026" — family first, matching the sharing summary line. An archived occasion
- * says so, the way an archived share target does on the sharing panel. */
+ * says so, the way an archived share target does on the sharing modal. */
 function claimOccasionLabel(occasion: ClaimOccasion): string {
   const base = `${occasion.family.name} · ${occasion.name}`;
   return occasion.is_archived ? `${base} — archived` : base;
@@ -827,6 +889,9 @@ function PurchaseControl({
     mutationFn: (amountPaid: string | null | undefined) => purchaseGift(listId, gift.id, amountPaid),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["list", listId] });
+      // Buying moves my_bought_count and last_activity_at on the /lists strip,
+      // and claiming then going straight back is the flow it exists for.
+      queryClient.invalidateQueries({ queryKey: ["occasions"] });
       setPrompting(false);
     },
     onError: () => toast.error("Failed to record the purchase."),
@@ -836,6 +901,7 @@ function PurchaseControl({
     mutationFn: () => unpurchaseGift(listId, gift.id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["list", listId] });
+      queryClient.invalidateQueries({ queryKey: ["occasions"] });
     },
     onError: () => toast.error("Failed to update the purchase."),
   });

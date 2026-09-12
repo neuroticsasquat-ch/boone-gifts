@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { resetPassword } from "../api/auth";
 import { useTitle } from "../hooks/useTitle";
+import { failureMessage } from "../lib/request-failure";
 
 export function ResetPassword() {
   useTitle("Set a new password");
@@ -37,12 +38,22 @@ export function ResetPassword() {
     setSubmitting(true);
     try {
       await resetPassword(token, newPassword);
-      navigate("/login", { replace: true });
-    } catch {
-      setTokenError(true);
+    } catch (err) {
+      // "Request a new link" is the right answer to a rejected token and the
+      // wrong one to everything else: a new link cannot fix a network outage,
+      // and it would fail the same way. A cross-cutting failure keeps the form
+      // mounted, so the submit button is the retry.
+      const msg = failureMessage(err);
+      if (msg) setError(msg);
+      else setTokenError(true);
+      return;
     } finally {
       setSubmitting(false);
     }
+    // Outside the `try` for the same reason as `Login`: a throw from routing is
+    // not a reset failure, and leaving it inside would condemn the link over a
+    // password that was in fact changed.
+    navigate("/login", { replace: true });
   }
 
   if (tokenError) {

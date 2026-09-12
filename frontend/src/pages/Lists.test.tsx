@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, it, expect } from "vitest";
-import { MemoryRouter } from "react-router";
+import { describe, it, expect, onTestFinished } from "vitest";
+import { MemoryRouter, useLocation, useNavigate } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { server } from "../test/mocks/server";
@@ -60,7 +60,7 @@ function ownedList(overrides: Record<string, unknown>) {
   return sharedList({ owner_id: 1, owner_name: "Tom Boone", ...overrides });
 }
 
-/** A list as the `shared` scope returns it, source and all. */
+/** A list as the `shared` scope returns it, routes and all. */
 function sharedList(overrides: Record<string, unknown>) {
   return {
     id: 1,
@@ -74,11 +74,14 @@ function sharedList(overrides: Record<string, unknown>) {
     claimed_count: 0,
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
+    // Never null and never absent, on either scope: an owned row reports the
+    // empty array (NEU-1290).
+    shared_via: [],
     ...overrides,
   };
 }
 
-/** Serve the two scopes separately: only `shared` carries `shared_via`. */
+/** Serve the two scopes separately: only `shared` carries routes to speak of. */
 function lists({ owned = [], shared = [] }: { owned?: unknown[]; shared?: unknown[] }) {
   server.use(
     http.get(`${API}/lists`, ({ request }) => {
@@ -88,7 +91,21 @@ function lists({ owned = [], shared = [] }: { owned?: unknown[]; shared?: unknow
   );
 }
 
-function renderLists() {
+/** The address this page's view state is held in, plus a Back button. The
+ *  whole point of the conversion is what the URL says and what Back does, and
+ *  neither is visible through the page's own markup. */
+function Address() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  return (
+    <>
+      <p>{`address: ${location.pathname}${location.search}`}</p>
+      <button onClick={() => navigate(-1)}>go back</button>
+    </>
+  );
+}
+
+function renderLists({ entries = ["/lists"] }: { entries?: string[] } = {}) {
   server.use(
     http.post(`${API}/auth/refresh`, () =>
       HttpResponse.json({ access_token: authToken, token_type: "bearer" })
@@ -101,8 +118,9 @@ function renderLists() {
   return { queryClient, ...render(
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={entries} initialIndex={entries.length - 1}>
           <Lists />
+          <Address />
         </MemoryRouter>
       </AuthProvider>
     </QueryClientProvider>
@@ -134,21 +152,21 @@ describe("Lists", () => {
   it("labels each shared row with its source", async () => {
     lists({
       shared: [
-        sharedList({ id: 1, name: "Jane's Wishlist", shared_via: { kind: "user", id: 2, name: "Jane Boone" } }),
+        sharedList({ id: 1, name: "Jane's Wishlist", shared_via: [{ kind: "direct", person: { id: 2, name: "Jane Boone" } }] }),
         sharedList({
           id: 2, name: "Carol's Wishlist", owner_name: "Carol Boone",
-          shared_via: {
-            kind: "occasion", id: 3, name: "Christmas 2026",
+          shared_via: [{
+            kind: "occasion", occasion: { id: 3, name: "Christmas 2026" },
             family: { id: 1, name: "Boone Family" },
-          },
+          }],
         }),
         sharedList({
           id: 3, name: "Beth's List", owner_name: "Tom Boone",
           recipient_name: "Beth",
-          shared_via: {
-            kind: "occasion", id: 3, name: "Christmas 2026",
+          shared_via: [{
+            kind: "occasion", occasion: { id: 3, name: "Christmas 2026" },
             family: { id: 1, name: "Boone Family" },
-          },
+          }],
         }),
       ],
     });
@@ -177,14 +195,14 @@ describe("Lists", () => {
       shared: [
         sharedList({
           id: 1, name: "Zoe's Wishlist", updated_at: "2026-02-01T00:00:00Z",
-          shared_via: { kind: "user", id: 2, name: "Zoe" },
+          shared_via: [{ kind: "direct", person: { id: 2, name: "Zoe" } }],
         }),
         sharedList({
           id: 2, name: "Adam's Wishlist", updated_at: "2026-01-01T00:00:00Z",
-          shared_via: {
-            kind: "occasion", id: 3, name: "Christmas 2026",
+          shared_via: [{
+            kind: "occasion", occasion: { id: 3, name: "Christmas 2026" },
             family: { id: 1, name: "Boone Family" },
-          },
+          }],
         }),
       ],
     });
@@ -197,6 +215,60 @@ describe("Lists", () => {
 
     // One section holds both paths — there is no second list of rows.
     expect(screen.getAllByRole("list")).toHaveLength(1);
+  });
+
+  // The way in to the occasions the viewer is shopping for, on the page the app
+  // opens on (ADR 0007). Its own behaviour is covered in OccasionStrip.test.tsx;
+  // what this page owns is where it sits and that it never holds the lists up.
+  it("renders the occasion strip between the banner and My Lists", async () => {
+    noLists();
+    // A banner with something in it, so "below the banner" is actually
+    // observable rather than vacuously true against an absent one.
+    server.use(
+      http.get(`${API}/connections/requests`, () => HttpResponse.json([testRequest])),
+    );
+    server.use(
+      http.get(`${API}/occasions`, () =>
+        HttpResponse.json([
+          {
+            id: 4,
+            family_id: 10,
+            name: "Christmas 2026",
+            is_archived: false,
+            created_by_id: 1,
+            created_at: "2026-01-01T00:00:00Z",
+            updated_at: "2026-01-01T00:00:00Z",
+            family_name: "Boone Family",
+            list_count: 2,
+            my_claimed_count: 0,
+            my_bought_count: 0,
+            last_activity_at: "2026-01-01T00:00:00Z",
+          },
+        ])
+      ),
+    );
+
+    renderLists();
+
+    const strip = await screen.findByRole("region", { name: "Occasions" });
+    const banner = await screen.findByRole("region", { name: "Waiting on you" });
+    const heading = screen.getByRole("heading", { name: /My Lists/ });
+
+    // Below the banner, above My Lists — both halves (AC1).
+    expect(banner.compareDocumentPosition(strip)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(strip.compareDocumentPosition(heading)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  // Holding the viewer's own lists behind a request that exists to show
+  // occasions inverts the argument the strip was built on.
+  it("renders the lists without waiting for the occasion strip", async () => {
+    noLists();
+    server.use(http.get(`${API}/occasions`, () => new Promise(() => {})));
+
+    renderLists();
+
+    expect(await screen.findByRole("heading", { name: /My Lists/ })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Occasions" })).not.toBeInTheDocument();
   });
 
   it("renders no banner region when nothing is pending", async () => {
@@ -263,11 +335,11 @@ describe("Lists — folder filter", () => {
     lists({
       owned: [ownedList({ id: 1, name: "Tom's Wishlist" }), ownedList({ id: 2, name: "Beth's List" })],
       shared: [
-        sharedList({ id: 3, name: "Jane's Wishlist", shared_via: { kind: "user", id: 2, name: "Jane Boone" } }),
-        sharedList({ id: 4, name: "Carol's Wishlist", shared_via: {
-            kind: "occasion", id: 3, name: "Christmas 2026",
+        sharedList({ id: 3, name: "Jane's Wishlist", shared_via: [{ kind: "direct", person: { id: 2, name: "Jane Boone" } }] }),
+        sharedList({ id: 4, name: "Carol's Wishlist", shared_via: [{
+            kind: "occasion", occasion: { id: 3, name: "Christmas 2026" },
             family: { id: 1, name: "Boone Family" },
-          } }),
+          }] }),
       ],
     });
     folders([{ id: 5, name: "Christmas 2026", lists: [{ id: 1 }, { id: 3 }] }]);
@@ -304,7 +376,7 @@ describe("Lists — folder filter", () => {
   it("says so per section when the filter matches nothing", async () => {
     lists({
       owned: [ownedList({ id: 1, name: "Tom's Wishlist" })],
-      shared: [sharedList({ id: 3, name: "Jane's Wishlist", shared_via: { kind: "user", id: 2, name: "Jane Boone" } })],
+      shared: [sharedList({ id: 3, name: "Jane's Wishlist", shared_via: [{ kind: "direct", person: { id: 2, name: "Jane Boone" } }] })],
     });
     folders([{ id: 5, name: "Christmas 2026", lists: [] }]);
 
@@ -328,8 +400,8 @@ describe("Lists — sort and the archive link", () => {
         ownedList({ id: 2, name: "Adam's List", updated_at: "2026-01-01T00:00:00Z" }),
       ],
       shared: [
-        sharedList({ id: 3, name: "Zoe's Wishlist", updated_at: "2026-02-01T00:00:00Z", shared_via: { kind: "user", id: 2, name: "Zoe" } }),
-        sharedList({ id: 4, name: "Adam's Wishlist", updated_at: "2026-01-01T00:00:00Z", shared_via: { kind: "user", id: 3, name: "Adam" } }),
+        sharedList({ id: 3, name: "Zoe's Wishlist", updated_at: "2026-02-01T00:00:00Z", shared_via: [{ kind: "direct", person: { id: 2, name: "Zoe" } }] }),
+        sharedList({ id: 4, name: "Adam's Wishlist", updated_at: "2026-01-01T00:00:00Z", shared_via: [{ kind: "direct", person: { id: 3, name: "Adam" } }] }),
       ],
     });
 
@@ -415,14 +487,14 @@ describe("Lists — shared account labels", () => {
 });
 
 describe("Lists — group by", () => {
-  const viaBoone = {
-    kind: "occasion", id: 3, name: "Christmas 2026",
+  const viaBoone = [{
+    kind: "occasion", occasion: { id: 3, name: "Christmas 2026" },
     family: { id: 1, name: "Boone Family" },
-  };
-  const viaExtended = {
-    kind: "occasion", id: 4, name: "Christmas 2026",
+  }];
+  const viaExtended = [{
+    kind: "occasion", occasion: { id: 4, name: "Christmas 2026" },
     family: { id: 2, name: "Extended Family" },
-  };
+  }];
 
   /** Two occasion shares and one direct share — the mix every grouping has to
    *  account for, since each keys on something one of them lacks. */
@@ -432,7 +504,7 @@ describe("Lists — group by", () => {
       shared: [
         sharedList({ id: 1, name: "Carol's Wishlist", owner_name: "Carol Boone", shared_via: viaBoone }),
         sharedList({ id: 2, name: "Dave's Wishlist", owner_name: "Dave Boone", shared_via: viaExtended }),
-        sharedList({ id: 3, name: "Jane's Wishlist", shared_via: { kind: "user", id: 2, name: "Jane Boone" } }),
+        sharedList({ id: 3, name: "Jane's Wishlist", shared_via: [{ kind: "direct", person: { id: 2, name: "Jane Boone" } }] }),
       ],
     });
   }
@@ -473,6 +545,25 @@ describe("Lists — group by", () => {
     expect(screen.getByRole("heading", { name: "Extended Family · Christmas 2026" })).toBeInTheDocument();
     expect(screen.getByText("Carol's Wishlist")).toBeInTheDocument();
     expect(screen.getByText("Dave's Wishlist")).toBeInTheDocument();
+  });
+
+  // ADR 0007: the occasion name leads to the occasion, and the family name in
+  // front of it does not — it names a family, and `/people/families/:id` carries
+  // less than this grouping does. This is the assertion that fails if the
+  // heading is ever wrapped in one link again.
+  it("links the occasion name in a heading, but not the family in front of it", async () => {
+    mixedShares();
+
+    renderLists();
+
+    await userEvent.selectOptions(await screen.findByLabelText("Group by"), "occasion");
+
+    const heading = await screen.findByRole("heading", { name: "Boone Family · Christmas 2026" });
+    expect(within(heading).getByRole("link", { name: "Christmas 2026" })).toHaveAttribute(
+      "href",
+      "/occasions/3",
+    );
+    expect(within(heading).queryByRole("link", { name: /Boone Family/ })).not.toBeInTheDocument();
   });
 
   it("groups by the person who shared, leaving family shares their own bucket", async () => {
@@ -591,7 +682,7 @@ describe("Lists — to-buy badge", () => {
       shared: [
         sharedList({
           id: 1, name: "Jane's Wishlist", my_unpurchased_claim_count: 2,
-          shared_via: { kind: "user", id: 2, name: "Jane Boone" },
+          shared_via: [{ kind: "direct", person: { id: 2, name: "Jane Boone" } }],
         }),
       ],
     });
@@ -609,12 +700,12 @@ describe("Lists — to-buy badge", () => {
       shared: [
         sharedList({
           id: 1, name: "Jane's Wishlist", my_unpurchased_claim_count: 0,
-          shared_via: { kind: "user", id: 2, name: "Jane Boone" },
+          shared_via: [{ kind: "direct", person: { id: 2, name: "Jane Boone" } }],
         }),
         // A row that carries no count at all draws no badge either.
         sharedList({
           id: 2, name: "Carol's Wishlist", owner_name: "Carol Boone",
-          shared_via: { kind: "user", id: 4, name: "Carol Boone" },
+          shared_via: [{ kind: "direct", person: { id: 4, name: "Carol Boone" } }],
         }),
       ],
     });
@@ -634,14 +725,14 @@ describe("Lists — to-buy badge", () => {
         sharedList({
           id: 1, name: "Carol's Wishlist", owner_name: "Carol Boone",
           my_unpurchased_claim_count: 1,
-          shared_via: {
-            kind: "occasion", id: 3, name: "Christmas 2026",
+          shared_via: [{
+            kind: "occasion", occasion: { id: 3, name: "Christmas 2026" },
             family: { id: 1, name: "Boone Family" },
-          },
+          }],
         }),
         sharedList({
           id: 2, name: "Jane's Wishlist", my_unpurchased_claim_count: 3,
-          shared_via: { kind: "user", id: 2, name: "Jane Boone" },
+          shared_via: [{ kind: "direct", person: { id: 2, name: "Jane Boone" } }],
         }),
       ],
     });
@@ -664,7 +755,7 @@ describe("Lists — to-buy badge", () => {
       shared: [
         sharedList({
           id: 1, name: "Jane's Wishlist", my_unpurchased_claim_count: 3,
-          shared_via: { kind: "user", id: 2, name: "Jane Boone" },
+          shared_via: [{ kind: "direct", person: { id: 2, name: "Jane Boone" } }],
         }),
       ],
     });
@@ -694,5 +785,143 @@ describe("Lists — to-buy badge", () => {
 
     expect(await screen.findByText("Tom's Wishlist")).toBeInTheDocument();
     expect(screen.queryByText(/to buy/)).not.toBeInTheDocument();
+  });
+});
+
+describe("Lists — view state lives in the URL", () => {
+  // Criterion 1: filter, sort or group, open a list, come back, and the view is
+  // the one you left — which requires the view to be in the address at all.
+  it("writes the sort to the URL", async () => {
+    noLists();
+
+    renderLists();
+
+    await userEvent.selectOptions(await screen.findByLabelText("Sort"), "name");
+
+    expect(await screen.findByText("address: /lists?sort=name")).toBeInTheDocument();
+  });
+
+  // Criterion 2: a preference about a page you are already on does not grow the
+  // history stack, so one Back press leaves a page you glanced at.
+  it("does not grow history when the sort changes — Back leaves the page", async () => {
+    noLists();
+
+    renderLists({ entries: ["/start", "/lists"] });
+
+    await userEvent.selectOptions(await screen.findByLabelText("Sort"), "name");
+    await screen.findByText("address: /lists?sort=name");
+
+    await userEvent.click(screen.getByRole("button", { name: "go back" }));
+
+    expect(await screen.findByText("address: /start")).toBeInTheDocument();
+  });
+
+  // Criterion 4: a URL carrying a grouping renders that view with no interaction.
+  it("renders ?group=occasion on load", async () => {
+    lists({
+      shared: [
+        sharedList({ id: 1, name: "Carol's Wishlist", owner_name: "Carol Boone", shared_via: [{
+          kind: "occasion", occasion: { id: 3, name: "Christmas 2026" },
+          family: { id: 1, name: "Boone Family" },
+        }] }),
+      ],
+    });
+
+    renderLists({ entries: ["/lists?group=occasion"] });
+
+    expect(await screen.findByRole("heading", { name: "Boone Family · Christmas 2026" })).toBeInTheDocument();
+    expect(await screen.findByLabelText("Group by")).toHaveValue("occasion");
+  });
+
+  it("renders ?sort=name on load", async () => {
+    lists({
+      owned: [
+        ownedList({ id: 1, name: "Zebra list", created_at: "2026-01-01T00:00:00Z" }),
+        ownedList({ id: 2, name: "Apple list", created_at: "2026-02-01T00:00:00Z" }),
+      ],
+    });
+
+    renderLists({ entries: ["/lists?sort=name"] });
+
+    expect(await screen.findByLabelText("Sort")).toHaveValue("name");
+    const rows = within(screen.getByRole("heading", { name: /My Lists/ }).closest("section") as HTMLElement)
+      .getAllByRole("listitem");
+    expect(rows[0]).toHaveTextContent("Apple list");
+  });
+
+  it("narrows both sections when ?folder= names a folder the viewer owns", async () => {
+    lists({
+      owned: [ownedList({ id: 1, name: "Tom's Wishlist" }), ownedList({ id: 2, name: "Beth's List" })],
+      shared: [
+        sharedList({ id: 3, name: "Jane's Wishlist", shared_via: [{ kind: "direct", person: { id: 2, name: "Jane Boone" } }] }),
+        sharedList({ id: 4, name: "Carol's Wishlist", shared_via: [{ kind: "direct", person: { id: 2, name: "Jane Boone" } }] }),
+      ],
+    });
+    folders([{ id: 5, name: "Christmas 2026", lists: [{ id: 1 }, { id: 3 }] }]);
+
+    renderLists({ entries: ["/lists?folder=5"] });
+
+    expect(await screen.findByText("Tom's Wishlist")).toBeInTheDocument();
+    expect(screen.getByText("Jane's Wishlist")).toBeInTheDocument();
+    expect(screen.queryByText("Beth's List")).not.toBeInTheDocument();
+    expect(screen.queryByText("Carol's Wishlist")).not.toBeInTheDocument();
+    expect(await screen.findByLabelText("Folder")).toHaveValue("5");
+  });
+
+  // Criterion 7: the id is well-formed but names no folder of the viewer's.
+  // Fetching it would 404 into an arm this page does not have, leaving both
+  // sections empty with no explanation.
+  it("falls back to All lists and scrubs a ?folder= the viewer does not own", async () => {
+    lists({
+      owned: [ownedList({ id: 1, name: "Tom's Wishlist" })],
+      shared: [sharedList({ id: 3, name: "Jane's Wishlist", shared_via: [{ kind: "direct", person: { id: 2, name: "Jane Boone" } }] })],
+    });
+    folders([{ id: 5, name: "Christmas 2026", lists: [{ id: 1 }] }]);
+    const asked: string[] = [];
+    const record = ({ request }: { request: Request }) => asked.push(new URL(request.url).pathname);
+    server.events.on("request:start", record);
+    onTestFinished(() => server.events.removeListener("request:start", record));
+
+    renderLists({ entries: ["/lists?folder=999"] });
+
+    expect(await screen.findByText("Tom's Wishlist")).toBeInTheDocument();
+    expect(screen.getByText("Jane's Wishlist")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Folder")).toHaveValue("all");
+    expect(await screen.findByText("address: /lists")).toBeInTheDocument();
+    // Never asked for — a 404 here has no arm on this page, so the id is judged
+    // against the folder list rather than against the server.
+    expect(asked).not.toContain("/folders/999");
+  });
+
+  it("treats a ?folder= that is not a positive integer as absent", async () => {
+    lists({ owned: [ownedList({ id: 1, name: "Tom's Wishlist" })] });
+    folders([{ id: 5, name: "Christmas 2026", lists: [] }]);
+
+    renderLists({ entries: ["/lists?folder=abc"] });
+
+    // Not filtered, not spun on, and not left in the address.
+    expect(await screen.findByText("Tom's Wishlist")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Folder")).toHaveValue("all");
+    expect(await screen.findByText("address: /lists")).toBeInTheDocument();
+  });
+
+  // Criterion 6: an unrecognised value renders the default and leaves no trace.
+  it("renders the default sort for ?sort=bogus and scrubs the key", async () => {
+    noLists();
+
+    renderLists({ entries: ["/lists?sort=bogus"] });
+
+    expect(await screen.findByLabelText("Sort")).toHaveValue("updated");
+    expect(await screen.findByText("address: /lists")).toBeInTheDocument();
+  });
+
+  // Criterion 8/9: the strip's shipped key is not this ticket's business, and
+  // the two keys share a page without touching each other.
+  it("leaves ?occasions=all alone while scrubbing a bogus sort", async () => {
+    noLists();
+
+    renderLists({ entries: ["/lists?occasions=all&sort=bogus"] });
+
+    expect(await screen.findByText("address: /lists?occasions=all")).toBeInTheDocument();
   });
 });

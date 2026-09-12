@@ -4,8 +4,20 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 import toast from "react-hot-toast";
 import { createOccasion, getFamilyOccasions, updateOccasion } from "../../api/occasions";
+import { useAuth } from "../../hooks/useAuth";
 import { Spinner } from "../../components/Spinner";
+import { ConfirmDialog, type ConfirmAction } from "../../components/ConfirmDialog";
+import { ARCHIVE_OCCASION_BODY } from "../OccasionDetail";
 import type { Occasion } from "../../types";
+
+// The same pair `OccasionDetail` carries, because the backend gates the two
+// fields separately (NEU-1294 decision 4). One rule with two answers in the
+// codebase is one answer that will be wrong to whoever finds it second.
+const RENAME_ONLY = "Only an organizer can rename an occasion.";
+const ARCHIVE_ONLY =
+  "Only an organizer or the person who created this occasion can archive it.";
+
+const ARCHIVE_ACTIONS: ConfirmAction[] = [{ id: "archive", label: "Archive", tone: "danger" }];
 
 interface OccasionsSectionProps {
   familyId: number;
@@ -14,8 +26,9 @@ interface OccasionsSectionProps {
 }
 
 /**
- * Warn, never block: a family may hold several active occasions (project spec
- * §5.3), so this only names the ones it already has and asks again.
+ * Warn, never block: a family may hold several active occasions
+ * (shopping-lists project spec §5.3), so this only names the ones it already
+ * has and asks again.
  *
  * The active list is already on the page, so the *pre*-create warning is built
  * from it rather than from the create response's `has_other_active` — that
@@ -30,7 +43,13 @@ function alreadyActiveWarning(familyName: string, active: Occasion[]): string {
 }
 
 /**
- * The family's occasions, on the family page (project spec §9.6).
+ * The family's occasions, on the family page — management only
+ * (occasions-and-navigation project spec §5.6, §9.5).
+ *
+ * This is no longer the way *in* to an occasion; the strip on /lists is
+ * (NEU-1298). The name still links, because an occasion is a destination
+ * (ADR 0007) — but nobody has to come here to find one. What stays here is
+ * what only belongs here: create, rename, archive, view archive.
  *
  * The family's **active** occasions and nothing else. Archived ones live behind
  * the "View archive" link, on their own page (NEU-1278) — this section has no
@@ -38,15 +57,18 @@ function alreadyActiveWarning(familyName: string, active: Occasion[]): string {
  *
  * Creating is open to **any member** — nobody should be blocked waiting on an
  * absent organizer, because a family with no active occasion cannot be shared
- * to at all. Renaming and archiving are organizer-only, gated the same way the
- * member controls above are. The backend enforces both regardless.
+ * to at all. Renaming is the **organizer's**; archiving is the organizer's *or*
+ * the occasion creator's, matching the per-field backend gate. The `isOrganizer`
+ * prop stays the family's answer, and the creator check is the occasion's — so
+ * the two are derived per row rather than for the section.
  *
  * Archive is still not a one-way door: **unarchiving** is on the occasion's own
- * page, which the archive links to and which already gates it to organizers.
+ * page, which the archive links to and which gates it the same way.
  * A second copy of that mutation here would be a second thing to keep honest.
  */
 export function OccasionsSection({ familyId, familyName, isOrganizer }: OccasionsSectionProps) {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   const [newName, setNewName] = useState("");
   const [pendingName, setPendingName] = useState<string | null>(null);
@@ -54,18 +76,24 @@ export function OccasionsSection({ familyId, familyName, isOrganizer }: Occasion
   const [actionError, setActionError] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  // The occasion being archived, not a boolean: this is a per-row action on a
+  // section listing every active occasion, so the dialog has to name which.
+  const [archiving, setArchiving] = useState<Occasion | null>(null);
 
   // The family's *active* occasions and nothing else. The archived ones have
   // their own page now, so this section no longer has a state that can show
-  // them (NEU-1278, project spec §9.5).
+  // them (NEU-1278, shopping-lists project spec §9.5).
   const occasions = useQuery({
     queryKey: ["occasions", familyId, { archived: false }],
     queryFn: () => getFamilyOccasions(familyId, false),
   });
 
-  // Prefix match, so both the active and the archived lists are refetched.
+  // The bare ["occasions"] prefix, so this sweeps both the active and archived
+  // lists for this family *and* the /lists occasion strip's index entry
+  // (["occasions", "index", …]) — creating, renaming or archiving an occasion
+  // changes which cards the landing page draws.
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["occasions", familyId] });
+    queryClient.invalidateQueries({ queryKey: ["occasions"] });
   };
 
   const createMutation = useMutation({
@@ -99,7 +127,7 @@ export function OccasionsSection({ familyId, familyName, isOrganizer }: Occasion
     },
     onError: (err: unknown) => {
       if (isAxiosError(err) && err.response?.status === 403) {
-        setActionError("Only an organizer can rename or archive an occasion.");
+        setActionError(RENAME_ONLY);
       } else {
         toast.error("Failed to rename the occasion.");
       }
@@ -111,11 +139,15 @@ export function OccasionsSection({ familyId, familyName, isOrganizer }: Occasion
     onSuccess: () => {
       invalidate();
       setActionError(null);
+      setArchiving(null);
+      // Kept, unlike the list and folder cases: the row leaves the section on
+      // success, so nothing left on the page says what happened.
       toast.success("Occasion archived.");
     },
     onError: (err: unknown) => {
+      setArchiving(null);
       if (isAxiosError(err) && err.response?.status === 403) {
-        setActionError("Only an organizer can rename or archive an occasion.");
+        setActionError(ARCHIVE_ONLY);
       } else {
         toast.error("Failed to archive the occasion.");
       }
@@ -207,19 +239,26 @@ export function OccasionsSection({ familyId, familyName, isOrganizer }: Occasion
                   >
                     {occasion.name}
                   </Link>
-                  {isOrganizer && (
+                  {/* Two gates, not one: the family's answer covers renaming,
+                      and archiving also belongs to whoever created the
+                      occasion. A member who created one is now routinely asked
+                      to archive it by the banner (NEU-1315), so the control has
+                      to be here for them too. */}
+                  {(isOrganizer || occasion.created_by_id === user?.id) && (
                     <div className="flex items-center gap-2">
+                      {isOrganizer && (
+                        <button
+                          onClick={() => {
+                            setRenamingId(occasion.id);
+                            setRenameValue(occasion.name);
+                          }}
+                          className="rounded bg-blue-100 px-3 py-1 text-sm font-medium text-blue-700 hover:bg-blue-200"
+                        >
+                          Rename
+                        </button>
+                      )}
                       <button
-                        onClick={() => {
-                          setRenamingId(occasion.id);
-                          setRenameValue(occasion.name);
-                        }}
-                        className="rounded bg-blue-100 px-3 py-1 text-sm font-medium text-blue-700 hover:bg-blue-200"
-                      >
-                        Rename
-                      </button>
-                      <button
-                        onClick={() => archiveMutation.mutate(occasion.id)}
+                        onClick={() => setArchiving(occasion)}
                         disabled={archiveMutation.isPending}
                         className="rounded bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50"
                       >
@@ -279,6 +318,23 @@ export function OccasionsSection({ familyId, familyName, isOrganizer }: Occasion
       )}
 
       {createError && <p className="mt-2 text-sm text-red-600">{createError}</p>}
+
+      {/* Archiving an occasion lands on the whole family, not just the viewer,
+          so it asks (`CONTEXT.md` rule 11) — the one archive site the earlier
+          tickets did not reach. The title names the occasion because a bare
+          "this occasion?" says nothing in a list of them; the body is the same
+          sentence the occasion's own page uses, shared rather than retyped. */}
+      <ConfirmDialog
+        open={archiving !== null}
+        title={`Archive ${archiving?.name}?`}
+        body={ARCHIVE_OCCASION_BODY}
+        actions={ARCHIVE_ACTIONS}
+        pending={archiveMutation.isPending}
+        onResolve={(id) => {
+          if (id === "archive" && archiving) archiveMutation.mutate(archiving.id);
+          else setArchiving(null);
+        }}
+      />
     </section>
   );
 }

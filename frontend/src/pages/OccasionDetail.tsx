@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from "react";
-import { Link } from "react-router";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 import toast from "react-hot-toast";
@@ -10,9 +10,15 @@ import { useNumericId } from "../components/NumericId";
 import { useTitle } from "../hooks/useTitle";
 import { Spinner } from "../components/Spinner";
 import { HeaderMenu } from "../components/HeaderMenu";
+import { BackControl, BACK_TO_PEOPLE, backToFamily } from "../components/BackControl";
 import { ListAttributionLine, RecipientLine } from "../components/ListAttribution";
 import { MyShopping } from "../components/MyShopping";
 import { TabBar } from "../components/TabBar";
+import { useEnumSearchParam } from "../hooks/useSearchParamState";
+import { useNavigationDepth } from "../contexts/NavigationDepthContext";
+import { ConfirmDialog, type ConfirmAction } from "../components/ConfirmDialog";
+import { OccasionSharingModal } from "../components/OccasionSharingModal";
+import { ShareIntoOccasionButton } from "../components/ShareIntoOccasionButton";
 import type { Occasion } from "../types";
 
 /**
@@ -27,7 +33,20 @@ const TABS = [
 
 type TabKey = (typeof TABS)[number]["key"];
 
-const ORGANIZER_ONLY = "Only an organizer can rename or archive an occasion.";
+const TAB_KEYS = TABS.map((tab) => tab.key);
+
+// One message per field, because the backend gates per field (NEU-1294
+// decision 4): a member who created an occasion may archive it and may not
+// rename it, and a single sentence covering both is now false by half.
+const RENAME_ONLY = "Only an organizer can rename an occasion.";
+const ARCHIVE_ONLY =
+  "Only an organizer or the person who created this occasion can archive it.";
+
+/** An open modal is a place you can be, so `?share=open` is the whole state and
+ *  a shut one leaves no trace: setting the fallback writes `null`. The path
+ *  already names the occasion, so `open` is unambiguous here — the `/lists`
+ *  strip, which can hold fifteen cards, carries the id as the value instead. */
+const SHARE_VALUES = ["open", "closed"] as const;
 
 /**
  * A family occasion — "Boone Family · Christmas 2026" — and the lists shared to
@@ -63,9 +82,7 @@ export function OccasionDetail() {
             : "Failed to load occasion."}
         </p>
         {unreachable ? (
-          <Link to="/people" className="mt-2 inline-block text-sm text-blue-600 hover:underline">
-            Back to People
-          </Link>
+          <BackControl fallback={BACK_TO_PEOPLE} className="mt-2 inline-block" />
         ) : (
           <button
             onClick={() => occasion.refetch()}
@@ -83,7 +100,60 @@ export function OccasionDetail() {
 
 function OccasionPage({ occasion }: { occasion: Occasion }) {
   const { user } = useAuth();
-  const [tab, setTab] = useState<TabKey>(TABS[0].key);
+  const navigate = useNavigate();
+  const depth = useNavigationDepth();
+  const [, setSearchParams] = useSearchParams();
+  // A tab is a **place**, so it pushes: "My shopping for Christmas 2026" has an
+  // address, and Back closes it rather than undoing a dropdown (spec §6.3).
+  const [tab, setTab] = useEnumSearchParam<TabKey>("tab", {
+    mode: "push",
+    values: TAB_KEYS,
+    fallback: TABS[0].key,
+  });
+  // So is an open modal. Read as an enum so `?share=banana` heals away through
+  // the wrapper's mount-time scrub instead of sitting in the address with the
+  // dialog shut.
+  const [share, setShare] = useEnumSearchParam("share", {
+    mode: "push",
+    values: SHARE_VALUES,
+    fallback: "closed",
+  });
+
+  const stripShare = useCallback(() => {
+    setSearchParams(
+      (current) => {
+        const params = new URLSearchParams(current);
+        params.delete("share");
+        return params;
+      },
+      { replace: true },
+    );
+  }, [setSearchParams]);
+
+  // One close path, depth-aware, mirroring `ListDetail` and `BackControl`
+  // (CONTEXT.md rules 8 and 9). The app pushed the open entry, so popping lands
+  // exactly where the viewer was; writing `closed` through the push-mode hook
+  // would add *another* entry, and Back after Done would reopen the dialog. At
+  // depth 0 — a deep link straight to `/occasions/7?share=open` — there is
+  // nothing of ours behind us, so strip instead.
+  const closeSharing = useCallback(() => {
+    if (depth > 0) {
+      navigate(-1);
+      return;
+    }
+    stripShare();
+  }, [depth, navigate, stripShare]);
+
+  // The control is dead on an archived occasion, but `?share=open` can be
+  // pasted, bookmarked, or reached by Back from a session that opened the dialog
+  // before an organizer archived it. Mounting it anyway would leave the 409 as
+  // the only refusal — the "click that can never succeed" decision 7 rejected —
+  // so the param is stripped instead and the address agrees with the page
+  // (rule 8). Same shape as `ListDetail`'s non-owner strip.
+  const archived = occasion.is_archived;
+  useEffect(() => {
+    if (share === "open" && archived) stripShare();
+  }, [share, archived, stripShare]);
 
   // The family behind the occasion: its name for the header and the back link,
   // and its members for the organizer gate. Keyed as the family page keys it,
@@ -96,40 +166,78 @@ function OccasionPage({ occasion }: { occasion: Occasion }) {
   const isOrganizer =
     family.data?.members.find((m) => m.user_id === user?.id)?.role === "organizer";
 
+  // Renaming is the family's business; archiving is also the occasion's, and
+  // the person who created it already had the authority to make it. The archive
+  // nudge (NEU-1315) routinely sends a plain member here, so organizer-only
+  // would be an invitation followed by a 403.
+  const canRename = isOrganizer;
+  const canArchive = isOrganizer || occasion.created_by_id === user?.id;
+
   return (
     <div className="space-y-6">
-      <Link
-        to={`/people/families/${occasion.family_id}`}
-        className="text-sm text-blue-600 hover:underline"
-      >
-        &larr; {family.data?.name ?? "Back to family"}
-      </Link>
+      <BackControl fallback={backToFamily(occasion.family_id, family.data?.name)} />
 
-      <OccasionHeader occasion={occasion} isOrganizer={isOrganizer} />
+      <OccasionHeader occasion={occasion} canRename={canRename} canArchive={canArchive} />
 
       <TabBar tabs={TABS} active={tab} onSelect={setTab} label="Occasion sections" />
 
       {tab === "lists" ? (
-        <ListsTab occasionId={occasion.id} />
+        <ListsTab occasion={occasion} onShare={() => setShare("open")} />
       ) : (
         <MyShopping scope={{ kind: "occasion", id: occasion.id }} />
+      )}
+
+      {/* Mounted at page level, not inside the tab: the Lists tab's empty state
+          is one of the things a successful share replaces, and a dialog owned by
+          it would unmount under the viewer's cursor on their first tick. */}
+      {share === "open" && !archived && (
+        <OccasionSharingModal
+          occasionId={occasion.id}
+          occasionName={occasion.name}
+          onClose={closeSharing}
+        />
       )}
     </div>
   );
 }
 
+const ARCHIVE_ACTIONS: ConfirmAction[] = [{ id: "archive", label: "Archive", tone: "danger" }];
+
 /**
- * The occasion's name, whether it is archived, and the organizer's controls.
+ * What archiving an occasion does to the lists already shared into it, said
+ * once. Two sites ask the question — here, and the family page's per-row
+ * Archive (`family-detail/OccasionsSection`) — and one sentence answering it
+ * must not be able to drift into two answers (NEU-1319).
  *
- * Rename and archive are **organizer-only**, gated the same way the family
- * page's member controls are — and enforced by the backend regardless, which is
- * why a 403 still has a message to show.
+ * `ActionableBanner`'s nudge deliberately does **not** use this: its body
+ * argues the case for archiving something that has gone quiet, which is a
+ * different sentence doing a different job.
  */
-function OccasionHeader({ occasion, isOrganizer }: { occasion: Occasion; isOrganizer: boolean }) {
+export const ARCHIVE_OCCASION_BODY = "Lists already shared to it stay shared.";
+
+/**
+ * The occasion's name, whether it is archived, and the controls for changing
+ * either.
+ *
+ * The two controls are gated **separately**, because the backend gates the
+ * fields separately: renaming is an organizer's, archiving is an organizer's or
+ * the creator's. Both are enforced server-side regardless, which is why a 403
+ * still has a message to show — one message each, now that the answers differ.
+ */
+function OccasionHeader({
+  occasion,
+  canRename,
+  canArchive,
+}: {
+  occasion: Occasion;
+  canRename: boolean;
+  canArchive: boolean;
+}) {
   const queryClient = useQueryClient();
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState(occasion.name);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [confirmingArchive, setConfirmingArchive] = useState(false);
 
   // The page's own copy, and the family page's list it was reached from —
   // prefix match on the latter, so the active and archived lists both refetch.
@@ -138,13 +246,18 @@ function OccasionHeader({ occasion, isOrganizer }: { occasion: Occasion; isOrgan
   // whether that occasion can still be shared to at all.
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["occasion", occasion.id] });
-    queryClient.invalidateQueries({ queryKey: ["occasions", occasion.family_id] });
+    // The bare prefix rather than this family's: it reaches the family page's
+    // active and archived lists and the /lists occasion strip's index entry
+    // alike, and a rename or an archive moves a card on both.
+    queryClient.invalidateQueries({ queryKey: ["occasions"] });
     queryClient.invalidateQueries({ queryKey: ["share-targets"] });
   };
 
-  function handleError(err: unknown, fallback: string) {
+  // The 403 message names the rule for *this* field — the two rules differ, and
+  // a viewer refused a rename has not been refused an archive.
+  function handleError(err: unknown, forbidden: string, fallback: string) {
     if (isAxiosError(err) && err.response?.status === 403) {
-      setActionError(ORGANIZER_ONLY);
+      setActionError(forbidden);
     } else {
       toast.error(fallback);
     }
@@ -157,7 +270,7 @@ function OccasionHeader({ occasion, isOrganizer }: { occasion: Occasion; isOrgan
       setRenaming(false);
       setActionError(null);
     },
-    onError: (err) => handleError(err, "Failed to rename the occasion."),
+    onError: (err) => handleError(err, RENAME_ONLY, "Failed to rename the occasion."),
   });
 
   const setArchivedMutation = useMutation({
@@ -167,7 +280,7 @@ function OccasionHeader({ occasion, isOrganizer }: { occasion: Occasion; isOrgan
       setActionError(null);
       toast.success(isArchived ? "Occasion archived." : "Occasion unarchived.");
     },
-    onError: (err) => handleError(err, "Failed to archive the occasion."),
+    onError: (err) => handleError(err, ARCHIVE_ONLY, "Failed to archive the occasion."),
   });
 
   function handleRename(e: FormEvent) {
@@ -177,14 +290,14 @@ function OccasionHeader({ occasion, isOrganizer }: { occasion: Occasion; isOrgan
     renameMutation.mutate(trimmed);
   }
 
-  // Archiving takes the occasion out of every default view, so it is confirmed
-  // — the same as the archive item in list detail's `⋯` menu. Unarchiving puts
-  // it back and asks nothing.
+  // Archiving takes the occasion out of every default view, for every member
+  // of the family and not just the viewer, so it is confirmed (`CONTEXT.md`
+  // rule 11). Unarchiving puts it back and asks nothing.
   function handleArchiveToggle() {
     if (occasion.is_archived) {
       setArchivedMutation.mutate(false);
-    } else if (window.confirm("Archive this occasion? Lists already shared to it stay shared.")) {
-      setArchivedMutation.mutate(true);
+    } else {
+      setConfirmingArchive(true);
     }
   }
 
@@ -230,22 +343,33 @@ function OccasionHeader({ occasion, isOrganizer }: { occasion: Occasion; isOrgan
               </span>
             )}
           </div>
-          {isOrganizer && (
+          {/* The menu itself appears for anyone who can do *something* with it,
+              and carries only what they can do — a creator who is not an
+              organizer gets Archive alone rather than a Rename that 403s. */}
+          {(canRename || canArchive) && (
             <HeaderMenu
               ariaLabel="Occasion actions"
               pending={renameMutation.isPending || setArchivedMutation.isPending}
               items={[
-                {
-                  label: "Rename",
-                  onClick: () => {
-                    setName(occasion.name);
-                    setRenaming(true);
-                  },
-                },
-                {
-                  label: occasion.is_archived ? "Unarchive" : "Archive",
-                  onClick: handleArchiveToggle,
-                },
+                ...(canRename
+                  ? [
+                      {
+                        label: "Rename",
+                        onClick: () => {
+                          setName(occasion.name);
+                          setRenaming(true);
+                        },
+                      },
+                    ]
+                  : []),
+                ...(canArchive
+                  ? [
+                      {
+                        label: occasion.is_archived ? "Unarchive" : "Archive",
+                        onClick: handleArchiveToggle,
+                      },
+                    ]
+                  : []),
               ]}
             />
           )}
@@ -253,43 +377,70 @@ function OccasionHeader({ occasion, isOrganizer }: { occasion: Occasion; isOrgan
       )}
 
       {actionError && <p className="mt-3 text-sm text-red-600">{actionError}</p>}
+
+      <ConfirmDialog
+        open={confirmingArchive}
+        title="Archive this occasion?"
+        body={ARCHIVE_OCCASION_BODY}
+        actions={ARCHIVE_ACTIONS}
+        onResolve={(id) => {
+          if (id === "archive") setArchivedMutation.mutate(true);
+          setConfirmingArchive(false);
+        }}
+      />
     </div>
   );
 }
 
-/** Every list shared to this occasion that the viewer can see. */
-function ListsTab({ occasionId }: { occasionId: number }) {
+/**
+ * Every list shared to this occasion that the viewer can see, and the control
+ * that adds one of the viewer's own.
+ *
+ * The control is here in **both** states (NEU-1308, decision 4). With no lists
+ * the empty state's body *is* the button — the page whose whole purpose is
+ * collecting lists used to say "No lists are shared to this occasion yet." and
+ * offer nothing. With lists it sits above the rows, which is story NEU-1304's
+ * second criterion.
+ *
+ * It is not organizer-gated, and deliberately: sharing your own list into an
+ * occasion was never an organizer power, and the `OwnedList` gate behind the
+ * write is the same one that always enforced it.
+ */
+function ListsTab({ occasion, onShare }: { occasion: Occasion; onShare: () => void }) {
   const { user } = useAuth();
 
   const lists = useQuery({
-    queryKey: ["occasion-lists", occasionId],
-    queryFn: () => getOccasionLists(occasionId),
+    queryKey: ["occasion-lists", occasion.id],
+    queryFn: () => getOccasionLists(occasion.id),
   });
 
   if (lists.isPending) return <Spinner />;
   if (lists.isError) return <p className="text-sm text-red-600">Couldn&apos;t load lists.</p>;
   if (lists.data.length === 0) {
-    return <p className="text-gray-500">No lists are shared to this occasion yet.</p>;
+    return <ShareIntoOccasionButton isArchived={occasion.is_archived} onOpen={onShare} />;
   }
 
   return (
-    <ul className="divide-y divide-gray-200 rounded-lg bg-white shadow">
-      {lists.data.map((list) => (
-        <li key={list.id}>
-          <Link to={`/lists/${list.id}`} className="block px-4 py-3 hover:bg-gray-50">
-            <p className="font-medium text-gray-900">{list.name}</p>
-            {/* The viewer's own list reads as their own row does elsewhere —
-                "from Tom" on your own list would be nonsense. Every other list
-                reached this page through this occasion, so the row names the
-                person it came from rather than repeating the family overhead. */}
-            {list.owner_id === user?.id ? (
-              <RecipientLine list={list} />
-            ) : (
-              <ListAttributionLine list={list} />
-            )}
-          </Link>
-        </li>
-      ))}
-    </ul>
+    <div className="space-y-3">
+      <ShareIntoOccasionButton isArchived={occasion.is_archived} onOpen={onShare} />
+      <ul className="divide-y divide-gray-200 rounded-lg bg-white shadow">
+        {lists.data.map((list) => (
+          <li key={list.id}>
+            <Link to={`/lists/${list.id}`} className="block px-4 py-3 hover:bg-gray-50">
+              <p className="font-medium text-gray-900">{list.name}</p>
+              {/* The viewer's own list reads as their own row does elsewhere —
+                  "from Tom" on your own list would be nonsense. Every other list
+                  reached this page through this occasion, so the row names the
+                  person it came from rather than repeating the family overhead. */}
+              {list.owner_id === user?.id ? (
+                <RecipientLine list={list} />
+              ) : (
+                <ListAttributionLine list={list} />
+              )}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

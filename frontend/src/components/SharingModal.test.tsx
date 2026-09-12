@@ -5,9 +5,10 @@ import { MemoryRouter } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import toast, { Toaster } from "react-hot-toast";
-import { server } from "../../test/mocks/server";
-import { AuthProvider } from "../../contexts/AuthContext";
-import { SharingPanel } from "./SharingPanel";
+import { server } from "../test/mocks/server";
+import { AuthProvider } from "../contexts/AuthContext";
+import { ListSharingModal } from "./ListSharingModal";
+import { SharingModal, type PersonRow, type SharingSelection } from "./SharingModal";
 
 const API = "https://boone-gifts-api.localhost";
 
@@ -78,7 +79,14 @@ function serveSharingState({
   );
 }
 
-function renderPanel(onClose = vi.fn()) {
+/**
+ * The whole live suite runs through `ListSharingModal`, the container that
+ * holds the queries and the mutations — the dialog's behaviour is unchanged by
+ * NEU-1307's controlled refactor, and these assertions are the guard that says
+ * so. The controlled seam itself is exercised at the bottom of the file,
+ * against the shell alone.
+ */
+function renderModal(onClose = vi.fn()) {
   server.use(
     http.post(`${API}/auth/refresh`, () =>
       HttpResponse.json({ access_token: ownerToken, token_type: "bearer" })
@@ -89,7 +97,7 @@ function renderPanel(onClose = vi.fn()) {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <MemoryRouter>
-          <SharingPanel listId={1} queryClient={queryClient} onClose={onClose} />
+          <ListSharingModal listId={1} queryClient={queryClient} onClose={onClose} />
           <Toaster />
         </MemoryRouter>
       </AuthProvider>
@@ -98,15 +106,16 @@ function renderPanel(onClose = vi.fn()) {
   return { onClose };
 }
 
-describe("SharingPanel — one panel for people and families", () => {
-  it("puts both groups in a single panel, families first", async () => {
+describe("SharingModal — one dialog for people and families", () => {
+  it("puts both groups in a single dialog over the page, families first", async () => {
     // The order is deliberate, not incidental: families is the broader stroke,
     // and it decides what the People rows can even offer (NEU-1284).
     serveSharingState();
 
-    renderPanel();
+    renderModal();
 
-    const panel = await screen.findByRole("region", { name: "Who can see this list" });
+    const panel = await screen.findByRole("dialog", { name: "Who can see this list" });
+    expect(panel).toHaveAttribute("aria-modal", "true");
     const headings = within(panel)
       .getAllByRole("heading", { level: 3 })
       .map((h) => h.textContent);
@@ -119,18 +128,250 @@ describe("SharingPanel — one panel for people and families", () => {
   it("closes on Done", async () => {
     serveSharingState();
 
-    const { onClose } = renderPanel();
+    const { onClose } = renderModal();
 
     await userEvent.click(await screen.findByRole("button", { name: /done/i }));
     expect(onClose).toHaveBeenCalled();
   });
+
+  it("closes on Escape, the same way Done does", async () => {
+    serveSharingState();
+
+    const { onClose } = renderModal();
+
+    await screen.findByRole("dialog", { name: "Who can see this list" });
+    await userEvent.keyboard("{Escape}");
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("opens with the filter box focused", async () => {
+    // It falls out of `Modal`'s "first tabbable element" rule rather than
+    // needing an autoFocus prop: the filter is first in the markup.
+    serveSharingState();
+
+    renderModal();
+
+    await waitFor(() =>
+      expect(screen.getByRole("searchbox", { name: /filter people and families/i })).toHaveFocus(),
+    );
+  });
 });
 
-describe("SharingPanel — people", () => {
+describe("SharingModal — one filter across both sections", () => {
+  /** A family with no active occasion, a person a live occasion share already
+   *  reaches, and a family and a person that share no word with either. */
+  const boonesCoveringGran = {
+    id: 7,
+    name: "The Boones",
+    member_ids: [1, 3],
+    occasions: [{ id: 10, name: "Christmas 2026", is_archived: false, shared: true }],
+  };
+  const dead = [
+    boonesCoveringGran,
+    { id: 11, name: "Boone Cousins", member_ids: [1], occasions: [] },
+    {
+      id: 12,
+      name: "Work Friends",
+      member_ids: [1],
+      occasions: [{ id: 20, name: "Easter 2026", is_archived: false, shared: false }],
+    },
+  ];
+
+  function serveGran() {
+    server.use(
+      http.get(`${API}/connections`, () =>
+        HttpResponse.json([
+          connections[0],
+          {
+            id: 6,
+            status: "accepted",
+            user: { id: 3, name: "Gran Boone", email: "gran@test.com" },
+            created_at: "2026-01-01",
+            accepted_at: "2026-01-02",
+          },
+        ])
+      ),
+      http.get(`${API}/lists/1/shares`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/families`, () => HttpResponse.json(dead)),
+    );
+  }
+
+  async function filterFor(query: string) {
+    const box = await screen.findByRole("searchbox", { name: /filter people and families/i });
+    await userEvent.type(box, query);
+  }
+
+  it("narrows both sections from one box", async () => {
+    // Someone typing "boone" does not know or care whether Boone is a family or
+    // a surname, and one box answers both.
+    serveGran();
+
+    renderModal();
+    await filterFor("boone");
+
+    expect(screen.getByRole("checkbox", { name: /share with the boones/i })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: /share with gran boone/i })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("checkbox", { name: /share with work friends/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: /share with alice/i })).not.toBeInTheDocument();
+  });
+
+  // The assertion the ticket asks for by name. A filter that dropped these rows
+  // would recreate the "why can't I share with Gran?" question CONTEXT.md
+  // rule 6 exists to answer.
+  it("keeps a matching row that is disabled, greyed, with its reason", async () => {
+    serveGran();
+
+    renderModal();
+    await filterFor("boone");
+
+    const family = screen.getByRole("checkbox", { name: /share with boone cousins/i });
+    expect(family).toBeDisabled();
+    expect(screen.getByText(/no active occasion/i)).toBeInTheDocument();
+
+    const person = screen.getByRole("checkbox", { name: /share with gran boone/i });
+    expect(person).toBeDisabled();
+    expect(screen.getByText("Already sees this through The Boones")).toBeInTheDocument();
+  });
+
+  it("matches a person on their email", async () => {
+    // The email is on the row, so a viewer typing what they can see should find
+    // it — and it is what separates two people called Chris.
+    serveGran();
+
+    renderModal();
+    await filterFor("gran@test");
+
+    expect(screen.getByRole("checkbox", { name: /share with gran boone/i })).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: /share with alice/i })).not.toBeInTheDocument();
+  });
+
+  it("matches a synthesised row on its name, the one it has", async () => {
+    server.use(
+      http.get(`${API}/connections`, () => HttpResponse.json([])),
+      http.get(`${API}/lists/1/shares`, () =>
+        HttpResponse.json([{ id: 1, list_id: 1, user_id: 42, created_at: "2026-01-01" }])
+      ),
+      http.get(`${API}/lists/1/families`, () => HttpResponse.json(shareTargets)),
+    );
+
+    renderModal();
+    await filterFor("user 42");
+
+    expect(screen.getByRole("checkbox", { name: /share with user 42/i })).toBeInTheDocument();
+  });
+
+  it("does not match a family on an occasion name the select keeps collapsed", async () => {
+    // An occasion is not the row's identity, and a row matching on text inside
+    // a control the viewer cannot see is worse than one that does not appear.
+    serveGran();
+
+    renderModal();
+    await filterFor("christmas");
+
+    expect(
+      screen.queryByRole("checkbox", { name: /share with the boones/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('No families match "christmas"')).toBeInTheDocument();
+  });
+
+  it("words no-match apart from no-data, per section, keeping both headings", async () => {
+    // Showing "add a connection" to someone with forty of them would be a lie,
+    // and both headings stay so the viewer can see which population came up
+    // empty rather than guessing.
+    serveGran();
+
+    renderModal();
+    await filterFor("cousins");
+
+    expect(screen.getByText('No people match "cousins"')).toBeInTheDocument();
+    expect(
+      screen.getByRole("checkbox", { name: /share with boone cousins/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/don't have any connections/i)).not.toBeInTheDocument();
+    expect(
+      screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent),
+    ).toEqual(["Families", "People"]);
+  });
+
+  it("renders the filter box even with nothing to filter", async () => {
+    // A control that appears once you cross some row count is one nobody learns.
+    serveSharingState({ targets: [] });
+    server.use(http.get(`${API}/connections`, () => HttpResponse.json([])));
+
+    renderModal();
+
+    expect(
+      await screen.findByRole("searchbox", { name: /filter people and families/i }),
+    ).toBeInTheDocument();
+    expect(await screen.findByText(/don't belong to any families/i)).toBeInTheDocument();
+    expect(screen.getByText(/don't have any connections/i)).toBeInTheDocument();
+  });
+});
+
+describe("SharingModal — the shared-with line", () => {
+  /** A family whose occasion is shared, or not. */
+  const family = (id: number, name: string, shared: boolean) => ({
+    id,
+    name,
+    member_ids: [1],
+    occasions: [{ id: id * 10, name: `${name} Christmas`, is_archived: false, shared }],
+  });
+  const share = (userId: number) => ({
+    id: userId,
+    list_id: 1,
+    user_id: userId,
+    created_at: "2026-01-01",
+  });
+
+  it("reuses the header's sentence when nothing is ticked", async () => {
+    serveSharingState({ targets: [family(7, "The Boones", false)] });
+
+    renderModal();
+
+    expect(await screen.findByText("This list isn't shared with anyone.")).toBeInTheDocument();
+  });
+
+  it.each([
+    ["1 family", [family(7, "The Boones", true)], []],
+    ["2 families", [family(7, "The Boones", true), family(8, "The Smiths", true)], []],
+    ["1 person", [family(7, "The Boones", false)], [share(2)]],
+    ["3 people", [family(7, "The Boones", false)], [share(2), share(3), share(4)]],
+    [
+      "2 families and 1 person",
+      [family(7, "The Boones", true), family(8, "The Smiths", true)],
+      [share(2)],
+    ],
+  ])("counts the ticked boxes as %s", async (expected, targets, shares) => {
+    serveSharingState({ shares, targets });
+
+    renderModal();
+
+    expect(await screen.findByText(`Shared with ${expected}`)).toBeInTheDocument();
+  });
+
+  it("does not claim a list is unshared when the read failed", async () => {
+    server.use(
+      http.get(`${API}/connections`, () => HttpResponse.json(connections)),
+      http.get(`${API}/lists/1/shares`, () => new HttpResponse(null, { status: 500 })),
+      http.get(`${API}/lists/1/families`, () => HttpResponse.json(shareTargets)),
+    );
+
+    renderModal();
+
+    expect(
+      await screen.findByText("Couldn't load who this list is shared with."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("This list isn't shared with anyone.")).not.toBeInTheDocument();
+  });
+});
+
+describe("SharingModal — people", () => {
   it("checks the connections the list is already shared with", async () => {
     serveSharingState({ shares: [{ id: 1, list_id: 1, user_id: 2, created_at: "2026-01-01" }] });
 
-    renderPanel();
+    renderModal();
 
     expect(await screen.findByRole("checkbox", { name: /share with alice/i })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: /share with bob/i })).not.toBeChecked();
@@ -149,7 +390,7 @@ describe("SharingPanel — people", () => {
       }),
     );
 
-    renderPanel();
+    renderModal();
 
     await userEvent.click(await screen.findByRole("checkbox", { name: /share with bob/i }));
     await waitFor(() => expect(shared).toHaveBeenCalledWith({ user_id: 3 }));
@@ -165,7 +406,7 @@ describe("SharingPanel — people", () => {
       }),
     );
 
-    renderPanel();
+    renderModal();
 
     await userEvent.click(await screen.findByRole("checkbox", { name: /share with alice/i }));
     await waitFor(() => expect(revoked).toHaveBeenCalled());
@@ -187,7 +428,7 @@ describe("SharingPanel — people", () => {
       }),
     );
 
-    renderPanel();
+    renderModal();
 
     const row = await screen.findByRole("checkbox", { name: /share with user 42/i });
     expect(row).toBeChecked();
@@ -203,14 +444,14 @@ describe("SharingPanel — people", () => {
       http.get(`${API}/lists/1/families`, () => HttpResponse.json(shareTargets)),
     );
 
-    renderPanel();
+    renderModal();
 
     expect(await screen.findByText(/don't have any connections/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /add a connection/i })).toHaveAttribute("href", "/people");
   });
 });
 
-describe("SharingPanel — people an occasion share already reaches", () => {
+describe("SharingModal — people an occasion share already reaches", () => {
   /** The Boones, reaching Bob (user 3) through a live occasion. */
   const boonesCoveringBob = {
     id: 7,
@@ -222,7 +463,7 @@ describe("SharingPanel — people an occasion share already reaches", () => {
   it("disables an unshared connection the family already reaches, and names the family", async () => {
     serveSharingState({ targets: [boonesCoveringBob] });
 
-    renderPanel();
+    renderModal();
 
     const box = await screen.findByRole("checkbox", { name: /share with bob/i });
     expect(box).toBeDisabled();
@@ -251,7 +492,7 @@ describe("SharingPanel — people an occasion share already reaches", () => {
       ],
     });
 
-    renderPanel();
+    renderModal();
 
     expect(
       await screen.findByText("Already sees this through The Boones and The Smiths"),
@@ -273,7 +514,7 @@ describe("SharingPanel — people an occasion share already reaches", () => {
       ],
     });
 
-    renderPanel();
+    renderModal();
 
     expect(await screen.findByRole("checkbox", { name: /share with bob/i })).toBeEnabled();
     expect(screen.getByText("bob@test.com")).toBeInTheDocument();
@@ -295,7 +536,7 @@ describe("SharingPanel — people an occasion share already reaches", () => {
       }),
     );
 
-    renderPanel();
+    renderModal();
 
     const box = await screen.findByRole("checkbox", { name: /share with bob/i });
     expect(box).toBeChecked();
@@ -325,7 +566,7 @@ describe("SharingPanel — people an occasion share already reaches", () => {
       }),
     );
 
-    renderPanel();
+    renderModal();
 
     expect(await screen.findByRole("checkbox", { name: /share with bob/i })).toBeDisabled();
 
@@ -338,7 +579,7 @@ describe("SharingPanel — people an occasion share already reaches", () => {
   });
 });
 
-describe("SharingPanel — families", () => {
+describe("SharingModal — families", () => {
   // react-hot-toast keeps its queue at module level, so a toast raised by one
   // test outlives `cleanup()` and shows up in the next one.
   beforeEach(() => toast.remove());
@@ -353,7 +594,7 @@ describe("SharingPanel — families", () => {
       }),
     );
 
-    renderPanel();
+    renderModal();
 
     // One occasion is displayed, not offered: no select, and one click shares.
     expect(await screen.findByText("Easter 2026")).toBeInTheDocument();
@@ -366,7 +607,7 @@ describe("SharingPanel — families", () => {
   it("checks the family whose occasion already holds the share, and names it", async () => {
     serveSharingState();
 
-    renderPanel();
+    renderModal();
 
     expect(await screen.findByRole("checkbox", { name: /share with the boones/i })).toBeChecked();
     expect(screen.getByText("Christmas 2026")).toBeInTheDocument();
@@ -376,7 +617,7 @@ describe("SharingPanel — families", () => {
   it("disables a family with no active occasion and says why", async () => {
     serveSharingState();
 
-    renderPanel();
+    renderModal();
 
     const box = await screen.findByRole("checkbox", { name: /share with work friends/i });
     expect(box).toBeDisabled();
@@ -393,7 +634,7 @@ describe("SharingPanel — families", () => {
       }),
     );
 
-    renderPanel();
+    renderModal();
 
     await userEvent.click(await screen.findByRole("checkbox", { name: /share with the joneses/i }));
 
@@ -412,7 +653,7 @@ describe("SharingPanel — families", () => {
       }),
     );
 
-    renderPanel();
+    renderModal();
 
     const select = await screen.findByRole("combobox", { name: /occasion for the joneses/i });
     await userEvent.selectOptions(select, "32");
@@ -440,7 +681,7 @@ describe("SharingPanel — families", () => {
       ],
     });
 
-    renderPanel();
+    renderModal();
 
     const select = await screen.findByRole("combobox", { name: /occasion for the joneses/i });
     expect(select).toBeDisabled();
@@ -461,7 +702,7 @@ describe("SharingPanel — families", () => {
       ),
     );
 
-    renderPanel();
+    renderModal();
 
     await userEvent.click(await screen.findByRole("checkbox", { name: /share with the smiths/i }));
 
@@ -480,11 +721,13 @@ describe("SharingPanel — families", () => {
       }),
     );
 
-    renderPanel();
+    renderModal();
 
     await userEvent.click(await screen.findByRole("checkbox", { name: /share with the boones/i }));
     await waitFor(() => expect(revoked).toHaveBeenCalledWith(null));
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "Some gifts are claimed" }),
+    ).not.toBeInTheDocument();
   });
 
   it("can still unshare from an occasion archived after the share was made", async () => {
@@ -508,7 +751,7 @@ describe("SharingPanel — families", () => {
       }),
     );
 
-    renderPanel();
+    renderModal();
 
     const box = await screen.findByRole("checkbox", { name: /share with the boones/i });
     expect(box).toBeEnabled();
@@ -529,12 +772,11 @@ describe("SharingPanel — families", () => {
       ),
     );
 
-    renderPanel();
+    renderModal();
 
     await userEvent.click(await screen.findByRole("checkbox", { name: /share with the boones/i }));
 
-    const dialog = await screen.findByRole("dialog");
-    expect(dialog).toHaveTextContent("Some gifts are claimed");
+    const dialog = await screen.findByRole("dialog", { name: "Some gifts are claimed" });
     expect(screen.getByRole("button", { name: /release those claims/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /keep them claimed/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /cancel/i })).toBeInTheDocument();
@@ -555,7 +797,7 @@ describe("SharingPanel — families", () => {
       }),
     );
 
-    renderPanel();
+    renderModal();
 
     await userEvent.click(await screen.findByRole("checkbox", { name: /share with the boones/i }));
     await userEvent.click(
@@ -577,12 +819,16 @@ describe("SharingPanel — families", () => {
       }),
     );
 
-    renderPanel();
+    renderModal();
 
     await userEvent.click(await screen.findByRole("checkbox", { name: /share with the boones/i }));
     await userEvent.click(await screen.findByRole("button", { name: /cancel/i }));
 
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("dialog", { name: "Some gifts are claimed" }),
+      ).not.toBeInTheDocument(),
+    );
     expect(revoked).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("checkbox", { name: /share with the boones/i })).toBeChecked();
   });
@@ -590,8 +836,226 @@ describe("SharingPanel — families", () => {
   it("says so when the owner belongs to no families", async () => {
     serveSharingState({ targets: [] });
 
-    renderPanel();
+    renderModal();
 
     expect(await screen.findByText(/don't belong to any families/i)).toBeInTheDocument();
+  });
+});
+
+describe("SharingModal — the revoke confirmation stacks on top", () => {
+  beforeEach(() => toast.remove());
+
+  /** The 409 that means members of the family hold claims a revoke would
+   *  orphan — the one path that puts two modals on screen at once. */
+  function serveClaimedRevoke() {
+    serveSharingState();
+    server.use(
+      http.delete(`${API}/lists/1/occasions/10`, () =>
+        HttpResponse.json({ detail: "claimed" }, { status: 409 })
+      ),
+    );
+  }
+
+  async function openConfirm() {
+    renderModal();
+    await userEvent.click(await screen.findByRole("checkbox", { name: /share with the boones/i }));
+    return screen.findByRole("dialog", { name: "Some gifts are claimed" });
+  }
+
+  it("leaves the sharing modal standing behind it", async () => {
+    serveClaimedRevoke();
+
+    await openConfirm();
+
+    expect(screen.getByRole("dialog", { name: "Who can see this list" })).toBeInTheDocument();
+  });
+
+  it("resolves only the confirm on Escape, and only once", async () => {
+    // Both dialogs listen on the document, so without the topmost-only stack
+    // one Escape would close the confirm *and* the modal underneath it.
+    serveClaimedRevoke();
+
+    const { onClose } = renderModal();
+    await userEvent.click(await screen.findByRole("checkbox", { name: /share with the boones/i }));
+    await screen.findByRole("dialog", { name: "Some gifts are claimed" });
+
+    await userEvent.keyboard("{Escape}");
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("dialog", { name: "Some gifts are claimed" }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole("dialog", { name: "Who can see this list" })).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("cycles Tab inside the confirm rather than back into the modal beneath", async () => {
+    // The outer trap's check is "is focus inside my panel?", and focus sitting
+    // in the inner dialog fails it — so without the stack the sharing modal
+    // would yank focus to its filter box on the first Tab.
+    serveClaimedRevoke();
+
+    await openConfirm();
+
+    const release = screen.getByRole("button", { name: /release those claims/i });
+    const keep = screen.getByRole("button", { name: /keep them claimed/i });
+    const cancel = screen.getByRole("button", { name: /cancel/i });
+    expect(release).toHaveFocus();
+
+    await userEvent.tab();
+    expect(keep).toHaveFocus();
+    await userEvent.tab();
+    expect(cancel).toHaveFocus();
+    await userEvent.tab();
+    expect(release).toHaveFocus();
+
+    expect(
+      screen.getByRole("searchbox", { name: /filter people and families/i }),
+    ).not.toHaveFocus();
+  });
+
+  it("returns focus to the row that opened it", async () => {
+    serveClaimedRevoke();
+
+    await openConfirm();
+    await userEvent.click(screen.getByRole("button", { name: /cancel/i }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("checkbox", { name: /share with the boones/i })).toHaveFocus(),
+    );
+  });
+});
+
+describe("SharingModal — controlled by whatever container mounts it", () => {
+  /** A family of each shape, as a draft sees them: nothing shared, nothing
+   *  archived, and no members to report. */
+  const draftFamilies = [
+    {
+      id: 7,
+      name: "The Boones",
+      member_ids: [],
+      occasions: [{ id: 10, name: "Christmas 2026", is_archived: false, shared: false }],
+    },
+    {
+      id: 9,
+      name: "The Joneses",
+      member_ids: [],
+      occasions: [
+        { id: 31, name: "Jones Christmas", is_archived: false, shared: false },
+        { id: 32, name: "Jones Birthdays", is_archived: false, shared: false },
+      ],
+    },
+  ];
+  const draftPeople: PersonRow[] = [
+    { userId: 2, name: "Alice", email: "alice@test.com" },
+    { userId: 3, name: "Bob", email: "bob@test.com" },
+  ];
+  const nothing: SharingSelection = { familyOccasions: {}, userIds: [] };
+
+  function renderShell({
+    selection = nothing,
+    families = draftFamilies,
+    people = draftPeople,
+    linkAway = false,
+  }: {
+    selection?: SharingSelection;
+    families?: typeof draftFamilies;
+    people?: PersonRow[];
+    linkAway?: boolean;
+  } = {}) {
+    const onFamilyToggled = vi.fn();
+    const onPersonToggled = vi.fn();
+    render(
+      <MemoryRouter>
+        <SharingModal
+          families={{ data: families, isLoading: false, isError: false, pending: false }}
+          people={{ data: people, isLoading: false, isError: false, pending: false }}
+          selection={{ data: selection, isLoading: false, isError: false }}
+          onFamilyToggled={onFamilyToggled}
+          onPersonToggled={onPersonToggled}
+          linkAway={linkAway}
+          onClose={vi.fn()}
+        />
+      </MemoryRouter>
+    );
+    return { onFamilyToggled, onPersonToggled };
+  }
+
+  it("ticks the boxes the selection names, and no others", async () => {
+    // The same rows the live container drives off server state, driven off a
+    // draft's local state instead — one implementation, two sources.
+    renderShell({ selection: { familyOccasions: { 9: 32 }, userIds: [3] } });
+
+    expect(screen.getByRole("checkbox", { name: /share with the joneses/i })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /share with bob/i })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /share with the boones/i })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /share with alice/i })).not.toBeChecked();
+    expect(screen.getByText("Shared with 1 family and 1 person")).toBeInTheDocument();
+  });
+
+  it("reports the intended state rather than a delta", async () => {
+    const { onFamilyToggled, onPersonToggled } = renderShell({
+      selection: { familyOccasions: { 9: 32 }, userIds: [] },
+    });
+
+    await userEvent.click(screen.getByRole("checkbox", { name: /share with the boones/i }));
+    expect(onFamilyToggled).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: 7 }),
+      10,
+    );
+
+    // Unticking says `null` — the container looks up which occasion that was.
+    await userEvent.click(screen.getByRole("checkbox", { name: /share with the joneses/i }));
+    expect(onFamilyToggled).toHaveBeenLastCalledWith(expect.objectContaining({ id: 9 }), null);
+
+    await userEvent.click(screen.getByRole("checkbox", { name: /share with alice/i }));
+    expect(onPersonToggled).toHaveBeenLastCalledWith(2, true);
+  });
+
+  it("refuses a tick on a family with several occasions until one is chosen", async () => {
+    // The refusal is the shell's, so both modes inherit it.
+    const { onFamilyToggled } = renderShell();
+
+    await userEvent.click(screen.getByRole("checkbox", { name: /share with the joneses/i }));
+    expect(screen.getByText(/choose an occasion to share with the joneses/i)).toBeInTheDocument();
+    expect(onFamilyToggled).not.toHaveBeenCalled();
+
+    await userEvent.selectOptions(
+      screen.getByRole("combobox", { name: /occasion for the joneses/i }),
+      "31",
+    );
+    await userEvent.click(screen.getByRole("checkbox", { name: /share with the joneses/i }));
+    expect(onFamilyToggled).toHaveBeenCalledWith(expect.objectContaining({ id: 9 }), 31);
+  });
+
+  it("disables no person row when nothing covers them", async () => {
+    // A draft tick is not a share: it reports no covering family, so every row
+    // stays live however many families are ticked (NEU-1307, decision 5).
+    renderShell({ selection: { familyOccasions: { 7: 10 }, userIds: [] } });
+
+    expect(screen.getByRole("checkbox", { name: /share with alice/i })).toBeEnabled();
+    expect(screen.getByRole("checkbox", { name: /share with bob/i })).toBeEnabled();
+    expect(screen.queryByText(/already sees this/i)).not.toBeInTheDocument();
+  });
+
+  it("keeps the empty sentences and drops their links when there is nowhere safe to go", async () => {
+    // Nothing on a create form may silently discard a half-typed list, and the
+    // fact the section is empty is what the row is there to say.
+    renderShell({ families: [], people: [], linkAway: false });
+
+    expect(screen.getByText(/don't belong to any families yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/don't have any connections yet/i)).toBeInTheDocument();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
+
+  it("offers those links where following one costs nothing", async () => {
+    renderShell({ families: [], people: [], linkAway: true });
+
+    expect(screen.getByRole("link", { name: /go to people/i })).toHaveAttribute("href", "/people");
+    expect(screen.getByRole("link", { name: /add a connection/i })).toHaveAttribute(
+      "href",
+      "/people",
+    );
   });
 });

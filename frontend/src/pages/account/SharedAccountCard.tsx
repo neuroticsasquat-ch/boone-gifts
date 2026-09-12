@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 import { getAccount, updateAccount } from "../../api/account";
 import type { Account, AccountConflict, AccountUpdate } from "../../types";
+import { ConfirmDialog } from "../../components/ConfirmDialog";
 
 /**
  * The Account page's shared-household card: declaring that more than one person
@@ -351,38 +352,25 @@ function StripLabelsDialog({
 }) {
   const names = joinNames(pending.names, "or");
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="strip-labels-title"
-        className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg"
-      >
-        <h2 id="strip-labels-title" className="text-lg font-semibold text-gray-900">
-          {pending.turningOff ? "Turn this off?" : "Remove from this account?"}
-        </h2>
-        <p className="mt-2 text-sm text-gray-600">
+    <ConfirmDialog
+      open
+      title={pending.turningOff ? "Turn this off?" : "Remove from this account?"}
+      body={
+        <>
           {listCount(pending.affectedLists)} marked for {names}.{" "}
           {pending.turningOff ? "Turning this off removes those labels." : "Removing them removes those labels."}{" "}
           The lists themselves are kept.
-        </p>
-        <div className="mt-6 flex flex-col gap-2 sm:flex-row">
-          <button
-            onClick={onConfirm}
-            disabled={busy}
-            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            {pending.turningOff ? "Turn it off" : "Remove them"}
-          </button>
-          <button
-            onClick={onCancel}
-            disabled={busy}
-            className="rounded px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 disabled:opacity-50"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
+        </>
+      }
+      actions={[
+        {
+          id: "confirm",
+          label: pending.turningOff ? "Turn it off" : "Remove them",
+          tone: "primary",
+        },
+      ]}
+      pending={busy}
+      onResolve={(id) => (id === null ? onCancel() : onConfirm())}
+    />
   );
 }

@@ -30,18 +30,23 @@ export interface User {
 
 // Gift Lists
 /**
- * How a shared list reached the viewer: a direct share from a person, or the
- * occasion it was shared to. A list reachable both ways reports `kind: "user"`
- * — the backend resolves that (NEU-1227), the client never re-derives it.
+ * One way a shared list reached the viewer: a direct share from a person, or an
+ * occasion of a family they belong to. A list can reach them several ways at
+ * once, so `shared_via` is the array of all of them (NEU-1290).
+ *
+ * The backend deliberately **ranks nothing** — routes arrive direct-first then
+ * by ascending occasion id, stable so responses do not churn, and that order is
+ * not a ranking `routes[0]` may be read from. Which route *labels* the row is
+ * the client's rule, and it lives in `lib/attribution.ts` alone (NEU-1291).
  *
  * A list is shared to an occasion, never to a family (project spec §5.1), so the
  * occasion arm carries the family it belongs to rather than naming it directly.
  */
-export type SharedVia =
-  | { kind: "user"; id: number; name: string }
+export type ShareRoute =
+  | { kind: "direct"; person: { id: number; name: string } }
   /** The family rides on the occasion arm and only there. It is not optional:
    *  the backend refuses an occasion share that does not carry one. */
-  | { kind: "occasion"; id: number; name: string; family: FamilyRef };
+  | { kind: "occasion"; occasion: { id: number; name: string }; family: FamilyRef };
 
 export interface GiftList {
   id: number;
@@ -63,9 +68,11 @@ export interface GiftList {
   claimed_count: number;
   created_at: string;
   updated_at: string;
-  /** Present only on a list in the `shared` scope — null on one the caller owns,
-   * absent on a response cached from before the field existed. */
-  shared_via?: SharedVia | null;
+  /** Every route by which this list reached the caller — empty on one they own.
+   * Never null and never absent: the API guarantees the array (NEU-1290), so a
+   * fixture that forgets it should fail to compile rather than quietly
+   * exercising the fallback in `attributionFor`. */
+  shared_via: ShareRoute[];
   /** How many of the viewer's *own* claims on this list are still unbought —
    * what the `• N to buy` badge counts (project spec §9.1).
    *
@@ -275,6 +282,45 @@ export interface Occasion {
  */
 export interface OccasionCreated extends Occasion {
   has_other_active: boolean;
+}
+
+/**
+ * One row of the occasion index — every non-archived occasion in every family
+ * the caller belongs to, including the ones no list has been shared to yet.
+ *
+ * The counts are **the caller's own** and are the caller's by construction:
+ * the endpoint takes no parameter naming another user. `last_activity_at` is
+ * the later of the last share *into* the occasion and the caller's own claim
+ * or purchase filed under it — never another user's claim, which would tell an
+ * owner that somebody is buying them a present (`CONTEXT.md` rule 2). That
+ * definition lives server-side and is not re-derived here.
+ *
+ * Non-null: the server floors it at the occasion's `created_at`.
+ */
+export interface OccasionSummary extends Occasion {
+  family_name: string;
+  list_count: number;
+  my_claimed_count: number;
+  my_bought_count: number;
+  last_activity_at: string;
+}
+
+/**
+ * One standing question about an occasion that has gone quiet: archive it, or
+ * not yet. Asked of the occasion's creator or an organizer of its family.
+ *
+ * Four fields, built from scratch rather than off `Occasion` so there is no
+ * field here that could ever carry claim state (NEU-1294 decision 9). Staleness
+ * reads no claim by anyone, the caller included, so nothing on a prompt row is
+ * inferable about who is shopping (`CONTEXT.md` rule 2).
+ *
+ * `id` is the **occasion's** id — what archive and dismiss both take.
+ */
+export interface ArchivePrompt {
+  id: number;
+  name: string;
+  family_id: number;
+  family_name: string;
 }
 
 // Shared Users
