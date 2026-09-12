@@ -276,6 +276,20 @@ export interface Occasion {
 }
 
 /**
+ * One occasion, read on its own — the occasion plus the family that owns it.
+ *
+ * `family_name` is here and not on `Occasion` because only `GET /occasions/{id}`
+ * carries it: the family occasions list is already scoped by a route naming the
+ * family, and `PUT` deliberately answers the narrower shape. The page's heading
+ * reads "Boone Family · Christmas 2026" and takes the name from this payload
+ * rather than from its own family query, which cannot fire until the occasion
+ * has resolved (NEU-1321).
+ */
+export interface OccasionDetail extends Occasion {
+  family_name: string;
+}
+
+/**
  * The create response. A second active occasion is allowed, so the backend
  * reports whether the family already had one rather than refusing — a caller
  * with no occasion list to hand can warn off this alone.

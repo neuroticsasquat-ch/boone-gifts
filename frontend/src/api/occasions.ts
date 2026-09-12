@@ -5,6 +5,7 @@ import type {
   GiftList,
   Occasion,
   OccasionCreated,
+  OccasionDetail,
   OccasionSummary,
   ShoppingPayload,
 } from "../types";
@@ -37,10 +38,15 @@ export async function getFamilyOccasions(
   return response.data;
 }
 
-/** One occasion. Any member of the owning family may read it; the backend
- *  answers 403 to everyone else and 404 when it does not exist. */
-export async function getOccasion(id: number): Promise<Occasion> {
-  const response = await apiClient.get<Occasion>(`/occasions/${id}`);
+/** One occasion, and the family that owns it. Any member of that family may
+ *  read it; the backend answers 403 to everyone else and 404 when it does not
+ *  exist.
+ *
+ *  The only occasion payload carrying `family_name` — `updateOccasion` below
+ *  returns the narrower `Occasion`, which is why its response must never be
+ *  written into the `["occasion", id]` cache entry (NEU-1321). */
+export async function getOccasion(id: number): Promise<OccasionDetail> {
+  const response = await apiClient.get<OccasionDetail>(`/occasions/${id}`);
   return response.data;
 }
 
@@ -66,6 +72,10 @@ export async function updateOccasion(
   id: number,
   data: { name?: string; is_archived?: boolean },
 ): Promise<Occasion> {
+  // Narrower than `getOccasion`'s `OccasionDetail` on purpose: callers
+  // invalidate `["occasion", id]` rather than writing this response into it,
+  // which would blank the page heading's family qualifier until the next
+  // refetch (NEU-1321 decision 5).
   const response = await apiClient.put<Occasion>(`/occasions/${id}`, data);
   return response.data;
 }

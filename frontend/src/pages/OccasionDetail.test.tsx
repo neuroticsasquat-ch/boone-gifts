@@ -40,7 +40,13 @@ const family = {
   ],
 };
 
-const occasion = {
+/** `OccasionRead` — what `PUT /occasions/{id}` answers, and deliberately no
+ *  more. Kept separate from the detail payload below so a mocked `PUT` cannot
+ *  be wider than the real one: if these handlers returned `family_name`, a
+ *  future `setQueryData(["occasion", id], response)` would blank the heading's
+ *  qualifier in production and leave every test here green (NEU-1321
+ *  decision 5). */
+const occasionRead = {
   id: 3,
   family_id: 7,
   name: "Christmas 2026",
@@ -49,6 +55,11 @@ const occasion = {
   created_at: "2026-09-01T00:00:00Z",
   updated_at: "2026-09-01T00:00:00Z",
 };
+
+/** `OccasionDetailRead` — what `GET /occasions/{id}` answers. The family name
+ *  rides on the occasion rather than being read off the page's family query,
+ *  which does not fire until this one has resolved (NEU-1321). */
+const occasion = { ...occasionRead, family_name: "Boone Family" };
 
 function list(overrides: Partial<Record<string, unknown>> = {}) {
   return {
@@ -176,7 +187,7 @@ describe("OccasionDetail", () => {
   it("heads the page with the occasion, its family, and a link back to it", async () => {
     renderOccasion();
 
-    expect(await screen.findByRole("heading", { name: "Christmas 2026" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Boone Family \u00b7 Christmas 2026" })).toBeInTheDocument();
     const back = await screen.findByRole("link", { name: "\u2190 Boone Family" });
     expect(back).toHaveAttribute("href", "/people/families/7");
   });
@@ -186,7 +197,7 @@ describe("OccasionDetail", () => {
     renderOccasion({ arriveFrom: "/lists/1" });
     await userEvent.click(screen.getByRole("button", { name: "arrive" }));
 
-    expect(await screen.findByRole("heading", { name: "Christmas 2026" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Boone Family \u00b7 Christmas 2026" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /Boone Family/ })).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "\u2190 Back" }));
@@ -302,7 +313,7 @@ describe("OccasionDetail", () => {
     server.use(
       http.put(`${API}/occasions/3`, async ({ request }) => {
         renamed(await request.json());
-        return HttpResponse.json({ ...occasion, name: "Christmas 2027" });
+        return HttpResponse.json({ ...occasionRead, name: "Christmas 2027" });
       })
     );
 
@@ -322,7 +333,7 @@ describe("OccasionDetail", () => {
     server.use(
       http.put(`${API}/occasions/3`, async ({ request }) => {
         archived(await request.json());
-        return HttpResponse.json({ ...occasion, is_archived: true });
+        return HttpResponse.json({ ...occasionRead, is_archived: true });
       })
     );
 
@@ -345,7 +356,7 @@ describe("OccasionDetail", () => {
     server.use(
       http.put(`${API}/occasions/3`, async ({ request }) => {
         archived(await request.json());
-        return HttpResponse.json(occasion);
+        return HttpResponse.json(occasionRead);
       })
     );
 
@@ -362,7 +373,7 @@ describe("OccasionDetail", () => {
   it("gives a plain member no rename or archive menu", async () => {
     renderOccasion({ userId: 2 });
 
-    expect(await screen.findByRole("heading", { name: "Christmas 2026" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Boone Family \u00b7 Christmas 2026" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Occasion actions" })).not.toBeInTheDocument();
   });
 
@@ -412,13 +423,93 @@ describe("OccasionDetail", () => {
   it("renders an archived occasion normally, offering Unarchive", async () => {
     renderOccasion({ occasionResponse: HttpResponse.json({ ...occasion, is_archived: true }) });
 
-    expect(await screen.findByRole("heading", { name: "Christmas 2026" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Boone Family \u00b7 Christmas 2026" })).toBeInTheDocument();
     expect(screen.getByText("Archived")).toBeInTheDocument();
     // Its lists are still listed: archiving is not unsharing.
     expect(await screen.findByRole("link", { name: /Jane's Wishlist/ })).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Occasion actions" }));
     expect(screen.getByRole("button", { name: "Unarchive" })).toBeInTheDocument();
+  });
+
+  // The ticket itself: at depth > 0 the back control reads only "\u2190 Back", so
+  // before this the family was named nowhere on the page.
+  it("names the family in the heading at depth > 0, where nothing else does", async () => {
+    renderOccasion({ arriveFrom: "/lists/1" });
+    await userEvent.click(screen.getByRole("button", { name: "arrive" }));
+
+    const heading = await screen.findByRole(
+      "heading",
+      { name: "Boone Family \u00b7 Christmas 2026" },
+    );
+    // Unlinked, per CONTEXT.md rule 3: the family's destination on this page is
+    // the back control, and a second link to it two lines apart is the
+    // redundancy the rule avoids.
+    expect(within(heading).queryByRole("link")).not.toBeInTheDocument();
+  });
+
+  it("titles the document with the family too", async () => {
+    renderOccasion();
+
+    await screen.findByRole("heading", { name: "Boone Family \u00b7 Christmas 2026" });
+    expect(document.title).toContain("Boone Family \u00b7 Christmas 2026");
+  });
+
+  // The assertion that fails under a heading derived from the page's family
+  // query: that query does not fire until the occasion has resolved, so a
+  // heading built from it paints unqualified first and shifts a round trip
+  // later. Here the family never arrives at all and the heading is still right.
+  it("names the family before the family query resolves", async () => {
+    renderOccasion();
+    server.use(http.get(`${API}/families/7`, () => new Promise(() => {})));
+
+    expect(
+      await screen.findByRole("heading", { name: "Boone Family \u00b7 Christmas 2026" }),
+    ).toBeInTheDocument();
+    // Same field, same reason: the back control never shows the `Family`
+    // placeholder on this page (Decision 7).
+    expect(screen.getByRole("link", { name: "\u2190 Boone Family" })).toHaveAttribute(
+      "href",
+      "/people/families/7",
+    );
+    expect(screen.queryByRole("link", { name: "\u2190 Family" })).not.toBeInTheDocument();
+  });
+
+  // This ticket's own bug, re-created in a transient state: with the qualifier
+  // in the <h1>, opening the form would take the family off the page again, and
+  // at depth > 0 the back control above reads only "\u2190 Back".
+  it("keeps the family on screen while the occasion is being renamed", async () => {
+    renderOccasion();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Occasion actions" }));
+    await userEvent.click(screen.getByRole("button", { name: "Rename" }));
+
+    expect(screen.getByText("Boone Family \u00b7")).toBeInTheDocument();
+    // The edit covers the occasion half and not the family half.
+    expect(screen.getByLabelText("Occasion name")).toHaveValue("Christmas 2026");
+  });
+
+  it("keeps the qualifier through a rename, changing only the occasion half", async () => {
+    renderOccasion();
+    server.use(
+      http.put(`${API}/occasions/3`, () =>
+        HttpResponse.json({ ...occasionRead, name: "Christmas 2027" })
+      ),
+      http.get(`${API}/occasions/3`, () =>
+        HttpResponse.json({ ...occasion, name: "Christmas 2027" })
+      )
+    );
+
+    await userEvent.click(await screen.findByRole("button", { name: "Occasion actions" }));
+    await userEvent.click(screen.getByRole("button", { name: "Rename" }));
+    const field = screen.getByLabelText("Occasion name");
+    await userEvent.clear(field);
+    await userEvent.type(field, "Christmas 2027");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(
+      await screen.findByRole("heading", { name: "Boone Family \u00b7 Christmas 2027" }),
+    ).toBeInTheDocument();
   });
 
   it("does not offer a retry on an occasion the viewer can never reach", async () => {
