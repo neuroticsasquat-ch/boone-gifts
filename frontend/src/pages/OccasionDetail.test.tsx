@@ -150,7 +150,11 @@ function renderOccasion({
     http.get(`${API}/occasions/3`, () => occasionResponse.clone()),
     http.get(`${API}/occasions/3/lists`, () => HttpResponse.json(lists)),
     http.get(`${API}/occasions/3/shopping`, () =>
-      HttpResponse.json({ budget: noBudget, items: shopping })
+      HttpResponse.json({
+        budget: { ...noBudget, allocated: "0.00", unallocated: null, target: null, allocation_count: 0 },
+        giftees: [],
+        items: shopping,
+      })
     ),
     http.get(`${API}/families/7`, () => HttpResponse.json(family)),
     http.get(`${API}/lists`, () => HttpResponse.json(ownedLists))
@@ -336,6 +340,7 @@ describe("OccasionDetail", () => {
           price: "85.00",
           list_id: 10,
           list_name: "Jane's Wishlist",
+          giftee_key: "owner:2",
           purchased_at: "2026-09-01T00:00:00Z",
           amount_paid: "85.00",
         },
@@ -363,6 +368,7 @@ describe("OccasionDetail", () => {
           price: "18.00",
           list_id: 11,
           list_name: "Gran's List",
+          giftee_key: "owner:3",
           purchased_at: null,
           amount_paid: null,
         },

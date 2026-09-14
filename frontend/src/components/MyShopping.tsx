@@ -5,11 +5,12 @@ import { updateClaim } from "../api/claims";
 import { getFolderShopping } from "../api/folders";
 import { getOccasionShopping } from "../api/occasions";
 import { purchaseGift, unpurchaseGift } from "../api/gifts";
+import { gifteeLabel, groupByGiftee, type GifteeGroup } from "../lib/giftees";
 import { formatMoney } from "../lib/money";
 import { shoppingKey, type ShoppingScope } from "../lib/shopping";
-import { BudgetLine } from "./BudgetLine";
+import { BudgetLine, GifteeBudgetLine } from "./BudgetLine";
 import { Spinner } from "./Spinner";
-import type { ShoppingItem } from "../types";
+import type { BudgetRollup, Giftee, ShoppingItem } from "../types";
 
 /** Nothing-here reads differently per scope, because *why* it is empty differs:
  *  an occasion holds claims filed under it, a folder holds claims on the lists
@@ -21,12 +22,16 @@ const EMPTY: Record<ShoppingScope["kind"], string> = {
 
 /**
  * The **My shopping** tab, shared by the occasion page and the folder page
- * (project spec §9.2, §9.3): the viewer's own claims, grouped by list, with the
- * purchase tick and what they paid.
+ * (project spec §9.2, §9.3): the viewer's own claims, grouped by **giftee** —
+ * the person each list is for — with a budget line per giftee, the purchase
+ * tick and what they paid (NEU-1326).
  *
  * **Only ever the viewer's own claims** — no aggregate here reaches anyone
  * else's, at any time (`CONTEXT.md` rule 2). The endpoints carry no parameter
  * that could widen it, so this is structural rather than a filter applied here.
+ *
+ * Every giftee in scope gets a group, empty or not: that is what lets a
+ * person be budgeted before anything has been claimed for them.
  */
 export function MyShopping({ scope }: { scope: ShoppingScope }) {
   const queryClient = useQueryClient();
@@ -66,12 +71,17 @@ export function MyShopping({ scope }: { scope: ShoppingScope }) {
   // is rendered whether or not there is anything claimed yet: the tally
   // describes the viewer's shopping either way, and a budget is something they
   // may well want to set before they have bought anything.
-  const { budget, items } = shopping.data;
+  const { budget, giftees, items } = shopping.data;
+
+  // The scope-level empty state is for a scope with nobody in it — a folder
+  // with no lists, an occasion nobody has shared into. A giftee with nothing
+  // claimed yet is a group of their own below, not this.
+  const nobodyHere = items.length === 0 && giftees.length === 0;
 
   return (
     <div className="space-y-4">
       <BudgetLine budget={budget} scope={scope} />
-      {items.length === 0 ? (
+      {nobodyHere ? (
         <div className="rounded-lg bg-white p-6 text-center shadow">
           <p className="text-gray-500">{EMPTY[scope.kind]}</p>
           <p className="mt-1 text-sm text-gray-400">
@@ -79,21 +89,15 @@ export function MyShopping({ scope }: { scope: ShoppingScope }) {
           </p>
         </div>
       ) : (
-        groupByList(items).map((group) => (
-          <div key={group.listId} className="overflow-hidden rounded-lg bg-white shadow">
-            <div className="border-b border-gray-200 bg-gray-50 px-4 py-2">
-              <h3 className="text-sm font-semibold text-gray-700">{group.listName}</h3>
-            </div>
-            <ul className="divide-y divide-gray-100">
-              {group.items.map((item) => (
-                <ShoppingRow
-                  key={item.claim_id}
-                  item={item}
-                  onChanged={() => handleChanged(item.list_id)}
-                />
-              ))}
-            </ul>
-          </div>
+        groupByGiftee(giftees, items).map((group) => (
+          <GifteeCard
+            key={group.key}
+            group={group}
+            giftees={giftees}
+            overall={budget}
+            scope={scope}
+            onChanged={handleChanged}
+          />
         ))
       )}
     </div>
@@ -101,27 +105,61 @@ export function MyShopping({ scope }: { scope: ShoppingScope }) {
 }
 
 /**
- * Claims in the order the backend sent them, gathered under their list.
+ * One giftee's card: the heading, their budget line, and the viewer's rows for
+ * them — or one muted sentence when there are none yet.
  *
- * Grouped on `list_id` and never on `list_name`: two lists routinely share a
- * name — a "Christmas list" per person is the ordinary case — and grouping on
- * the name silently merges them into one heading.
+ * A row names its list only when this giftee has more than one list in scope
+ * (decision 9): the common one-list giftee stays as clean as the list-grouped
+ * card it replaced. A group with no giftee behind it — a stray item the server
+ * should never send — has no budget line and no `list_count`, so its rows
+ * name their list and its heading is the list's name, the one true thing in
+ * hand.
  */
-function groupByList(items: ShoppingItem[]) {
-  const groups = new Map<number, { listId: number; listName: string; items: ShoppingItem[] }>();
-  for (const item of items) {
-    const group = groups.get(item.list_id);
-    if (group) {
-      group.items.push(item);
-    } else {
-      groups.set(item.list_id, {
-        listId: item.list_id,
-        listName: item.list_name,
-        items: [item],
-      });
-    }
-  }
-  return [...groups.values()];
+function GifteeCard({
+  group,
+  giftees,
+  overall,
+  scope,
+  onChanged,
+}: {
+  group: GifteeGroup;
+  giftees: Giftee[];
+  overall: BudgetRollup;
+  scope: ShoppingScope;
+  onChanged: (listId: number) => void;
+}) {
+  const giftee = group.giftee;
+  const heading = giftee ? gifteeLabel(giftee, giftees) : group.items[0].list_name;
+  const showList = giftee ? giftee.list_count > 1 : true;
+
+  return (
+    <div className="overflow-hidden rounded-lg bg-white shadow">
+      <div className="border-b border-gray-200 bg-gray-50 px-4 py-2">
+        <h3 className="text-sm font-semibold text-gray-700">{heading}</h3>
+        {giftee && (
+          <div className="mt-1">
+            <GifteeBudgetLine giftee={giftee} overall={overall} scope={scope} />
+          </div>
+        )}
+      </div>
+      {group.items.length === 0 ? (
+        <p className="px-4 py-3 text-sm text-gray-400">
+          Nothing claimed for {giftee?.name ?? "them"} yet.
+        </p>
+      ) : (
+        <ul className="divide-y divide-gray-100">
+          {group.items.map((item) => (
+            <ShoppingRow
+              key={item.claim_id}
+              item={item}
+              showList={showList}
+              onChanged={() => onChanged(item.list_id)}
+            />
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 /**
@@ -139,7 +177,15 @@ function groupByList(items: ShoppingItem[]) {
  *   `POST /purchase`, which re-stamps `purchased_at` to today and would walk
  *   the purchase across an occasion boundary to fix a typo.
  */
-function ShoppingRow({ item, onChanged }: { item: ShoppingItem; onChanged: () => void }) {
+function ShoppingRow({
+  item,
+  showList,
+  onChanged,
+}: {
+  item: ShoppingItem;
+  showList: boolean;
+  onChanged: () => void;
+}) {
   const isPurchased = item.purchased_at !== null;
   const [prompting, setPrompting] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -258,6 +304,10 @@ function ShoppingRow({ item, onChanged }: { item: ShoppingItem; onChanged: () =>
             )}
             {/* The owner's asking price, never the claimer's spend. */}
             {priceText && <span className="text-xs text-gray-400">listed at {priceText}</span>}
+            {/* Only when this giftee has more than one list in scope: a
+                second "Christmas list" for the same person is the case the
+                name is for (decision 9). */}
+            {showList && <span className="text-xs text-gray-400">from {item.list_name}</span>}
           </div>
 
           {item.description && (
