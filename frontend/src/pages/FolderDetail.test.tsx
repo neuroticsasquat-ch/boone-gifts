@@ -347,7 +347,12 @@ describe("FolderDetail", () => {
             bought_count: 0,
             total_count: 1,
             unpriced_count: 0,
+            allocated: "0.00",
+            unallocated: null,
+            target: null,
+            allocation_count: 0,
           },
+          giftees: [],
           items: [
             {
               claim_id: 100,
@@ -358,6 +363,7 @@ describe("FolderDetail", () => {
               price: "49.99",
               list_id: 10,
               list_name: "My Wishlist",
+              giftee_key: "owner:2",
               purchased_at: null,
               amount_paid: null,
             },
@@ -608,7 +614,11 @@ describe("FolderDetail — the tab is a place", () => {
       http.get(`${API}/lists`, () => HttpResponse.json([])),
       http.get(`${API}/folders/1/shopping`, () =>
         HttpResponse.json({
-          budget: { amount: null, spent: "0.00", remaining: null, bought_count: 0, total_count: 0, unpriced_count: 0 },
+          budget: {
+            amount: null, spent: "0.00", remaining: null, bought_count: 0, total_count: 0,
+            unpriced_count: 0, allocated: "0.00", unallocated: null, target: null, allocation_count: 0,
+          },
+          giftees: [],
           items: [],
         })
       ),

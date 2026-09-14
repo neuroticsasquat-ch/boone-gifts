@@ -63,8 +63,9 @@ src/
     families.ts      # 13 functions — see "Families" below
     account.ts       # GET/PUT /account — the shared-account flag and its people
     occasions.ts     # A family's occasions: list, read, create, rename/archive,
-                     # the lists shared to one, its shopping payload, and the
-                     # caller's own budget for it (PUT/DELETE .../budget)
+                     # the lists shared to one, its shopping payload, the
+                     # caller's own budget for it (PUT/DELETE .../budget) and
+                     # their per-giftee budgets (.../giftees/{key}/budget)
     claims.ts        # updateClaim — PATCH /claims/{id}, the only way to correct
                      # a recorded amount without re-stamping the purchase
     connections.ts, shares.ts, folders.ts, invites.ts, users.ts, meta.ts
@@ -135,10 +136,13 @@ src/
     ListAttribution.tsx   # "from Jane" / "for Beth · kept by Tom" row lines
     MyShopping.tsx        # The My shopping tab both the occasion and folder
                           # pages mount — the viewer's own claims, grouped by
-                          # list, with the purchase tick and what they paid
+                          # giftee (one card per person in scope, empty or
+                          # not), with the purchase tick and what they paid
     BudgetLine.tsx        # The line at the top of that tab — the viewer's own
                           # spend against their own target, set/edited/cleared
-                          # inline, always disclosing unpriced purchases
+                          # inline, always disclosing unpriced purchases — plus
+                          # the BudgetEditor it and GifteeBudgetLine (one per
+                          # giftee card) both mount
     TabBar.tsx            # The Lists · My shopping bar those two pages share
     ListForFields.tsx     # "Who is this list for?" — the shared-account picker,
                           # falling back to RecipientFields on a normal account
@@ -178,7 +182,9 @@ src/
                      # request-failure.ts — failureMessage, the one place a
                      # transport or server failure becomes text, and null for
                      # "the server answered and rejected you";
-                     # shopping.ts — ShoppingScope and the shoppingKey cache key
+                     # shopping.ts — ShoppingScope and the shoppingKey cache key;
+                     # giftees.ts — how My shopping groups by giftee and labels
+                     # each group, and the "sum of N people's budgets" clause
   types/index.ts     # Types mirroring the backend Pydantic schemas
   test/
     setup.ts         # Vitest setup (Testing Library + MSW)
@@ -410,10 +416,25 @@ because the two reads (`GET /occasions/{id}/shopping`, `GET /folders/{id}/shoppi
 `ShoppingItem[]` from the same backend select and differ only in what bounds the set: an occasion the
 claims are *filed under*, or a folder the claimed-from lists are *in*. Keyed `["shopping", kind, id]`.
 
+**Grouped by giftee since NEU-1326** — the person a list is *for*, which the server derives from the
+list and hands over as an opaque key on `giftees[]` and on each item's `giftee_key`. One card per
+entry of `giftees[]`, in array order (the server sorts: people with a row first, then the rest, by
+name), headed by the giftee's label, with that giftee's own budget line beneath the heading and the
+viewer's rows beneath that. `lib/giftees.ts` holds the rules:
+- `groupByGiftee` never drops a row: an item whose key matches no giftee gets a group of its own
+  rather than vanishing from a section that claims to hold everything.
+- **Every giftee in scope gets a card, empty or not** — "Nothing claimed for Gran yet." — because
+  that is what lets a person be budgeted before anything is claimed for them. The scope-level
+  empty state renders only when `giftees` *and* `items` are both empty.
+- `gifteeLabel` is the name alone unless another giftee in scope shares it (case-insensitive), in
+  which case the keeper is added in the words `attribution.ts` already uses — "Gran · Tom's
+  account", "Beth · kept by Tom". Two owners with one name stay identical.
+- A row shows a muted `from {list name}` only when its giftee's `list_count` is greater than one.
+
 - **Only ever the viewer's own claims.** The endpoints take no parameter that could widen it, so this
   is structural rather than a filter applied here (`CONTEXT.md` rule 2).
-- **Grouped on `list_id`, never on `list_name`** — two lists routinely share a name and grouping on
-  it would silently merge them under one heading. Order comes from the backend and is stable.
+- **Grouped on `giftee_key`, never on a name** — two people routinely share a name, and two lists
+  for one person are one group. Order comes from the backend and is stable.
 - **Two amount paths, deliberately not one.** Ticking an unbought claim reveals the same prompt list
   detail's `PurchaseControl` does — Save and Skip commit, the asking price is a "listed at $39" hint
   beside the field and never inside it. A claim that is *already* bought is corrected in place
@@ -426,13 +447,15 @@ claims are *filed under*, or a folder the claimed-from lists are *in*. Keyed `["
 - An archived occasion still serves its shopping payload — archiving takes an occasion out of the
   default views and does nothing else.
 - A change here invalidates `["list", listId]` too, because it is the same claim list detail renders.
-- **The read is a payload, not a list.** `GET .../shopping` returns `{ budget, items }` — the rollup
-  travels *with* the claims because the two are one screen and must agree, and a budget line fetched
-  behind a second request can render a total the list beneath it contradicts. A purchase moves
-  `spent` as well as the row, so one invalidation of that key refreshes both.
-- **The cache key is `lib/shopping.ts`'s `shoppingKey(scope)`, not a literal.** Two components read
-  and write the entry (`MyShopping` the whole payload, `BudgetLine` its budget half), and a key
-  restated in a second file is a cache bug waiting to happen. `ShoppingScope` lives there with it —
+- **The read is a payload, not a list.** `GET .../shopping` returns `{ budget, giftees, items }` —
+  the rollup and the giftees travel *with* the claims because the three are one screen and must
+  agree, and a budget line fetched behind a second request can render a total the list beneath it
+  contradicts. A purchase moves `spent` as well as the row, so one invalidation of that key
+  refreshes all of it.
+- **The cache key is `lib/shopping.ts`'s `shoppingKey(scope)`, not a literal.** Three components
+  read and write the entry (`MyShopping` the whole payload, `BudgetLine` its budget half,
+  `GifteeBudgetLine` the budget and giftees halves), and a key restated in a second file is a
+  cache bug waiting to happen. `ShoppingScope` lives there with it —
   out of the component modules so Fast Refresh keeps working.
 
 ## Budget line
@@ -464,11 +487,34 @@ $142 of $200 spent · $58 left            [ Edit budget ]
 - **Both writes return the recomputed rollup and it is written into the cache**, so the line is one
   round trip rather than a write followed by a re-read. A *failed* write re-reads instead: the line
   may be asserting a budget someone already removed elsewhere.
-- The editor seeds from the target already set, never from the spend so far.
+- The editor seeds from the target already set, never from the spend so far — and never from what
+  is left to allocate, which a giftee's field may *show* as a placeholder but never holds.
 - **Every clause is built from a formatted value and dropped when that value will not format**
   (ADR 0003). Nothing falls back to the raw wire string under a bare `$`, and nothing substitutes a
   zero. An overspend moves the sign into the word — the leading `-` is dropped and `$12.00 over`
   printed — rather than round-tripping the amount through `Number`.
+
+**Giftee budgets (NEU-1326).** `BudgetLine.tsx` is now three things: `BudgetEditor`, the field and
+its Save / Cancel / Remove and failure behaviour, parameterised by the two writes it makes and
+what to do with what they return; `BudgetLine`, the overall's line, mounting it with the overall
+endpoints and writing the returned rollup into the cache; and `GifteeBudgetLine`, one per giftee
+card, mounting it with `.../giftees/{key}/budget` and writing the returned `BudgetBlock` — both
+`budget` and `giftees`, leaving `items` alone — because a giftee write moves that giftee's line
+*and* the overall's allocation at once. Its field is labelled `Budget for {name}` with id
+`budget-amount-{key}`, so several editors can be open at once.
+- **The money line measures against `target`, not `amount`.** With no overall set and people
+  budgeted, `target` is their sum and the line reads exactly as a set budget would; the tally then
+  says `budget is the sum of 3 people's budgets`. The Set / Edit button still reads `amount === null`,
+  so a derived target offers **Set budget**, and setting one replaces the derived figure.
+- **The tally's allocation clause**, after the bought and unpriced clauses: `$150.00 of $200.00
+  allocated to people` while the allocation fits; `$230.00 allocated · $30.00 over your budget` when
+  it does not — stated, never refused, the same rule as an overspend; nothing when nothing is
+  allocated, which is also every giftee's own line.
+- **An unbudgeted giftee is told what is left.** With an overall set and no budget of their own, the
+  giftee's tally ends `$50.00 of your $200.00 not yet allocated` and the field carries that figure
+  as its placeholder — or `$30.00 over your budget` and no placeholder once the allocation is
+  already over. With no overall set, neither appears. The placeholder is never the saved value:
+  saving with the field empty saves nothing.
 
 ## Recipients
 

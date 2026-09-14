@@ -247,7 +247,11 @@ function renderOccasionDetail() {
     ),
     http.get(`${API}/occasions/3/lists`, () => HttpResponse.json([])),
     http.get(`${API}/occasions/3/shopping`, () =>
-      HttpResponse.json({ budget: { amount: null, spent: "0.00", remaining: null }, items: [] })
+      HttpResponse.json({
+        budget: { amount: null, spent: "0.00", remaining: null, target: null, allocated: "0.00" },
+        giftees: [],
+        items: [],
+      })
     ),
     http.get(`${API}/families/7`, () =>
       HttpResponse.json({
@@ -329,6 +333,7 @@ function renderBudgetLine() {
         budget={{
           amount: "200.00", spent: "142.00", remaining: "58.00",
           bought_count: 3, total_count: 7, unpriced_count: 0,
+          allocated: "0.00", unallocated: "200.00", target: "200.00", allocation_count: 0,
         }}
         scope={{ kind: "occasion", id: 3 }}
       />

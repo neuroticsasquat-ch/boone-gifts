@@ -24,9 +24,10 @@ architecture live in [`AGENTS.md`](AGENTS.md); this file is only about what the 
 | **Occasion strip** | The row of occasion cards at the top of `/lists`: every non-archived occasion in every family I belong to, most recently active first, four at a time. Absent entirely when I have none. Carries no money | `pages/lists/OccasionStrip.tsx` |
 | **Archive prompt** | A standing question about one occasion that has gone quiet: archive it, or not yet. Asked of the occasion's creator or an organizer of its family, in the banner that already carries connection requests and family invites. Names the occasion and its family and nothing else. "Not yet" is a dated snooze, not a permanent dismissal | `components/ActionableBanner.tsx` |
 | **Claim** / "I'll get this" | My private intent to buy a gift. Never visible to the list's owner | `pages/list-detail/GiftsTab.tsx` |
-| **My shopping** | Everything *I* have claimed within one occasion or one folder — what I still have to buy, what I bought, and what I paid. Never anyone else's, in any aggregate | `components/MyShopping.tsx` |
+| **My shopping** | Everything *I* have claimed within one occasion or one folder — what I still have to buy, what I bought, and what I paid — grouped by **giftee**, with a group for every giftee in scope even when I have claimed nothing for them yet. Never anyone else's, in any aggregate | `components/MyShopping.tsx` |
+| **Giftee** | The person a shopping group is about: who a list is *for* — its owner, an account person on a shared login, or someone with no account ("for Beth"). Two lists for one person are one group. Named by the person alone, with the keeper added only when two groups would otherwise read the same | `lib/giftees.ts`, `components/MyShopping.tsx` |
 | **Account person** | A named person on a shared login; a list can be marked as being for one | `components/ListForFields.tsx` |
-| **Budget** | A spending target *I* set for myself against one occasion or one folder, and what I have spent toward it. Private to me — organizers name an occasion and never see any money | `components/BudgetLine.tsx` |
+| **Budget** | A spending target *I* set for myself against one occasion or one folder, and what I have spent toward it. Private to me — organizers name an occasion and never see any money. May be split into a **giftee budget** per person; an overall I have not set reads as the sum of the split, and says so | `components/BudgetLine.tsx` |
 
 Words the UI must **not** use: "collection" (rejected outright — it reads too close to "connection"),
 "occasion" for a folder (the word is reserved for a family's shared occasion — see
@@ -94,7 +95,11 @@ behaviour).
    budget to read. A purchase recorded with no amount counts as bought and never toward the money
    total, so the count of them is shown whenever it is non-zero — an understated total must read as
    an understatement, never as fact. Going over is stated plainly, not as an error: a budget is a
-   target, not a limit.
+   target, not a limit. A budget may be split per giftee, and the split is as private and as
+   honest as the whole: allocating never writes the overall, an overall left unset reads as the
+   sum of the split and is labelled as derived, allocating more than the overall is stated rather
+   than refused, and a giftee with no budget yet is told what is left to allocate without having
+   it typed in for them.
 
 6. **A share points at an occasion, not a family.** A family with no active occasion is listed and
    disabled with the reason, never hidden; a family with several is not shared to until one is

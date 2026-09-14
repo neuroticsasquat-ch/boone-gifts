@@ -6,7 +6,7 @@ import { http, HttpResponse } from "msw";
 import { server } from "../test/mocks/server";
 import { MyShopping } from "./MyShopping";
 import type { ShoppingScope } from "../lib/shopping";
-import type { BudgetRollup, ShoppingItem } from "../types";
+import type { BudgetRollup, Giftee, ShoppingItem } from "../types";
 
 const API = "https://boone-gifts-api.localhost";
 
@@ -20,6 +20,7 @@ function item(overrides: Partial<ShoppingItem> = {}): ShoppingItem {
     price: "39.00",
     list_id: 10,
     list_name: "Jane's Wishlist",
+    giftee_key: "owner:1",
     purchased_at: null,
     amount_paid: null,
     ...overrides,
@@ -29,23 +30,47 @@ function item(overrides: Partial<ShoppingItem> = {}): ShoppingItem {
 /** The rollup the tab's budget line reads. Defaulted to "no budget set" so a
  *  test about claims says nothing about money it does not care about. */
 function budget(overrides: Partial<BudgetRollup> = {}): BudgetRollup {
+  const amount = overrides.amount === undefined ? null : overrides.amount;
   return {
-    amount: null,
+    amount,
     spent: "0.00",
     remaining: null,
     bought_count: 0,
     total_count: 1,
     unpriced_count: 0,
+    allocated: "0.00",
+    unallocated: amount,
+    target: amount,
+    allocation_count: 0,
+    ...overrides,
+  };
+}
+
+/** The giftee the default item belongs to — Jane, whose one list it came from. */
+function giftee(overrides: Partial<Giftee> = {}): Giftee {
+  return {
+    key: "owner:1",
+    kind: "owner",
+    name: "Jane",
+    keeper: null,
+    list_count: 1,
+    budget: budget(),
     ...overrides,
   };
 }
 
 function renderShopping({
   items = [item()],
+  giftees = [giftee()],
   scope = { kind: "occasion", id: 3 } as ShoppingScope,
   rollup = budget(),
-}: { items?: ShoppingItem[]; scope?: ShoppingScope; rollup?: BudgetRollup } = {}) {
-  const payload = { budget: rollup, items };
+}: {
+  items?: ShoppingItem[];
+  giftees?: Giftee[];
+  scope?: ShoppingScope;
+  rollup?: BudgetRollup;
+} = {}) {
+  const payload = { budget: rollup, giftees, items };
   server.use(
     http.get(`${API}/occasions/3/shopping`, () => HttpResponse.json(payload)),
     http.get(`${API}/folders/5/shopping`, () => HttpResponse.json(payload)),
@@ -59,45 +84,98 @@ function renderShopping({
   );
 }
 
-/** The card a list's claims sit in, found by its heading. */
-function groupFor(listName: string) {
-  return screen.getByRole("heading", { name: listName }).closest("div")!.parentElement!;
+/** The card a giftee's claims sit in, found by its heading. */
+function groupFor(label: string) {
+  return screen.getByRole("heading", { name: label }).closest("div")!.parentElement!;
 }
 
 describe("MyShopping", () => {
-  it("groups the viewer's claims under the list each came from", async () => {
+  // Criterion 17: one card per giftee, in array order, headed by the label,
+  // with that giftee's budget line and their rows beneath.
+  it("groups the viewer's claims under the person each list is for", async () => {
     renderShopping({
+      giftees: [
+        giftee({ key: "absent:2:R3Jhbg", kind: "absent", name: "Gran", keeper: "Tom" }),
+        giftee({ key: "owner:1", name: "Jane" }),
+      ],
       items: [
-        item({ claim_id: 100, gift_id: 20, name: "Cast iron skillet" }),
-        item({ claim_id: 101, gift_id: 21, name: "Running shoes" }),
+        item({ claim_id: 100, gift_id: 20, name: "Cast iron skillet", giftee_key: "owner:1" }),
+        item({ claim_id: 101, gift_id: 21, name: "Running shoes", giftee_key: "owner:1" }),
         item({
           claim_id: 102,
           gift_id: 30,
           name: "Puzzle",
           list_id: 11,
           list_name: "Gran's List",
+          giftee_key: "absent:2:R3Jhbg",
         }),
       ],
     });
 
-    expect(await screen.findByRole("heading", { name: "Jane's Wishlist" })).toBeInTheDocument();
-    expect(within(groupFor("Jane's Wishlist")).getAllByRole("listitem")).toHaveLength(2);
-    expect(within(groupFor("Gran's List")).getAllByRole("listitem")).toHaveLength(1);
+    expect(await screen.findByRole("heading", { name: "Jane" })).toBeInTheDocument();
+    expect(screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent)).toEqual([
+      "Gran",
+      "Jane",
+    ]);
+    expect(within(groupFor("Jane")).getAllByRole("listitem")).toHaveLength(2);
+    expect(within(groupFor("Gran")).getAllByRole("listitem")).toHaveLength(1);
+    expect(within(groupFor("Jane")).getByText("$0.00 spent · no budget set")).toBeInTheDocument();
   });
 
-  // Two lists routinely share a name — one "Christmas list" per person is the
-  // ordinary case — and grouping on the name would merge them.
-  it("keeps two lists with the same name apart", async () => {
+  // Criterion 18: a giftee with nothing claimed yet is still a card — that is
+  // what lets them be budgeted — and the scope-level empty state is only for
+  // a scope with nobody in it.
+  it("renders an empty card for a giftee nothing is claimed for yet", async () => {
     renderShopping({
+      giftees: [giftee({ key: "owner:2", name: "Zed" }), giftee({ key: "owner:1", name: "Jane" })],
+      items: [item({ giftee_key: "owner:1" })],
+    });
+
+    expect(await screen.findByText("Nothing claimed for Zed yet.")).toBeInTheDocument();
+    expect(within(groupFor("Zed")).getByRole("button", { name: "Set budget" })).toBeInTheDocument();
+    expect(within(groupFor("Zed")).queryByRole("listitem")).not.toBeInTheDocument();
+    expect(screen.queryByText(/You haven't claimed anything/)).not.toBeInTheDocument();
+  });
+
+  // Criterion 20: a row names its list only when its giftee has more than one.
+  it("names a row's list only when the giftee has more than one list", async () => {
+    renderShopping({
+      giftees: [giftee({ list_count: 2 })],
       items: [
         item({ claim_id: 100, list_id: 10, list_name: "Christmas list" }),
-        item({ claim_id: 101, gift_id: 21, list_id: 11, list_name: "Christmas list" }),
+        item({ claim_id: 101, gift_id: 21, list_id: 11, list_name: "Stocking list" }),
       ],
     });
 
-    await waitFor(() =>
-      expect(screen.getAllByRole("heading", { name: "Christmas list" })).toHaveLength(2),
-    );
+    expect(await screen.findByText("from Christmas list")).toBeInTheDocument();
+    expect(screen.getByText("from Stocking list")).toBeInTheDocument();
+  });
+
+  it("leaves the list unnamed on the common one-list giftee", async () => {
+    renderShopping();
+
+    expect(await screen.findByText("Cast iron skillet")).toBeInTheDocument();
+    expect(screen.queryByText(/^from /)).not.toBeInTheDocument();
+  });
+
+  // Criterion 19: two giftees sharing a name are told apart by their keeper, in
+  // the words the app already uses; a unique name renders bare.
+  it("keeps two giftees with the same name apart by naming the keeper", async () => {
+    renderShopping({
+      giftees: [
+        giftee({ key: "absent:1:QmV0aA", kind: "absent", name: "Beth", keeper: "Tom" }),
+        giftee({ key: "absent:2:QmV0aA", kind: "absent", name: "Beth", keeper: "Jane" }),
+        giftee({ key: "person:9", kind: "person", name: "Gran", keeper: "Tom" }),
+      ],
+      items: [
+        item({ claim_id: 100, list_id: 10, giftee_key: "absent:1:QmV0aA" }),
+        item({ claim_id: 101, gift_id: 21, list_id: 11, giftee_key: "absent:2:QmV0aA" }),
+      ],
+    });
+
+    expect(await screen.findByRole("heading", { name: "Beth · kept by Tom" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Beth · kept by Jane" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Gran" })).toBeInTheDocument();
   });
 
   it("links a gift that has a url and leaves one that doesn't as plain text", async () => {
@@ -146,14 +224,14 @@ describe("MyShopping", () => {
   // mounts it, above the groups, from the same payload the claims came in.
   it("carries the budget line above the claims", async () => {
     renderShopping({
-      rollup: {
+      rollup: budget({
         amount: "200.00",
         spent: "142.00",
         remaining: "58.00",
         bought_count: 3,
         total_count: 7,
         unpriced_count: 2,
-      },
+      }),
     });
 
     expect(await screen.findByText("$142.00 of $200.00 spent · $58.00 left")).toBeInTheDocument();
@@ -165,7 +243,7 @@ describe("MyShopping", () => {
   // A budget is worth setting before anything is claimed, so the line outlives
   // the empty state rather than being hidden behind it.
   it("still offers a budget when nothing is claimed yet", async () => {
-    renderShopping({ items: [], rollup: budget({ total_count: 0 }) });
+    renderShopping({ items: [], giftees: [], rollup: budget({ total_count: 0 }) });
 
     expect(await screen.findByRole("button", { name: "Set budget" })).toBeInTheDocument();
   });
@@ -174,21 +252,16 @@ describe("MyShopping", () => {
   // second read of the payload.
   it("shows a saved budget without re-reading the tab", async () => {
     let reads = 0;
-    const payload = { budget: budget({ spent: "142.00" }), items: [item()] };
+    const payload = { budget: budget({ spent: "142.00" }), giftees: [giftee()], items: [item()] };
     server.use(
       http.get(`${API}/occasions/3/shopping`, () => {
         reads += 1;
         return HttpResponse.json(payload);
       }),
       http.put(`${API}/occasions/3/budget`, () =>
-        HttpResponse.json({
-          amount: "200.00",
-          spent: "142.00",
-          remaining: "58.00",
-          bought_count: 3,
-          total_count: 7,
-          unpriced_count: 0,
-        }),
+        HttpResponse.json(
+          budget({ amount: "200.00", spent: "142.00", remaining: "58.00", bought_count: 3, total_count: 7 }),
+        ),
       ),
     );
     render(
@@ -199,7 +272,8 @@ describe("MyShopping", () => {
       </QueryClientProvider>,
     );
 
-    await userEvent.click(await screen.findByRole("button", { name: "Set budget" }));
+    // The overall's control is the first on the page; Jane's card carries its own.
+    await userEvent.click((await screen.findAllByRole("button", { name: "Set budget" }))[0]);
     await userEvent.type(screen.getByLabelText("Budget"), "200");
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
 
@@ -208,7 +282,7 @@ describe("MyShopping", () => {
   });
 
   it("says nothing is here yet, in the words of the scope", async () => {
-    renderShopping({ items: [] });
+    renderShopping({ items: [], giftees: [] });
     expect(
       await screen.findByText("You haven't claimed anything for this occasion yet."),
     ).toBeInTheDocument();
@@ -427,5 +501,90 @@ describe("MyShopping", () => {
       expect(patched).not.toHaveBeenCalled();
       expect(screen.getByText("you paid $42.00")).toBeInTheDocument();
     });
+  });
+});
+
+describe("MyShopping giftee budgets", () => {
+  // Criterion 21: the write hits the giftee endpoint on the tab's scope, and
+  // the returned block moves that giftee's line *and* the overall's tally
+  // without a second read of the payload.
+  it("sets a giftee budget and updates both lines without re-reading the tab", async () => {
+    let reads = 0;
+    let body: unknown;
+    const payload = { budget: budget(), giftees: [giftee()], items: [item()] };
+    server.use(
+      http.get(`${API}/occasions/3/shopping`, () => {
+        reads += 1;
+        return HttpResponse.json(payload);
+      }),
+      http.put(`${API}/occasions/3/giftees/owner:1/budget`, async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json({
+          budget: budget({ target: "150.00", remaining: "150.00", allocated: "150.00", allocation_count: 1 }),
+          giftees: [giftee({ budget: budget({ amount: "150.00", remaining: "150.00" }) })],
+        });
+      }),
+    );
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <MyShopping scope={{ kind: "occasion", id: 3 }} />
+      </QueryClientProvider>,
+    );
+
+    await screen.findByRole("heading", { name: "Jane" });
+    await userEvent.click(within(groupFor("Jane")).getByRole("button", { name: "Set budget" }));
+    await userEvent.type(screen.getByLabelText("Budget for Jane"), "150");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByText("$0.00 of $150.00 spent · $150.00 left", { selector: "div.rounded-lg.bg-white.px-4 p" })).toBeInTheDocument();
+    expect(
+      screen.getByText("0 of 1 bought · budget is the sum of 1 person's budget"),
+    ).toBeInTheDocument();
+    expect(
+      within(groupFor("Jane")).getByText("$0.00 of $150.00 spent · $150.00 left"),
+    ).toBeInTheDocument();
+    expect(body).toEqual({ amount: "150" });
+    expect(reads).toBe(1);
+  });
+
+  it("removes a giftee budget through the giftee endpoint", async () => {
+    let called = false;
+    renderShopping({
+      giftees: [giftee({ budget: budget({ amount: "150.00", remaining: "150.00" }) })],
+      rollup: budget({ target: "150.00", remaining: "150.00", allocated: "150.00", allocation_count: 1 }),
+    });
+    server.use(
+      http.delete(`${API}/occasions/3/giftees/owner:1/budget`, () => {
+        called = true;
+        return HttpResponse.json({ budget: budget(), giftees: [giftee()] });
+      }),
+    );
+
+    await screen.findByRole("heading", { name: "Jane" });
+    await userEvent.click(within(groupFor("Jane")).getByRole("button", { name: "Edit budget" }));
+    await userEvent.click(screen.getByRole("button", { name: "Remove budget" }));
+
+    await waitFor(() => expect(called).toBe(true));
+    expect(await screen.findByText("0 of 1 bought", { selector: "div.rounded-lg.bg-white.px-4 p" })).toBeInTheDocument();
+  });
+
+  it("writes a folder giftee's budget to the folder endpoint", async () => {
+    let called = false;
+    renderShopping({ scope: { kind: "folder", id: 5 } });
+    server.use(
+      http.put(`${API}/folders/5/giftees/owner:1/budget`, () => {
+        called = true;
+        return HttpResponse.json({ budget: budget(), giftees: [giftee()] });
+      }),
+    );
+
+    await screen.findByRole("heading", { name: "Jane" });
+    await userEvent.click(within(groupFor("Jane")).getByRole("button", { name: "Set budget" }));
+    await userEvent.type(screen.getByLabelText("Budget for Jane"), "60");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(called).toBe(true));
   });
 });

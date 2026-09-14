@@ -1,6 +1,7 @@
 import { apiClient } from "./client";
 import type {
   ArchivePrompt,
+  BudgetBlock,
   BudgetRollup,
   GiftList,
   Occasion,
@@ -129,6 +130,39 @@ export async function setOccasionBudget(id: number, amount: string): Promise<Bud
  */
 export async function clearOccasionBudget(id: number): Promise<BudgetRollup> {
   const response = await apiClient.delete<BudgetRollup>(`/occasions/${id}/budget`);
+  return response.data;
+}
+
+/**
+ * Set or replace **the caller's own** budget for one giftee in this occasion,
+ * and get the whole budget block back — that giftee's line and the overall's
+ * `allocated` / `target` move together, so one write answers with both.
+ *
+ * `gifteeKey` is the opaque key the payload handed out on `giftees[]`; it is
+ * already one URL segment and needs no escaping. A malformed key is a 400, a
+ * key for a giftee no longer in this occasion is a 404 (NEU-1326).
+ */
+export async function setOccasionGifteeBudget(
+  id: number,
+  gifteeKey: string,
+  amount: string,
+): Promise<BudgetBlock> {
+  const response = await apiClient.put<BudgetBlock>(
+    `/occasions/${id}/giftees/${gifteeKey}/budget`,
+    { amount },
+  );
+  return response.data;
+}
+
+/** Remove the caller's own budget for one giftee in this occasion and get the
+ *  block it leaves behind. 404 when there was none to clear. */
+export async function clearOccasionGifteeBudget(
+  id: number,
+  gifteeKey: string,
+): Promise<BudgetBlock> {
+  const response = await apiClient.delete<BudgetBlock>(
+    `/occasions/${id}/giftees/${gifteeKey}/budget`,
+  );
   return response.data;
 }
 

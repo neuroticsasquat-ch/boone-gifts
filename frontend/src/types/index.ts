@@ -372,6 +372,9 @@ export interface ShoppingItem {
   price: string | null;
   list_id: number;
   list_name: string;
+  /** Who the list is for, as the server minted it — opaque here. The tab groups
+   *  on it; every distinct key on `items` has an entry in `giftees` (NEU-1326). */
+  giftee_key: string;
   purchased_at: string | null;
   amount_paid: string | null;
 }
@@ -384,10 +387,19 @@ export interface ShoppingItem {
  * accounts, so there is nothing here that could be anyone else's
  * (`CONTEXT.md` rule 2).
  *
- * `amount` and `remaining` are null when no budget is set — that null is what
- * tells this app to offer *set* rather than *edit*, and the counts are worth
- * rendering either way. `remaining` may be negative: a budget is a target, not
- * a limit, and an overspend is a state to show plainly rather than an error.
+ * `amount` is the target the viewer *set*, or null — and that null is what
+ * tells this app to offer *set* rather than *edit*; the counts are worth
+ * rendering either way. `target` is what the money line measures against:
+ * `amount` when set, else the sum of the viewer's giftee budgets when at least
+ * one exists (`allocation_count > 0`), else null. `remaining` is
+ * `target − spent`, null when `target` is. `allocated` is that sum (`"0.00"`
+ * when none) and `unallocated` is `amount − allocated`, null when `amount` is.
+ * Both `remaining` and `unallocated` may be negative: a budget is a target, not
+ * a limit, and an overspend or an over-allocation is a state to show plainly
+ * rather than an error (NEU-1326).
+ *
+ * A giftee's own rollup is the same shape, as a leaf: `allocated` is `"0.00"`,
+ * `unallocated` null, `target` its `amount`, `allocation_count` 0.
  *
  * **The money total discloses its own incompleteness.** A purchase with no
  * amount recorded counts toward `bought_count` and `unpriced_count` and never
@@ -401,17 +413,50 @@ export interface BudgetRollup {
   bought_count: number;
   total_count: number;
   unpriced_count: number;
+  allocated: string;
+  unallocated: string | null;
+  target: string | null;
+  allocation_count: number;
 }
 
 /**
- * A shopping tab, whole: the viewer's claims and the budget they count against.
+ * One person a shopping tab groups by: who a list in scope is *for* — its
+ * owner, an account person on a shared login, or someone with no account —
+ * derived from the list by the server and never its own row (NEU-1326).
+ *
+ * `key` is opaque: received here and on each item's `giftee_key`, sent back on
+ * a write, never built or read inside. `keeper` is the account the list is kept
+ * on for a `person` or `absent` giftee, null for an `owner`. `list_count` is
+ * how many lists in scope resolve to this giftee — a row names its list only
+ * when that is more than one. `budget` is this giftee's own rollup, counted
+ * over that giftee's lists and the viewer's own claims alone.
+ */
+export interface Giftee {
+  key: string;
+  kind: "owner" | "person" | "absent";
+  name: string;
+  keeper: string | null;
+  list_count: number;
+  budget: BudgetRollup;
+}
+
+/** The overall rollup and every giftee in scope with theirs — what a giftee
+ *  budget write answers with, because it moves that giftee's line *and* the
+ *  overall's `allocated` / `target` at once. */
+export interface BudgetBlock {
+  budget: BudgetRollup;
+  giftees: Giftee[];
+}
+
+/**
+ * A shopping tab, whole: the viewer's claims, the giftees they are grouped by,
+ * and the budgets they count against.
  *
  * The rollup travels *with* the items rather than behind a second endpoint
  * because the two are one screen and must agree — a budget line fetched
  * separately can render a total the list beneath it contradicts.
  */
-export interface ShoppingPayload {
-  budget: BudgetRollup;
+export interface ShoppingPayload extends BudgetBlock {
   items: ShoppingItem[];
 }
 
