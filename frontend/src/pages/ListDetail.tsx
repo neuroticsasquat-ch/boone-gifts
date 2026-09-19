@@ -14,7 +14,7 @@ import toast from "react-hot-toast";
 import { Spinner } from "../components/Spinner";
 import { useNumericId } from "../components/NumericId";
 import { BackControl, BACK_TO_LISTS } from "../components/BackControl";
-import { HeaderMenu } from "../components/HeaderMenu";
+import { ActionBar } from "../components/ActionBar";
 import { ConfirmDialog, type ConfirmAction } from "../components/ConfirmDialog";
 import { ListSharingModal } from "../components/ListSharingModal";
 import { GiftsTab } from "./list-detail/GiftsTab";
@@ -229,18 +229,31 @@ function OwnerHeader({
             : undefined
         }
         isArchived={list.is_archived}
-        sharing={
-          <SharingSummary listId={listId} onChange={onChangeSharing} />
-        }
+        sharing={<SharingSummary listId={listId} />}
         actions={
-          <HeaderMenu
-            ariaLabel="List actions"
-            pending={archiveMutation.isPending || deleteMutation.isPending}
+          <ActionBar
+            collapseOnMobile
             items={[
+              // First, ahead of the folder action: it is the most-reached thing
+              // an owner does to a list, and this is the surface that just
+              // pushed it furthest away (ADR 0010). Danger stays last whatever
+              // order this array is in — `ActionBar` sees to that.
+              { label: SHARING, onClick: onChangeSharing },
               { label: ADD_TO_FOLDER, onClick: onAddToFolder },
               { label: "Edit", onClick: onEdit },
-              { label: list.is_archived ? "Unarchive" : "Archive", onClick: () => archiveMutation.mutate() },
-              { label: "Delete", onClick: () => setConfirmingDelete(true), danger: true, separatorBefore: true },
+              {
+                label: list.is_archived ? "Unarchive" : "Archive",
+                onClick: () => archiveMutation.mutate(),
+                pending: archiveMutation.isPending,
+                pendingLabel: list.is_archived ? "Unarchiving…" : "Archiving…",
+              },
+              {
+                label: "Delete",
+                onClick: () => setConfirmingDelete(true),
+                tone: "danger",
+                pending: deleteMutation.isPending,
+                pendingLabel: "Deleting…",
+              },
             ]}
           />
         }
@@ -266,6 +279,15 @@ function OwnerHeader({
  */
 const ADD_TO_FOLDER = "Add to a folder…";
 
+/**
+ * The label has to name what it opens, now that it no longer sits at the end of
+ * the sentence "Shared with …". The trailing ellipsis follows a noun that says
+ * what it does, the way `Add to a folder…` does — not a glyph standing in for
+ * something unnamed, which is what rule 12 is against. `CreateList`'s `Choose…`
+ * is a different surface with a different default and keeps its own word.
+ */
+const SHARING = "Sharing…";
+
 const DELETE_ACTIONS: ConfirmAction[] = [{ id: "delete", label: "Delete", tone: "danger" }];
 
 function ViewerHeader({
@@ -288,26 +310,32 @@ function ViewerHeader({
     ) : (
       label
     );
-  const ownerLink = linkToOwner(list.owner_name);
+
+  // Both halves come from the attribution rather than from `owner_name`, so a
+  // blank owner drops the half it cannot fill instead of trailing a preposition
+  // — "for Beth", never "for Beth · kept by " (NEU-1324). `undefined` when there
+  // is nothing at all to say; `ListHeader` renders no line for it.
+  let subtitle;
+  if (attribution === null) {
+    subtitle = undefined;
+  } else if (attribution.kind !== "absent") {
+    subtitle = <>from {linkToOwner(attribution.subject)}</>;
+  } else if (attribution.keeper === null) {
+    subtitle = <>for {attribution.subject}</>;
+  } else {
+    subtitle = <>for {attribution.subject} &middot; kept by {linkToOwner(attribution.keeper)}</>;
+  }
 
   return (
     <ListHeader
       name={list.name}
       description={list.description}
-      subtitle={
-        attribution.kind === "absent" ? (
-          <>for {attribution.subject} &middot; kept by {ownerLink}</>
-        ) : (
-          <>from {linkToOwner(attribution.subject)}</>
-        )
-      }
+      subtitle={subtitle}
       isArchived={list.is_archived}
-      // No owner controls, but the menu itself stays: filing someone else's list
-      // under a folder of your own is the main use of the feature, and this
-      // is a viewer's only way to reach it.
-      actions={
-        <HeaderMenu ariaLabel="List actions" items={[{ label: ADD_TO_FOLDER, onClick: onAddToFolder }]} />
-      }
+      // No owner controls, but the folder action stays: filing someone else's
+      // list under a folder of your own is the main use of the feature, and
+      // this is a viewer's only way to reach it.
+      actions={<ActionBar items={[{ label: ADD_TO_FOLDER, onClick: onAddToFolder }]} />}
     />
   );
 }

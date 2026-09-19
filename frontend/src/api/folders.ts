@@ -1,5 +1,5 @@
 import { apiClient } from "./client";
-import type { BudgetRollup, Folder, FolderDetail, ShoppingPayload } from "../types";
+import type { BudgetBlock, BudgetRollup, Folder, FolderDetail, ShoppingPayload } from "../types";
 
 export async function getFolders(archived?: boolean): Promise<Folder[]> {
   const params = archived !== undefined ? { archived: String(archived) } : undefined;
@@ -80,5 +80,33 @@ export async function setFolderBudget(folderId: number, amount: string): Promise
  */
 export async function clearFolderBudget(folderId: number): Promise<BudgetRollup> {
   const response = await apiClient.delete<BudgetRollup>(`/folders/${folderId}/budget`);
+  return response.data;
+}
+
+/**
+ * Set or replace **the caller's own** budget for one giftee in this folder, and
+ * get the whole budget block back — see `setOccasionGifteeBudget` (NEU-1326).
+ */
+export async function setFolderGifteeBudget(
+  folderId: number,
+  gifteeKey: string,
+  amount: string,
+): Promise<BudgetBlock> {
+  const response = await apiClient.put<BudgetBlock>(
+    `/folders/${folderId}/giftees/${gifteeKey}/budget`,
+    { amount },
+  );
+  return response.data;
+}
+
+/** Remove the caller's own budget for one giftee in this folder and get the
+ *  block it leaves behind. 404 when there was none to clear. */
+export async function clearFolderGifteeBudget(
+  folderId: number,
+  gifteeKey: string,
+): Promise<BudgetBlock> {
+  const response = await apiClient.delete<BudgetBlock>(
+    `/folders/${folderId}/giftees/${gifteeKey}/budget`,
+  );
   return response.data;
 }

@@ -1,10 +1,12 @@
 import { apiClient } from "./client";
 import type {
   ArchivePrompt,
+  BudgetBlock,
   BudgetRollup,
   GiftList,
   Occasion,
   OccasionCreated,
+  OccasionDetail,
   OccasionSummary,
   ShoppingPayload,
 } from "../types";
@@ -37,10 +39,15 @@ export async function getFamilyOccasions(
   return response.data;
 }
 
-/** One occasion. Any member of the owning family may read it; the backend
- *  answers 403 to everyone else and 404 when it does not exist. */
-export async function getOccasion(id: number): Promise<Occasion> {
-  const response = await apiClient.get<Occasion>(`/occasions/${id}`);
+/** One occasion, and the family that owns it. Any member of that family may
+ *  read it; the backend answers 403 to everyone else and 404 when it does not
+ *  exist.
+ *
+ *  The only occasion payload carrying `family_name` — `updateOccasion` below
+ *  returns the narrower `Occasion`, which is why its response must never be
+ *  written into the `["occasion", id]` cache entry (NEU-1321). */
+export async function getOccasion(id: number): Promise<OccasionDetail> {
+  const response = await apiClient.get<OccasionDetail>(`/occasions/${id}`);
   return response.data;
 }
 
@@ -66,6 +73,10 @@ export async function updateOccasion(
   id: number,
   data: { name?: string; is_archived?: boolean },
 ): Promise<Occasion> {
+  // Narrower than `getOccasion`'s `OccasionDetail` on purpose: callers
+  // invalidate `["occasion", id]` rather than writing this response into it,
+  // which would blank the page heading's family qualifier until the next
+  // refetch (NEU-1321 decision 5).
   const response = await apiClient.put<Occasion>(`/occasions/${id}`, data);
   return response.data;
 }
@@ -119,6 +130,39 @@ export async function setOccasionBudget(id: number, amount: string): Promise<Bud
  */
 export async function clearOccasionBudget(id: number): Promise<BudgetRollup> {
   const response = await apiClient.delete<BudgetRollup>(`/occasions/${id}/budget`);
+  return response.data;
+}
+
+/**
+ * Set or replace **the caller's own** budget for one giftee in this occasion,
+ * and get the whole budget block back — that giftee's line and the overall's
+ * `allocated` / `target` move together, so one write answers with both.
+ *
+ * `gifteeKey` is the opaque key the payload handed out on `giftees[]`; it is
+ * already one URL segment and needs no escaping. A malformed key is a 400, a
+ * key for a giftee no longer in this occasion is a 404 (NEU-1326).
+ */
+export async function setOccasionGifteeBudget(
+  id: number,
+  gifteeKey: string,
+  amount: string,
+): Promise<BudgetBlock> {
+  const response = await apiClient.put<BudgetBlock>(
+    `/occasions/${id}/giftees/${gifteeKey}/budget`,
+    { amount },
+  );
+  return response.data;
+}
+
+/** Remove the caller's own budget for one giftee in this occasion and get the
+ *  block it leaves behind. 404 when there was none to clear. */
+export async function clearOccasionGifteeBudget(
+  id: number,
+  gifteeKey: string,
+): Promise<BudgetBlock> {
+  const response = await apiClient.delete<BudgetBlock>(
+    `/occasions/${id}/giftees/${gifteeKey}/budget`,
+  );
   return response.data;
 }
 

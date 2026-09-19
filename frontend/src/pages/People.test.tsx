@@ -326,9 +326,9 @@ describe("People", () => {
     expect(screen.getByRole("link", { name: "Bob" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Alice" })).not.toBeInTheDocument();
 
-    // Families get the filter; they do not get a row menu
+    // Families get the filter; they do not get a row action
     expect(
-      screen.queryByRole("button", { name: "Actions for The Boones" })
+      screen.queryByRole("button", { name: "Remove The Boones" })
     ).not.toBeInTheDocument();
   });
 
@@ -394,7 +394,7 @@ describe("People", () => {
     expect(screen.queryByRole("textbox", { name: "Filter people" })).not.toBeInTheDocument();
   });
 
-  it("keeps Remove behind the row's menu, and cancelling removes nothing", async () => {
+  it("shows Remove on the row, and cancelling removes nothing", async () => {
     let deleted = false;
     mockPeople({ connections: [ALICE] });
     server.use(
@@ -407,10 +407,9 @@ describe("People", () => {
     renderPeople();
 
     await screen.findByRole("link", { name: "Alice" });
-    expect(screen.queryByRole("button", { name: "Remove" })).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "Actions for Alice" }));
-    await userEvent.click(screen.getByRole("button", { name: "Remove" }));
+    // The accessible name carries the person; the visible text stays "Remove".
+    await userEvent.click(screen.getByRole("button", { name: "Remove Alice" }));
 
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText("Remove Alice?")).toBeInTheDocument();
@@ -422,7 +421,7 @@ describe("People", () => {
     expect(deleted).toBe(false);
   });
 
-  it("removes a connection from the row's menu once confirmed", async () => {
+  it("removes a connection from the row once confirmed", async () => {
     let deletedId: string | null = null;
     server.use(
       http.get(`${API}/families`, () => HttpResponse.json([])),
@@ -436,8 +435,7 @@ describe("People", () => {
 
     renderPeople();
 
-    await userEvent.click(await screen.findByRole("button", { name: "Actions for Alice" }));
-    await userEvent.click(screen.getByRole("button", { name: "Remove" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Remove Alice" }));
 
     const dialog = await screen.findByRole("dialog");
     await userEvent.click(within(dialog).getByRole("button", { name: "Remove" }));
@@ -463,8 +461,7 @@ describe("People", () => {
     renderPeople();
 
     await userEvent.type(await filterBox(), "al");
-    await userEvent.click(screen.getByRole("button", { name: "Actions for Alice" }));
-    await userEvent.click(screen.getByRole("button", { name: "Remove" }));
+    await userEvent.click(screen.getByRole("button", { name: "Remove Alice" }));
 
     const dialog = await screen.findByRole("dialog");
     await userEvent.click(within(dialog).getByRole("button", { name: "Remove" }));
@@ -477,21 +474,21 @@ describe("People", () => {
     expect(screen.getByRole("textbox", { name: "Filter people" })).toHaveValue("al");
   });
 
-  it("returns focus to that row's menu when the dialog closes", async () => {
+  it("returns focus to that row's Remove when the dialog closes", async () => {
     mockPeople({ connections: [ALICE] });
 
     renderPeople();
 
-    const menu = await screen.findByRole("button", { name: "Actions for Alice" });
-    await userEvent.click(menu);
-    await userEvent.click(screen.getByRole("button", { name: "Remove" }));
+    const remove = await screen.findByRole("button", { name: "Remove Alice" });
+    await userEvent.click(remove);
 
     await screen.findByRole("dialog");
     await userEvent.keyboard("{Escape}");
 
-    // HeaderMenu focuses the trigger before running the action, so the dialog
-    // has something other than <body> to restore to.
-    await waitFor(() => expect(menu).toHaveFocus());
+    // A visible button is already the focused element when clicked, so the
+    // dialog captures it as the thing to restore to with no help from the row
+    // — the focus dance `HeaderMenu` needed is gone with it (ADR 0009).
+    await waitFor(() => expect(remove).toHaveFocus());
   });
 
   it("leaves the dialog open and toasts when a removal fails", async () => {
@@ -505,8 +502,7 @@ describe("People", () => {
 
     renderPeople();
 
-    await userEvent.click(await screen.findByRole("button", { name: "Actions for Alice" }));
-    await userEvent.click(screen.getByRole("button", { name: "Remove" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Remove Alice" }));
 
     const dialog = await screen.findByRole("dialog");
     await userEvent.click(within(dialog).getByRole("button", { name: "Remove" }));

@@ -7,6 +7,7 @@ import toast from "react-hot-toast";
 import { Spinner } from "../components/Spinner";
 import { FolderOpenIcon } from "../components/Icons";
 import { ConfirmDialog, type ConfirmAction } from "../components/ConfirmDialog";
+import { ActionBar } from "../components/ActionBar";
 
 const DELETE_ACTIONS: ConfirmAction[] = [{ id: "delete", label: "Delete", tone: "danger" }];
 
@@ -74,13 +75,20 @@ export function Folders() {
                   )}
                 </Link>
                 {!showArchived && (
-                  <button
-                    onClick={() => setDeletingId(folder.id)}
-                    disabled={deleteMutation.isPending}
-                    className="ml-4 shrink-0 rounded bg-red-600 px-3 py-1 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
-                  >
-                    Delete
-                  </button>
+                  <div className="ml-4 shrink-0">
+                    <ActionBar
+                      items={[
+                        {
+                          label: "Delete",
+                          tone: "danger",
+                          ariaLabel: `Delete ${folder.name}`,
+                          onClick: () => setDeletingId(folder.id),
+                          pending: deleteMutation.isPending && deleteMutation.variables === folder.id,
+                          pendingLabel: "Deleting…",
+                        },
+                      ]}
+                    />
+                  </div>
                 )}
               </li>
             ))}

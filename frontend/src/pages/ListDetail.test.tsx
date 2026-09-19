@@ -113,13 +113,13 @@ function renderListDetail(
 }
 
 describe("ListDetail sharing modal", () => {
-  // The tab bar is gone: sharing is reached from the header's Change control,
+  // The tab bar is gone: sharing is reached from the header bar's Sharing… action,
   // and that is the only way in.
   async function openSharingModal() {
     await waitFor(() => {
       expect(screen.getByText("My Wishlist")).toBeInTheDocument();
     });
-    await userEvent.click(await screen.findByRole("button", { name: "Change" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Sharing…" }));
     return screen.findByRole("dialog", { name: "Who can see this list" });
   }
 
@@ -168,7 +168,7 @@ describe("ListDetail sharing modal", () => {
     await waitFor(() => {
       expect(screen.getByText("My Wishlist")).toBeInTheDocument();
     });
-    expect(screen.queryByRole("button", { name: "Change" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Sharing…" })).not.toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: "Who can see this list" })).not.toBeInTheDocument();
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
@@ -473,7 +473,7 @@ describe("ListDetail — no tab bar", () => {
     expect(
       await screen.findByText("This list isn't shared with anyone."),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Change" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sharing…" })).toBeInTheDocument();
   });
 
   it("does not claim a list is unshared when the sharing state failed to load", async () => {
@@ -508,7 +508,7 @@ describe("ListDetail — no tab bar", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("opens the family controls from Change", async () => {
+  it("opens the family controls from Sharing…", async () => {
     server.use(
       http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
@@ -528,7 +528,7 @@ describe("ListDetail — no tab bar", () => {
     renderListDetail(ownerToken);
 
     await screen.findByText("My Wishlist");
-    await userEvent.click(await screen.findByRole("button", { name: "Change" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Sharing…" }));
 
     expect(
       await screen.findByRole("checkbox", { name: /share with the boones/i })
@@ -536,7 +536,7 @@ describe("ListDetail — no tab bar", () => {
   });
 });
 
-describe("ListDetail — header actions menu", () => {
+describe("ListDetail — header actions", () => {
   afterEach(() => vi.restoreAllMocks());
 
   function serveOwnerList(list: object = ownerListDetail) {
@@ -548,25 +548,22 @@ describe("ListDetail — header actions menu", () => {
     );
   }
 
-  it("keeps edit, archive and delete behind the menu", async () => {
+  // They stood behind a `⋯` until NEU-1322 (`CONTEXT.md` rule 12, ADR 0009).
+  it("shows edit, archive and delete on the header, with nothing to open first", async () => {
     serveOwnerList();
     renderListDetail(ownerToken);
 
     await screen.findByText("My Wishlist");
-    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Archive" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "List actions" }));
-
-    expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Archive" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add to a folder…" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Edit" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Archive" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Delete" })).toBeEnabled();
   });
 
   // Archiving is reversible from the "View archive" link on /lists and nobody
   // else can tell, so it asks nothing (`CONTEXT.md` rule 11, NEU-1319).
-  it("archives from the menu in one click, with no dialog at any point", async () => {
+  it("archives from the header in one click, with no dialog at any point", async () => {
     serveOwnerList();
     let archived: unknown = null;
     server.use(
@@ -578,7 +575,6 @@ describe("ListDetail — header actions menu", () => {
     renderListDetail(ownerToken);
 
     await screen.findByText("My Wishlist");
-    await userEvent.click(screen.getByRole("button", { name: "List actions" }));
     await userEvent.click(screen.getByRole("button", { name: "Archive" }));
 
     await waitFor(() => expect(archived).toBe(true));
@@ -587,7 +583,7 @@ describe("ListDetail — header actions menu", () => {
 
   // Unchanged behaviour, but it is the same code path as Archive now rather
   // than the other arm of a branch.
-  it("unarchives from the menu in one click, with no dialog at any point", async () => {
+  it("unarchives from the header in one click, with no dialog at any point", async () => {
     serveOwnerList({ ...ownerListDetail, is_archived: true });
     let archived: unknown = null;
     server.use(
@@ -599,32 +595,33 @@ describe("ListDetail — header actions menu", () => {
     renderListDetail(ownerToken);
 
     await screen.findByText("My Wishlist");
-    await userEvent.click(screen.getByRole("button", { name: "List actions" }));
     await userEvent.click(screen.getByRole("button", { name: "Unarchive" }));
 
     await waitFor(() => expect(archived).toBe(false));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("returns focus to the actions menu when the confirmation is dismissed", async () => {
+  // The path `HeaderMenu`'s focus dance existed to protect: it returned focus to
+  // the `⋯` *before* running an action, because choosing a menu item unmounted
+  // the trigger and the dialog captured whatever was focused at that moment.
+  // A visible button is already focused when clicked, so `Modal` restores to it
+  // with no help — which is worth asserting rather than assuming (ADR 0009).
+  it("returns focus to the Delete button when the confirmation is dismissed", async () => {
     serveOwnerList();
 
     renderListDetail(ownerToken);
 
     await screen.findByText("My Wishlist");
-    const menu = screen.getByRole("button", { name: "List actions" });
-    await userEvent.click(menu);
-    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    const deleteButton = screen.getByRole("button", { name: "Delete" });
+    await userEvent.click(deleteButton);
 
     await screen.findByRole("dialog");
     await userEvent.keyboard("{Escape}");
 
-    // The menu item that opened the dialog is gone by the time it closes, so
-    // focus lands on the `⋯` button it hung off rather than on the document.
-    await waitFor(() => expect(menu).toHaveFocus());
+    await waitFor(() => expect(deleteButton).toHaveFocus());
   });
 
-  it("deletes from the menu once confirmed", async () => {
+  it("deletes from the header once confirmed", async () => {
     serveOwnerList();
     let deleted = false;
     server.use(
@@ -636,7 +633,6 @@ describe("ListDetail — header actions menu", () => {
     renderListDetail(ownerToken);
 
     await screen.findByText("My Wishlist");
-    await userEvent.click(screen.getByRole("button", { name: "List actions" }));
     await userEvent.click(screen.getByRole("button", { name: "Delete" }));
 
     const dialog = await screen.findByRole("dialog");
@@ -647,7 +643,7 @@ describe("ListDetail — header actions menu", () => {
     await waitFor(() => expect(deleted).toBe(true));
   });
 
-  it("gives a viewer the menu, holding the folder action alone", async () => {
+  it("gives a viewer the folder action alone, on the header", async () => {
     server.use(
       http.get(`${API}/lists/1`, () => HttpResponse.json(viewerListDetail)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
@@ -656,9 +652,8 @@ describe("ListDetail — header actions menu", () => {
     renderListDetail(viewerToken);
 
     await screen.findByText("My Wishlist");
-    await userEvent.click(screen.getByRole("button", { name: "List actions" }));
 
-    expect(screen.getByRole("button", { name: "Add to a folder…" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add to a folder…" })).toBeEnabled();
     for (const owned of ["Edit", "Archive", "Delete"]) {
       expect(screen.queryByRole("button", { name: owned })).not.toBeInTheDocument();
     }
@@ -685,14 +680,13 @@ describe("ListDetail — add to a folder", () => {
     );
   }
 
-  async function openFromMenu() {
+  async function openThePicker() {
     await screen.findByText("My Wishlist");
-    await userEvent.click(screen.getByRole("button", { name: "List actions" }));
     await userEvent.click(screen.getByRole("button", { name: "Add to a folder…" }));
     return screen.getByRole("region", { name: "Add to a folder" });
   }
 
-  it("opens the picker from the owner's menu", async () => {
+  it("opens the picker from the owner's header", async () => {
     server.use(
       http.get(`${API}/lists/1`, () => HttpResponse.json(ownerListDetail)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
@@ -703,13 +697,13 @@ describe("ListDetail — add to a folder", () => {
 
     renderListDetail(ownerToken);
 
-    const panel = await openFromMenu();
+    const panel = await openThePicker();
     expect(await within(panel).findByRole("checkbox", { name: /christmas 2026/i })).toBeInTheDocument();
   });
 
   // The whole point of moving this into the header: a viewer has no other way
   // in, so it has to work identically for them.
-  it("opens the picker from a viewer's menu too", async () => {
+  it("opens the picker from a viewer's header too", async () => {
     server.use(
       http.get(`${API}/lists/1`, () => HttpResponse.json(viewerListDetail)),
       http.get(`${API}/connections`, () => HttpResponse.json([])),
@@ -718,7 +712,7 @@ describe("ListDetail — add to a folder", () => {
 
     renderListDetail(viewerToken);
 
-    const panel = await openFromMenu();
+    const panel = await openThePicker();
     expect(await within(panel).findByRole("checkbox", { name: /christmas 2026/i })).toBeInTheDocument();
   });
 
@@ -736,8 +730,8 @@ describe("ListDetail — add to a folder", () => {
 
     renderListDetail(ownerToken);
 
-    await openFromMenu();
-    await userEvent.click(await screen.findByRole("button", { name: "Change" }));
+    await openThePicker();
+    await userEvent.click(await screen.findByRole("button", { name: "Sharing…" }));
 
     expect(
       await screen.findByRole("dialog", { name: "Who can see this list" }),
@@ -790,6 +784,24 @@ describe("ListDetail — list recipients", () => {
     expect(await screen.findByText(/for Beth · kept by Owner/)).toBeInTheDocument();
   });
 
+  // Criterion 7: a blank owner name must never reach the header as a preposition
+  // with nothing after it. The keeper half comes from the attribution rather
+  // than from `owner_name`, so it drops instead of trailing (NEU-1324).
+  it("drops the keeper half rather than trailing it when the owner has no name", async () => {
+    serveList({ ...withRecipient(viewerListDetail, "Beth"), owner_name: "   " });
+    renderListDetail(viewerToken);
+    expect(await screen.findByText("for Beth")).toBeInTheDocument();
+    expect(screen.queryByText(/kept by/)).not.toBeInTheDocument();
+  });
+
+  it("says nothing at all when a routeless list's owner has no name", async () => {
+    serveList({ ...withRecipient(viewerListDetail, null), owner_name: "" });
+    renderListDetail(viewerToken);
+    // The page still paints; it simply carries no attribution line.
+    await screen.findByRole("heading", { name: viewerListDetail.name });
+    expect(screen.queryByText(/^from/)).not.toBeInTheDocument();
+  });
+
   it("never shows the keeper's warning to a viewer", async () => {
     serveList(withRecipient(viewerListDetail, "Beth"));
     renderListDetail(viewerToken);
@@ -835,8 +847,7 @@ describe("ListDetail — list recipients", () => {
 
     renderListDetail(ownerToken);
 
-    await userEvent.click(await screen.findByRole("button", { name: "List actions" }));
-    await userEvent.click(screen.getByRole("button", { name: "Edit" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
 
     const disclosure = screen.getByRole("checkbox", {
       name: "This list is for someone else",
@@ -866,8 +877,7 @@ describe("ListDetail — list recipients", () => {
 
     renderListDetail(ownerToken);
 
-    await userEvent.click(await screen.findByRole("button", { name: "List actions" }));
-    await userEvent.click(screen.getByRole("button", { name: "Edit" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
     await userEvent.click(
       screen.getByRole("checkbox", { name: "This list is for someone else" }),
     );
@@ -885,8 +895,7 @@ describe("ListDetail — list recipients", () => {
     serveList(withRecipient(ownerListDetail, null));
     renderListDetail(ownerToken);
 
-    await userEvent.click(await screen.findByRole("button", { name: "List actions" }));
-    await userEvent.click(screen.getByRole("button", { name: "Edit" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
     await userEvent.click(
       screen.getByRole("checkbox", { name: "This list is for someone else" }),
     );
@@ -950,8 +959,7 @@ describe("ListDetail — who is this list for (shared account)", () => {
   }
 
   async function openEditor() {
-    await userEvent.click(await screen.findByRole("button", { name: "List actions" }));
-    await userEvent.click(screen.getByRole("button", { name: "Edit" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
     // The picker only replaces the disclosure once GET /account has answered.
     await screen.findByRole("radio", { name: "Gran" });
   }
@@ -1050,8 +1058,7 @@ describe("ListDetail — the edit picker while the account is still loading", ()
 
     renderListDetail(ownerToken);
 
-    await userEvent.click(await screen.findByRole("button", { name: "List actions" }));
-    await userEvent.click(screen.getByRole("button", { name: "Edit" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
 
     expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
     expect(
@@ -1752,13 +1759,13 @@ describe("ListDetail — the sharing modal lives at ?share=open", () => {
 
   // Criterion 2. An open modal is a place you can be, so it is linkable and
   // Back closes it (CONTEXT.md rule 8).
-  it("pushes ?share=open when Change is pressed, and Back closes it", async () => {
+  it("pushes ?share=open when Sharing… is pressed, and Back closes it", async () => {
     serveSharing();
 
     renderListDetail(ownerToken, { entries: ["/lists", "/lists/1"] });
 
     await screen.findByText("My Wishlist");
-    await userEvent.click(screen.getByRole("button", { name: "Change" }));
+    await userEvent.click(screen.getByRole("button", { name: "Sharing…" }));
 
     expect(await screen.findByText("address: /lists/1?share=open")).toBeInTheDocument();
     expect(sharingModal()).toBeInTheDocument();
@@ -1789,7 +1796,7 @@ describe("ListDetail — the sharing modal lives at ?share=open", () => {
     await userEvent.click(screen.getByRole("button", { name: "arrive" }));
 
     await screen.findByText("My Wishlist");
-    await userEvent.click(screen.getByRole("button", { name: "Change" }));
+    await userEvent.click(screen.getByRole("button", { name: "Sharing…" }));
     await screen.findByText("address: /lists/1?share=open");
 
     await userEvent.click(screen.getByRole("button", { name: /^done$/i }));

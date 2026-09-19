@@ -11,6 +11,7 @@ import { NavigationDepthProvider } from "../contexts/NavigationDepthContext";
 import { ArrivedFrom } from "../test/arrived-from";
 import { NumericId } from "../components/NumericId";
 import { OccasionDetail } from "./OccasionDetail";
+import { mockViewport } from "../test/viewport";
 
 const API = "https://boone-gifts-api.localhost";
 
@@ -40,7 +41,13 @@ const family = {
   ],
 };
 
-const occasion = {
+/** `OccasionRead` — what `PUT /occasions/{id}` answers, and deliberately no
+ *  more. Kept separate from the detail payload below so a mocked `PUT` cannot
+ *  be wider than the real one: if these handlers returned `family_name`, a
+ *  future `setQueryData(["occasion", id], response)` would blank the heading's
+ *  qualifier in production and leave every test here green (NEU-1321
+ *  decision 5). */
+const occasionRead = {
   id: 3,
   family_id: 7,
   name: "Christmas 2026",
@@ -49,6 +56,11 @@ const occasion = {
   created_at: "2026-09-01T00:00:00Z",
   updated_at: "2026-09-01T00:00:00Z",
 };
+
+/** `OccasionDetailRead` — what `GET /occasions/{id}` answers. The family name
+ *  rides on the occasion rather than being read off the page's family query,
+ *  which does not fire until this one has resolved (NEU-1321). */
+const occasion = { ...occasionRead, family_name: "Boone Family" };
 
 function list(overrides: Partial<Record<string, unknown>> = {}) {
   return {
@@ -68,8 +80,12 @@ function list(overrides: Partial<Record<string, unknown>> = {}) {
     // How the row reached the viewer, as every list surface reports it since
     // NEU-1290: the array of routes, never a scalar and never null. A list on
     // this page arrived through this occasion by definition, and this one also
-    // came straight from Jane — so direct wins and the row names her, which is
-    // what this page wants ("rather than repeating the family overhead").
+    // came straight from Jane — so direct wins and the row names her.
+    //
+    // That second route is why this page looked right for so long: it is the
+    // *un*typical list. The occasion-only case beneath — which is what a list
+    // shared into an occasion normally is — read "Boone Family" until NEU-1324,
+    // repeating the page's own heading at a row whose job was to name a person.
     shared_via: [
       {
         kind: "occasion",
@@ -134,7 +150,11 @@ function renderOccasion({
     http.get(`${API}/occasions/3`, () => occasionResponse.clone()),
     http.get(`${API}/occasions/3/lists`, () => HttpResponse.json(lists)),
     http.get(`${API}/occasions/3/shopping`, () =>
-      HttpResponse.json({ budget: noBudget, items: shopping })
+      HttpResponse.json({
+        budget: { ...noBudget, allocated: "0.00", unallocated: null, target: null, allocation_count: 0 },
+        giftees: [],
+        items: shopping,
+      })
     ),
     http.get(`${API}/families/7`, () => HttpResponse.json(family)),
     http.get(`${API}/lists`, () => HttpResponse.json(ownedLists))
@@ -176,7 +196,7 @@ describe("OccasionDetail", () => {
   it("heads the page with the occasion, its family, and a link back to it", async () => {
     renderOccasion();
 
-    expect(await screen.findByRole("heading", { name: "Christmas 2026" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Boone Family Christmas 2026" })).toBeInTheDocument();
     const back = await screen.findByRole("link", { name: "\u2190 Boone Family" });
     expect(back).toHaveAttribute("href", "/people/families/7");
   });
@@ -186,8 +206,11 @@ describe("OccasionDetail", () => {
     renderOccasion({ arriveFrom: "/lists/1" });
     await userEvent.click(screen.getByRole("button", { name: "arrive" }));
 
-    expect(await screen.findByRole("heading", { name: "Christmas 2026" })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /Boone Family/ })).not.toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Boone Family Christmas 2026" })).toBeInTheDocument();
+    // The *back control* does not name the family at this depth \u2014 it reads only
+    // "\u2190 Back". The heading's eyebrow still links to it, and is now the page's
+    // only route there, which is the case NEU-1323 turns on.
+    expect(screen.queryByRole("link", { name: "\u2190 Boone Family" })).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "\u2190 Back" }));
 
@@ -226,6 +249,65 @@ describe("OccasionDetail", () => {
     expect(await screen.findByRole("link", { name: /My Wishlist/ })).not.toHaveTextContent("from");
   });
 
+  // The ordinary case, and the one the fixture above deliberately is not: a list
+  // that reached the viewer through this occasion and no other way. The page is
+  // already headed "Boone Family", so repeating it identifies nobody — the row
+  // owes the viewer the owner's name (NEU-1324).
+  it("names the owner of a list that reached the viewer through this occasion alone", async () => {
+    renderOccasion({
+      lists: [
+        list({
+          shared_via: [
+            {
+              kind: "occasion",
+              occasion: { id: 3, name: "Christmas 2026" },
+              family: { id: 1, name: "Boone Family" },
+            },
+          ],
+        }),
+      ],
+    });
+
+    const row = await screen.findByRole("link", { name: /Jane's Wishlist/ });
+    expect(row).toHaveTextContent("from Jane");
+    expect(row).not.toHaveTextContent("Boone Family");
+  });
+
+  // The other half of the same complaint: an owned row with nothing to say used
+  // to say nothing at all, which on a screen of five people's lists is the one
+  // row you cannot pick out.
+  it("marks the viewer's own unmarked list as theirs", async () => {
+    renderOccasion({
+      lists: [
+        list(),
+        list({ id: 11, name: "My Wishlist", owner_id: 1, owner_name: "Alice", shared_via: [] }),
+      ],
+    });
+
+    expect(await screen.findByRole("link", { name: /My Wishlist/ })).toHaveTextContent("Mine");
+  });
+
+  it("keeps naming the recipient on the viewer's own kept list", async () => {
+    // "Mine" is a fallback, never a replacement: a list kept for someone still
+    // says who for.
+    renderOccasion({
+      lists: [
+        list({
+          id: 11,
+          name: "Beth's List",
+          owner_id: 1,
+          owner_name: "Alice",
+          recipient_name: "Beth",
+          shared_via: [],
+        }),
+      ],
+    });
+
+    const row = await screen.findByRole("link", { name: /Beth's List/ });
+    expect(row).toHaveTextContent("for Beth");
+    expect(row).not.toHaveTextContent("Mine");
+  });
+
   // Until NEU-1308 this read "No lists are shared to this occasion yet." and
   // offered nothing — a dead end on the one page whose purpose is collecting
   // lists. The empty state is now the control; the sharing block below covers
@@ -258,6 +340,7 @@ describe("OccasionDetail", () => {
           price: "85.00",
           list_id: 10,
           list_name: "Jane's Wishlist",
+          giftee_key: "owner:2",
           purchased_at: "2026-09-01T00:00:00Z",
           amount_paid: "85.00",
         },
@@ -285,6 +368,7 @@ describe("OccasionDetail", () => {
           price: "18.00",
           list_id: 11,
           list_name: "Gran's List",
+          giftee_key: "owner:3",
           purchased_at: null,
           amount_paid: null,
         },
@@ -302,12 +386,11 @@ describe("OccasionDetail", () => {
     server.use(
       http.put(`${API}/occasions/3`, async ({ request }) => {
         renamed(await request.json());
-        return HttpResponse.json({ ...occasion, name: "Christmas 2027" });
+        return HttpResponse.json({ ...occasionRead, name: "Christmas 2027" });
       })
     );
 
-    await userEvent.click(await screen.findByRole("button", { name: "Occasion actions" }));
-    await userEvent.click(screen.getByRole("button", { name: "Rename" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Rename" }));
     const field = screen.getByLabelText("Occasion name");
     await userEvent.clear(field);
     await userEvent.type(field, "Christmas 2027");
@@ -322,12 +405,11 @@ describe("OccasionDetail", () => {
     server.use(
       http.put(`${API}/occasions/3`, async ({ request }) => {
         archived(await request.json());
-        return HttpResponse.json({ ...occasion, is_archived: true });
+        return HttpResponse.json({ ...occasionRead, is_archived: true });
       })
     );
 
-    await userEvent.click(await screen.findByRole("button", { name: "Occasion actions" }));
-    await userEvent.click(screen.getByRole("button", { name: "Archive" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Archive" }));
 
     // The menu item and the dialog's action share a label, so the confirming
     // click is scoped to the dialog.
@@ -345,12 +427,11 @@ describe("OccasionDetail", () => {
     server.use(
       http.put(`${API}/occasions/3`, async ({ request }) => {
         archived(await request.json());
-        return HttpResponse.json(occasion);
+        return HttpResponse.json(occasionRead);
       })
     );
 
-    await userEvent.click(await screen.findByRole("button", { name: "Occasion actions" }));
-    await userEvent.click(screen.getByRole("button", { name: "Archive" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Archive" }));
 
     const dialog = await screen.findByRole("dialog");
     await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
@@ -359,11 +440,39 @@ describe("OccasionDetail", () => {
     expect(archived).not.toHaveBeenCalled();
   });
 
+  /**
+   * The constraint behind "triggering an action does not close the disclosure"
+   * (ADR 0010), asserted end to end rather than taken on trust: `Modal` captures
+   * `document.activeElement` when it opens and focuses it again on close, so a
+   * panel that unmounted the button it was opened from would have nothing to
+   * return to — the exact bug ADR 0009 deleted `HeaderMenu`'s focus dance to be
+   * rid of. On a phone the archive confirmation is now opened from inside the
+   * panel, which is the only place in the app where that risk is live.
+   */
+  it("returns focus into the open panel when a dialog opened from it closes", async () => {
+    mockViewport("mobile");
+    renderOccasion();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Actions" }));
+    const archive = screen.getByRole("button", { name: "Archive" });
+    await userEvent.click(archive);
+
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    // Still mounted, still the same node, and focused again.
+    expect(screen.getByRole("button", { name: "Archive" })).toBe(archive);
+    expect(archive).toHaveFocus();
+  });
+
   it("gives a plain member no rename or archive menu", async () => {
     renderOccasion({ userId: 2 });
 
-    expect(await screen.findByRole("heading", { name: "Christmas 2026" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Occasion actions" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Boone Family Christmas 2026" })).toBeInTheDocument();
+    for (const action of ["Rename", "Archive", "Unarchive"]) {
+      expect(screen.queryByRole("button", { name: action })).not.toBeInTheDocument();
+    }
   });
 
   // The backend gates the two fields separately (NEU-1294 decision 4), and the
@@ -374,9 +483,7 @@ describe("OccasionDetail", () => {
       occasionResponse: HttpResponse.json({ ...occasion, created_by_id: 2 }),
     });
 
-    await userEvent.click(await screen.findByRole("button", { name: "Occasion actions" }));
-
-    expect(screen.getByRole("button", { name: "Archive" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Archive" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Rename" })).not.toBeInTheDocument();
   });
 
@@ -384,8 +491,7 @@ describe("OccasionDetail", () => {
     renderOccasion();
     server.use(http.put(`${API}/occasions/3`, () => new HttpResponse(null, { status: 403 })));
 
-    await userEvent.click(await screen.findByRole("button", { name: "Occasion actions" }));
-    await userEvent.click(screen.getByRole("button", { name: "Archive" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Archive" }));
     const dialog = await screen.findByRole("dialog");
     await userEvent.click(within(dialog).getByRole("button", { name: "Archive" }));
 
@@ -400,8 +506,7 @@ describe("OccasionDetail", () => {
     renderOccasion();
     server.use(http.put(`${API}/occasions/3`, () => new HttpResponse(null, { status: 403 })));
 
-    await userEvent.click(await screen.findByRole("button", { name: "Occasion actions" }));
-    await userEvent.click(screen.getByRole("button", { name: "Rename" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Rename" }));
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
 
     expect(
@@ -412,13 +517,124 @@ describe("OccasionDetail", () => {
   it("renders an archived occasion normally, offering Unarchive", async () => {
     renderOccasion({ occasionResponse: HttpResponse.json({ ...occasion, is_archived: true }) });
 
-    expect(await screen.findByRole("heading", { name: "Christmas 2026" })).toBeInTheDocument();
-    expect(screen.getByText("Archived")).toBeInTheDocument();
+    const heading = await screen.findByRole("heading", { name: "Boone Family Christmas 2026" });
+    // The eyebrow survives the pill: all three of eyebrow, name and badge are on
+    // the header, and the pill is a **sibling** of the heading, not part of the
+    // occasion's name. That is what keeps the accessible name to two halves and
+    // what `items-end` on the row is for — the badge belongs on the occasion
+    // line, not floated up against the family (AC 6).
+    expect(within(heading).getByRole("link", { name: "Boone Family" })).toBeInTheDocument();
+    const pill = screen.getByText("Archived");
+    expect(pill).toBeInTheDocument();
+    expect(heading).not.toContainElement(pill);
+    expect(heading.parentElement).toHaveClass("items-end");
     // Its lists are still listed: archiving is not unsharing.
     expect(await screen.findByRole("link", { name: /Jane's Wishlist/ })).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "Occasion actions" }));
     expect(screen.getByRole("button", { name: "Unarchive" })).toBeInTheDocument();
+  });
+
+  // The ticket itself: at depth > 0 the back control reads only "\u2190 Back", so
+  // before this the family was named nowhere on the page.
+  it("names the family in the heading at depth > 0, where nothing else does", async () => {
+    renderOccasion({ arriveFrom: "/lists/1" });
+    await userEvent.click(screen.getByRole("button", { name: "arrive" }));
+
+    const heading = await screen.findByRole(
+      "heading",
+      { name: "Boone Family Christmas 2026" },
+    );
+    // Linked, and this is the exact inversion of NEU-1321's "the family half is
+    // not a link" — which was written one day earlier and is deleted rather
+    // than left to rot. Rule 3's test is whether the destination carries
+    // something this surface does not: on the occasion *page* the viewer has
+    // arrived, so the family stops disambiguating and becomes the parent that
+    // administers this occasion. It duplicates the back control at depth 0
+    // alone; here, where a viewer actually arrives from, it is the only route.
+    expect(within(heading).getByRole("link", { name: "Boone Family" })).toHaveAttribute(
+      "href",
+      "/people/families/7",
+    );
+  });
+
+  // The eyebrow is *inside* the <h1>, not a <p> above it. That is what keeps
+  // the page identified as "Boone Family Christmas 2026" to a screen reader —
+  // the identification NEU-1321 was filed to get, and the thing a detached line
+  // above the heading would quietly hand back.
+  it("keeps both halves inside the heading, and drops the separator there", async () => {
+    renderOccasion();
+
+    const heading = await screen.findByRole("heading", { level: 1 });
+
+    expect(heading).toHaveAccessibleName("Boone Family Christmas 2026");
+    expect(heading).toHaveTextContent(/^Boone Family\s*Christmas 2026$/);
+  });
+
+  it("titles the document with the family too", async () => {
+    renderOccasion();
+
+    await screen.findByRole("heading", { name: "Boone Family Christmas 2026" });
+    expect(document.title).toContain("Boone Family \u00b7 Christmas 2026");
+  });
+
+  // The assertion that fails under a heading derived from the page's family
+  // query: that query does not fire until the occasion has resolved, so a
+  // heading built from it paints unqualified first and shifts a round trip
+  // later. Here the family never arrives at all and the heading is still right.
+  it("names the family before the family query resolves", async () => {
+    renderOccasion();
+    server.use(http.get(`${API}/families/7`, () => new Promise(() => {})));
+
+    expect(
+      await screen.findByRole("heading", { name: "Boone Family Christmas 2026" }),
+    ).toBeInTheDocument();
+    // Same field, same reason: the back control never shows the `Family`
+    // placeholder on this page (Decision 7).
+    expect(screen.getByRole("link", { name: "\u2190 Boone Family" })).toHaveAttribute(
+      "href",
+      "/people/families/7",
+    );
+    expect(screen.queryByRole("link", { name: "\u2190 Family" })).not.toBeInTheDocument();
+  });
+
+  // NEU-1321's bug, re-created in a transient state: with the qualifier in the
+  // <h1>, opening the form would take the family off the page again, and at
+  // depth > 0 the back control above reads only "\u2190 Back". It is the same
+  // eyebrow as the resting state, link and all \u2014 a static copy would have the
+  // two states disagree about what the family half is, one keystroke apart.
+  it("keeps the linked family on screen while the occasion is being renamed", async () => {
+    renderOccasion();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Rename" }));
+
+    expect(screen.getByRole("link", { name: "Boone Family" })).toHaveAttribute(
+      "href",
+      "/people/families/7",
+    );
+    // The edit covers the occasion half and not the family half.
+    expect(screen.getByLabelText("Occasion name")).toHaveValue("Christmas 2026");
+  });
+
+  it("keeps the qualifier through a rename, changing only the occasion half", async () => {
+    renderOccasion();
+    server.use(
+      http.put(`${API}/occasions/3`, () =>
+        HttpResponse.json({ ...occasionRead, name: "Christmas 2027" })
+      ),
+      http.get(`${API}/occasions/3`, () =>
+        HttpResponse.json({ ...occasion, name: "Christmas 2027" })
+      )
+    );
+
+    await userEvent.click(await screen.findByRole("button", { name: "Rename" }));
+    const field = screen.getByLabelText("Occasion name");
+    await userEvent.clear(field);
+    await userEvent.type(field, "Christmas 2027");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(
+      await screen.findByRole("heading", { name: "Boone Family Christmas 2027" }),
+    ).toBeInTheDocument();
   });
 
   it("does not offer a retry on an occasion the viewer can never reach", async () => {

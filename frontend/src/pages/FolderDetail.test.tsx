@@ -278,7 +278,9 @@ describe("FolderDetail", () => {
       expect(screen.getByText("My Wishlist")).toBeInTheDocument();
     });
 
-    await userEvent.click(screen.getByText("Remove"));
+    // Queried by its accessible name, which names the list it takes out of the
+    // folder (`CONTEXT.md` rule 12).
+    await userEvent.click(screen.getByRole("button", { name: "Remove My Wishlist" }));
   });
 
   it("adds a list to folder", async () => {
@@ -345,7 +347,12 @@ describe("FolderDetail", () => {
             bought_count: 0,
             total_count: 1,
             unpriced_count: 0,
+            allocated: "0.00",
+            unallocated: null,
+            target: null,
+            allocation_count: 0,
           },
+          giftees: [],
           items: [
             {
               claim_id: 100,
@@ -356,6 +363,7 @@ describe("FolderDetail", () => {
               price: "49.99",
               list_id: 10,
               list_name: "My Wishlist",
+              giftee_key: "owner:2",
               purchased_at: null,
               amount_paid: null,
             },
@@ -513,14 +521,19 @@ describe("FolderDetail — the Add a List picker", () => {
     renderFolderDetail();
 
     const rows = await picker();
-    // Someone else's: the family behind the occasion it came through.
+    // Someone else's: the family behind the occasion it came through. A folder
+    // establishes no family of its own — it is the viewer's grouping and
+    // routinely spans two — so this stays the family here (NEU-1324).
     expect(await rows.findByText("Boone Family")).toBeInTheDocument();
     // The viewer's own, kept for someone: "for Beth", never "from Tom Boone".
     expect(rows.getByText("for Beth")).toBeInTheDocument();
     expect(rows.queryByText("from Tom Boone")).not.toBeInTheDocument();
-    // And the viewer's own for nobody carries no second line at all.
+    // And the viewer's own for nobody says so. It read as a bare title until
+    // NEU-1324 — the one row on a mixed screen that named nothing at all —
+    // and "Mine" is its relationship to the viewer, not their name read back.
     const own = rows.getByText("Birthday List").parentElement as HTMLElement;
-    expect(own.querySelectorAll("p")).toHaveLength(1);
+    expect(own.querySelectorAll("p")).toHaveLength(2);
+    expect(within(own).getByText("Mine")).toBeInTheDocument();
   });
 
   /**
@@ -601,7 +614,11 @@ describe("FolderDetail — the tab is a place", () => {
       http.get(`${API}/lists`, () => HttpResponse.json([])),
       http.get(`${API}/folders/1/shopping`, () =>
         HttpResponse.json({
-          budget: { amount: null, spent: "0.00", remaining: null, bought_count: 0, total_count: 0, unpriced_count: 0 },
+          budget: {
+            amount: null, spent: "0.00", remaining: null, bought_count: 0, total_count: 0,
+            unpriced_count: 0, allocated: "0.00", unallocated: null, target: null, allocation_count: 0,
+          },
+          giftees: [],
           items: [],
         })
       ),

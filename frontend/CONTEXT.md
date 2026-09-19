@@ -9,7 +9,7 @@ architecture live in [`AGENTS.md`](AGENTS.md); this file is only about what the 
 |---|---|---|
 | **My lists** | Lists this account owns | `pages/Lists.tsx` |
 | **Shared with me** | Every list someone else has made visible to me, **however it reached me** — a direct share, or an occasion of a family I belong to. One section, never two destinations | `pages/Lists.tsx`, `components/SharedListRows.tsx` |
-| **from Jane** / **Boone Family** | The source label on a shared row. A list may have arrived several ways at once, and **direct wins**: a row that also came through an occasion still reads "from Jane", because the direct share is the grant that survives the viewer leaving the family. An occasion-only row is labelled with its **family** — the occasion is how the share was made, the family is who the viewer recognises — and with every distinct family, comma-joined, when more than one carried it | `components/ListAttribution.tsx`, `lib/attribution.ts` |
+| **from Jane** / **Boone Family** | The source label on a shared row. A list may have arrived several ways at once, and **direct wins**: a row that also came through an occasion still reads "from Jane", because the direct share is the grant that survives the viewer leaving the family. An occasion-only row is labelled with its **family** — the occasion is how the share was made, the family is who the viewer recognises — and with every distinct family, comma-joined, when more than one carried it. **Except where the surface has already established that family**, which today means the occasion page alone: there the row names the **owner** instead, because a family repeated from the page's own heading identifies nobody (NEU-1324). This is rule 3's test one level down — the family qualifies a row where it disambiguates, and steps aside where the viewer has arrived. A folder is *not* such a surface: it is my grouping, not a family's, and one routinely spans two | `components/ListAttribution.tsx`, `lib/attribution.ts` |
 | **Share route** | One way a list reached me: a direct share, or an occasion of a family I belong to. A list can have several; `shared_via` is the array of all of them | `lib/attribution.ts`, `lib/list-grouping.ts` |
 | **for Beth** | This list is kept for a person with no account | `components/ListAttribution.tsx`, `lib/attribution.ts` |
 | **Group by** | How I ask *Shared with me* to subdivide — by occasion, person, or folder. Off by default; every grouping keeps a "Not in a …" bucket so nothing vanishes; held in the URL as `?group=`, so it survives a round trip and can be shared | `pages/Lists.tsx`, `lib/list-grouping.ts` |
@@ -17,16 +17,17 @@ architecture live in [`AGENTS.md`](AGENTS.md); this file is only about what the 
 | **A person's page** | Every list that person owns which I can see, **however it reached me**. Derived from the shared scope rather than fetched as its own index; it lists no occasions, and it is a label's destination rather than a second index | `pages/ConnectionProfile.tsx` |
 | **Family** | A named group of people. A list reaches one **through an occasion of that family**, never the family itself. Its page administers the family — members, occasions, settings — and is **not** the way in to an occasion | `pages/FamilyDetail.tsx` |
 | **Folder** | My saved grouping of lists — "Christmas 2026". Was called a *collection*, then an *occasion*. Has a page (`/folders/:id`) but no index | `pages/FolderDetail.tsx` |
-| **Add a List** | The folder's picker: **every list I can see** that is not already in this folder — mine and ones shared with me, since a folder groups the people I'm buying for, who are by definition not me. The third list-choosing surface and the only one holding both populations, so it labels per row rather than per section: a row someone else owns carries its attribution line, a row I own carries only "for Beth" or nothing. Inline on the Lists tab, with no filter of its own | `pages/FolderDetail.tsx` |
-| **Occasion** | A family's shared gifting occasion — "Christmas 2026". The unit a list is shared *to*, and the only thing that makes a family shareable | `pages/OccasionDetail.tsx`, `pages/lists/OccasionStrip.tsx` (finding one), `pages/family-detail/OccasionsSection.tsx` (managing one), `lib/occasion-choice.ts` |
-| **Who can see this list** | The owner's one sharing surface — families and connections in a single dialog, with one filter box across both sections and a line saying what is ticked. Over a list that exists it sits behind the header's **Change** control and every tick is a write; **New List mounts the same dialog** behind `Choose…`, holding its ticks until the list is created and starting from **nothing ticked**. Its open-ness is the address: `?share=open` | `components/SharingModal.tsx` (the rows), `ListSharingModal.tsx` / `DraftSharingModal.tsx` (the two modes) |
+| **Add a List** | The folder's picker: **every list I can see** that is not already in this folder — mine and ones shared with me, since a folder groups the people I'm buying for, who are by definition not me. The third list-choosing surface and the only one holding both populations, so it labels per row rather than per section: a row someone else owns carries its attribution line, a row I own carries "for Beth" or "Mine". Inline on the Lists tab, with no filter of its own | `pages/FolderDetail.tsx` |
+| **Occasion** | A family's shared gifting occasion — "Boone Family · Christmas 2026". The unit a list is shared *to*, and the only thing that makes a family shareable. **Always named with its family** — as a linked eyebrow above the name on its own page's heading, and as an unlinked prefix in every heading that points at it — two families routinely both call one "Christmas 2026" | `pages/OccasionDetail.tsx`, `pages/lists/OccasionStrip.tsx` (finding one), `pages/family-detail/OccasionsSection.tsx` (managing one), `lib/occasion-choice.ts` |
+| **Who can see this list** | The owner's one sharing surface — families and connections in a single dialog, with one filter box across both sections and a line saying what is ticked. Over a list that exists it sits behind the header's **Sharing…** action, in the same bar as everything else you can do to the list, and every tick is a write; **New List mounts the same dialog** behind `Choose…`, holding its ticks until the list is created and starting from **nothing ticked**. Its open-ness is the address: `?share=open` | `components/SharingModal.tsx` (the rows), `ListSharingModal.tsx` / `DraftSharingModal.tsx` (the two modes) |
 | **Share a list** | The **other** sharing direction: the occasion is fixed and the *list* is chosen, from lists I own. The same dialog chrome, a different population and a different write — one `PUT` per tick, add-only, and a list already here is ticked and dead. Offered from the occasion page's Lists tab in both its states, and from an empty card in the occasion strip | `components/OccasionSharingModal.tsx` (the rows), `ShareIntoOccasionButton.tsx` (the control), `SharingShell.tsx` (the chrome both modes wear) |
 | **Occasion strip** | The row of occasion cards at the top of `/lists`: every non-archived occasion in every family I belong to, most recently active first, four at a time. Absent entirely when I have none. Carries no money | `pages/lists/OccasionStrip.tsx` |
 | **Archive prompt** | A standing question about one occasion that has gone quiet: archive it, or not yet. Asked of the occasion's creator or an organizer of its family, in the banner that already carries connection requests and family invites. Names the occasion and its family and nothing else. "Not yet" is a dated snooze, not a permanent dismissal | `components/ActionableBanner.tsx` |
 | **Claim** / "I'll get this" | My private intent to buy a gift. Never visible to the list's owner | `pages/list-detail/GiftsTab.tsx` |
-| **My shopping** | Everything *I* have claimed within one occasion or one folder — what I still have to buy, what I bought, and what I paid. Never anyone else's, in any aggregate | `components/MyShopping.tsx` |
+| **My shopping** | Everything *I* have claimed within one occasion or one folder — what I still have to buy, what I bought, and what I paid — grouped by **giftee**, with a group for every giftee in scope even when I have claimed nothing for them yet. Never anyone else's, in any aggregate | `components/MyShopping.tsx` |
+| **Giftee** | The person a shopping group is about: who a list is *for* — its owner, an account person on a shared login, or someone with no account ("for Beth"). Two lists for one person are one group. Named by the person alone, with the keeper added only when two groups would otherwise read the same | `lib/giftees.ts`, `components/MyShopping.tsx` |
 | **Account person** | A named person on a shared login; a list can be marked as being for one | `components/ListForFields.tsx` |
-| **Budget** | A spending target *I* set for myself against one occasion or one folder, and what I have spent toward it. Private to me — organizers name an occasion and never see any money | `components/BudgetLine.tsx` |
+| **Budget** | A spending target *I* set for myself against one occasion or one folder, and what I have spent toward it. Private to me — organizers name an occasion and never see any money. May be split into a **giftee budget** per person; an overall I have not set reads as the sum of the split, and says so | `components/BudgetLine.tsx` |
 
 Words the UI must **not** use: "collection" (rejected outright — it reads too close to "connection"),
 "occasion" for a folder (the word is reserved for a family's shared occasion — see
@@ -73,6 +74,13 @@ behaviour).
    ([`docs/adr/0007-occasions-are-a-destination.md`](docs/adr/0007-occasions-are-a-destination.md),
    amending [ADR 0005](docs/adr/0005-grouping-returns-as-an-opt-in.md)). An occasion heading names
    its family as an unlinked prefix, because the occasion name alone does not identify one occasion.
+   The occasion **page's** own heading names the family too, but as a **linked eyebrow above** the
+   occasion name rather than a prefix beside it: at a phone's width the two halves on one line left
+   neither of them readable (NEU-1323). The family half is a link *here* and nowhere else — on the
+   page the viewer has arrived, so the family stops disambiguating one occasion among several and
+   becomes the parent that administers it, which is a destination by the test above. The eyebrow is
+   part of the heading rather than a line above it, so the heading still announces both; only the
+   occasion half is editable.
 
    A list may appear under **several** occasion headings, as it already could under several folders:
    grouping fans out over every route, where the row's *label* picks one (direct wins).
@@ -87,7 +95,11 @@ behaviour).
    budget to read. A purchase recorded with no amount counts as bought and never toward the money
    total, so the count of them is shown whenever it is non-zero — an understated total must read as
    an understatement, never as fact. Going over is stated plainly, not as an error: a budget is a
-   target, not a limit.
+   target, not a limit. A budget may be split per giftee, and the split is as private and as
+   honest as the whole: allocating never writes the overall, an overall left unset reads as the
+   sum of the split and is labelled as derived, allocating more than the overall is stated rather
+   than refused, and a giftee with no budget yet is told what is left to allocate without having
+   it typed in for them.
 
 6. **A share points at an occasion, not a family.** A family with no active occasion is listed and
    disabled with the reason, never hidden; a family with several is not shared to until one is
@@ -167,3 +179,24 @@ behaviour).
     limit and not a lower one. Unclaiming asks only when there is a recorded purchase to lose;
     unticking a purchase never does, because the amount survives it. The dialog itself is settled and
     is not the subject of this rule — see ADR 0008.
+
+12. **An action on the thing a header or a row is about is always visible.** Rule 11's twin: rule 11
+    governs when an action *asks*, this one whether it is *seen*. Nothing that acts on a list, a
+    folder, an occasion, a connection or a member is reached by first revealing it — hiding one
+    behind a glyph is the fault NEU-1322 named, and the glyph in question hid a menu of a single
+    item at two of the four call sites that used it. A row's action says more than its visible text
+    where the row alone identifies it, so a roster is not fifty buttons all announced as "Remove".
+    Danger treatment is reserved for what cannot be undone, which is why archiving — reversible and
+    private, which is why rule 11 holds it needn't ask — is never painted as danger. An action the
+    repo holds to be so benign it does not stop to ask cannot also be its loudest. **One exception,
+    and it is a width exception rather than a taste one** (NEU-1323, ADR 0010): a header carrying a
+    *group* of actions may collapse them behind a labelled disclosure below `md`, where the
+    alternative is two rows of buttons stacked above a heading with no room left either. It is
+    opt-in per call site and granted to exactly two — the occasion header and a list owner's —
+    because a header holding a single action has nothing to group, and hiding that one would rebuild
+    the single-item menu this rule was written against. A row never collapses, at any width; and the
+    disclosure is a word **and** a chevron carrying `aria-expanded` — never a glyph alone, and
+    never dressed as one of the buttons it hides (ADR 0011). This governs action groups on a
+    header or a row and nothing else: `GiftsTab`'s claim and purchase controls are a page's content,
+    `ActionableBanner` is a CTA, and the admin pages and `SharedAccountCard` are off the main
+    product surface. See ADR 0009.

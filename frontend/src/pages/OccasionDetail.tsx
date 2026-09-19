@@ -9,7 +9,7 @@ import { useAuth } from "../hooks/useAuth";
 import { useNumericId } from "../components/NumericId";
 import { useTitle } from "../hooks/useTitle";
 import { Spinner } from "../components/Spinner";
-import { HeaderMenu } from "../components/HeaderMenu";
+import { ActionBar } from "../components/ActionBar";
 import { BackControl, BACK_TO_PEOPLE, backToFamily } from "../components/BackControl";
 import { ListAttributionLine, RecipientLine } from "../components/ListAttribution";
 import { MyShopping } from "../components/MyShopping";
@@ -19,7 +19,11 @@ import { useNavigationDepth } from "../contexts/NavigationDepthContext";
 import { ConfirmDialog, type ConfirmAction } from "../components/ConfirmDialog";
 import { OccasionSharingModal } from "../components/OccasionSharingModal";
 import { ShareIntoOccasionButton } from "../components/ShareIntoOccasionButton";
-import type { Occasion } from "../types";
+// `OccasionDetail` is aliased because this module already exports a component
+// of that name — the page — and the type is the payload it renders. `Occasion`
+// stays alongside it: only the header and the back control need the family, and
+// `ListsTab` below is honest about needing no more than the base shape.
+import type { Occasion, OccasionDetail as OccasionDetailPayload } from "../types";
 
 /**
  * The tabs the occasion page carries (project spec §9.2). The bar is driven by
@@ -65,7 +69,12 @@ export function OccasionDetail() {
     queryFn: () => getOccasion(occasionId),
   });
 
-  useTitle(occasion.data?.name ?? "Occasion");
+  // The family qualifies the tab too, so two families' Christmas 2026 stop
+  // being indistinguishable in a row of tabs (NEU-1321). The fallback is
+  // load-bearing: this sits above the pending guard.
+  useTitle(
+    occasion.data ? `${occasion.data.family_name} · ${occasion.data.name}` : "Occasion",
+  );
 
   if (occasion.isPending) return <Spinner />;
   if (occasion.isError) {
@@ -98,7 +107,7 @@ export function OccasionDetail() {
   return <OccasionPage occasion={occasion.data} />;
 }
 
-function OccasionPage({ occasion }: { occasion: Occasion }) {
+function OccasionPage({ occasion }: { occasion: OccasionDetailPayload }) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const depth = useNavigationDepth();
@@ -155,9 +164,10 @@ function OccasionPage({ occasion }: { occasion: Occasion }) {
     if (share === "open" && archived) stripShare();
   }, [share, archived, stripShare]);
 
-  // The family behind the occasion: its name for the header and the back link,
-  // and its members for the organizer gate. Keyed as the family page keys it,
-  // so arriving from there costs no request.
+  // The family behind the occasion, for its **members** and the organizer gate
+  // alone — the name now arrives on the occasion itself. Still required:
+  // `canRename` and `canArchive` are computed from this. Keyed as the family
+  // page keys it, so arriving from there costs no request.
   const family = useQuery({
     queryKey: ["family", occasion.family_id],
     queryFn: () => getFamily(occasion.family_id),
@@ -175,7 +185,11 @@ function OccasionPage({ occasion }: { occasion: Occasion }) {
 
   return (
     <div className="space-y-6">
-      <BackControl fallback={backToFamily(occasion.family_id, family.data?.name)} />
+      {/* `occasion.family_name`, not `family.data?.name`: the family query below
+          does not resolve until after this has painted, so reading it here would
+          show the `Family` placeholder for a round trip, every visit (NEU-1321
+          decision 7). `FamilyArchive` still needs that placeholder and keeps it. */}
+      <BackControl fallback={backToFamily(occasion.family_id, occasion.family_name)} />
 
       <OccasionHeader occasion={occasion} canRename={canRename} canArchive={canArchive} />
 
@@ -229,7 +243,7 @@ function OccasionHeader({
   canRename,
   canArchive,
 }: {
-  occasion: Occasion;
+  occasion: OccasionDetailPayload;
   canRename: boolean;
   canArchive: boolean;
 }) {
@@ -304,52 +318,82 @@ function OccasionHeader({
   return (
     <div className="rounded-lg bg-white p-6 shadow">
       {renaming ? (
-        <form onSubmit={handleRename} className="flex items-center gap-2">
-          <label className="sr-only" htmlFor="occasion-name">
-            Occasion name
-          </label>
-          <input
-            id="occasion-name"
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm"
-          />
-          <button
-            type="submit"
-            disabled={renameMutation.isPending}
-            className="rounded bg-blue-600 px-3 py-1 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            Save
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setRenaming(false);
-              setName(occasion.name);
-            }}
-            className="rounded bg-gray-200 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-300"
-          >
-            Cancel
-          </button>
+        <form onSubmit={handleRename}>
+          {/* The form replaces the whole heading row, so without this the family
+              would leave the page the moment an organizer started typing, and at
+              depth > 0 the control above reads only "← Back". It is the resting
+              eyebrow unchanged, link and all: a static copy would have the two
+              states disagree about what the family half *is*, one line and one
+              keystroke apart. Navigating away mid-rename is already possible —
+              the back control and the tab bar are live throughout — so a link
+              here loses nothing that was safe before. */}
+          <FamilyEyebrow occasion={occasion} />
+          <div className="flex items-center gap-2">
+            <label className="sr-only" htmlFor="occasion-name">
+              Occasion name
+            </label>
+            <input
+              id="occasion-name"
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+            <button
+              type="submit"
+              disabled={renameMutation.isPending}
+              className="rounded bg-blue-600 px-3 py-1 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setRenaming(false);
+                setName(occasion.name);
+              }}
+              className="rounded bg-gray-200 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-300"
+            >
+              Cancel
+            </button>
+          </div>
         </form>
       ) : (
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <h1 className="text-2xl font-bold text-gray-900">{occasion.name}</h1>
+        // Stacks below `md`, as `ListHeader` and `FolderDetail` always have.
+        // This header was the one that never did, which is half of why its
+        // heading had no width left beside its actions (ADR 0010).
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          {/* `items-end`, not `items-center`: with a two-line heading, centring
+              would float the pill against the eyebrow instead of the occasion
+              name it is a state badge for. */}
+          <div className="flex min-w-0 items-end gap-2">
+            {/* One <h1>, announced whole as "Boone Family Christmas 2026" — the
+                family is what identifies *this* Christmas 2026 among several,
+                and a <p> above the heading would take that identification back
+                out of it. The family half is a link *here and nowhere else*:
+                the viewer has arrived, so it stops disambiguating and becomes
+                the parent that administers this occasion (CONTEXT.md rule 3). */}
+            <h1 className="text-2xl font-bold text-gray-900">
+              <FamilyEyebrow occasion={occasion} />
+              {/* The space between the two halves is its own node: the accessible
+                  name trims each element child, so without it the heading
+                  announces as one run-on word. It costs nothing on screen —
+                  the eyebrow is `block`, so the name starts a new line. */}
+              {" "}
+              {occasion.name}
+            </h1>
             {occasion.is_archived && (
               <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
                 Archived
               </span>
             )}
           </div>
-          {/* The menu itself appears for anyone who can do *something* with it,
+          {/* The bar itself appears for anyone who can do *something* with it,
               and carries only what they can do — a creator who is not an
               organizer gets Archive alone rather than a Rename that 403s. */}
           {(canRename || canArchive) && (
-            <HeaderMenu
-              ariaLabel="Occasion actions"
-              pending={renameMutation.isPending || setArchivedMutation.isPending}
+            <ActionBar
+              collapseOnMobile
               items={[
                 ...(canRename
                   ? [
@@ -359,6 +403,7 @@ function OccasionHeader({
                           setName(occasion.name);
                           setRenaming(true);
                         },
+                        pending: renameMutation.isPending,
                       },
                     ]
                   : []),
@@ -367,6 +412,8 @@ function OccasionHeader({
                       {
                         label: occasion.is_archived ? "Unarchive" : "Archive",
                         onClick: handleArchiveToggle,
+                        pending: setArchivedMutation.isPending,
+                        pendingLabel: occasion.is_archived ? "Unarchiving…" : "Archiving…",
                       },
                     ]
                   : []),
@@ -389,6 +436,37 @@ function OccasionHeader({
         }}
       />
     </div>
+  );
+}
+
+/**
+ * The family, above the occasion name and linked to the family's own page.
+ *
+ * Written once because the resting heading and the rename form must not drift
+ * apart on what the family half is — they sit one keystroke apart, and the
+ * whole reason the form carries it at all is that at depth > 0 the control
+ * above reads only "← Back" (NEU-1321 decision 6).
+ *
+ * `block` is what puts it on its own line, and `text-sm font-normal` is what
+ * makes it an eyebrow rather than a second 24px heading — which is what
+ * NEU-1321's "visually subordinate" asked for and the shipped span, inheriting
+ * `text-2xl`, never did. The ` · ` separator is dropped *here and only here*:
+ * two lines do not need one. Every heading that points **at** an occasion keeps
+ * the unlinked prefix.
+ *
+ * It duplicates the back control's destination at depth 0 alone, where that
+ * control reads "← Boone Family". That is accepted: one is the way back to
+ * where you were, the other the parent of the thing you are looking at, and
+ * they coincide only on a cold deep link.
+ */
+function FamilyEyebrow({ occasion }: { occasion: OccasionDetailPayload }) {
+  return (
+    <Link
+      to={`/people/families/${occasion.family_id}`}
+      className="block text-sm font-normal text-gray-500 hover:underline"
+    >
+      {occasion.family_name}
+    </Link>
   );
 }
 
@@ -430,12 +508,13 @@ function ListsTab({ occasion, onShare }: { occasion: Occasion; onShare: () => vo
               <p className="font-medium text-gray-900">{list.name}</p>
               {/* The viewer's own list reads as their own row does elsewhere —
                   "from Tom" on your own list would be nonsense. Every other list
-                  reached this page through this occasion, so the row names the
-                  person it came from rather than repeating the family overhead. */}
+                  is here because it reached *this* occasion, so the heading has
+                  already said the family and `withinFamily` stops the row saying
+                  it again: what is missing on this page is the person (NEU-1324). */}
               {list.owner_id === user?.id ? (
                 <RecipientLine list={list} />
               ) : (
-                <ListAttributionLine list={list} />
+                <ListAttributionLine list={list} withinFamily />
               )}
             </Link>
           </li>

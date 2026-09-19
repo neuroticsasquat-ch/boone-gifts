@@ -63,8 +63,9 @@ src/
     families.ts      # 13 functions — see "Families" below
     account.ts       # GET/PUT /account — the shared-account flag and its people
     occasions.ts     # A family's occasions: list, read, create, rename/archive,
-                     # the lists shared to one, its shopping payload, and the
-                     # caller's own budget for it (PUT/DELETE .../budget)
+                     # the lists shared to one, its shopping payload, the
+                     # caller's own budget for it (PUT/DELETE .../budget) and
+                     # their per-giftee budgets (.../giftees/{key}/budget)
     claims.ts        # updateClaim — PATCH /claims/{id}, the only way to correct
                      # a recorded amount without re-stamping the purchase
     connections.ts, shares.ts, folders.ts, invites.ts, users.ts, meta.ts
@@ -74,14 +75,26 @@ src/
                      # knows whether `navigate(-1)` lands on a page of ours
   hooks/             # useAuth, useTitle, useTimeout (a setTimeout that clears on unmount),
                      # useSearchParamState / useEnumSearchParam — view state in the URL,
-                     # `mode` required at every call site (CONTEXT.md rule 8)
+                     # `mode` required at every call site (CONTEXT.md rule 8),
+                     # useMediaQuery — one width question answered in JS rather
+                     # than CSS, for ActionBar alone (ADR 0010)
   components/
     Layout.tsx            # App shell: one tab set (Lists · People) + outlet, badge queries
     ProtectedRoute.tsx    # Auth guard        AdminRoute.tsx — admin guard for /admin/*
     Badge.tsx             # Numeric badge overlay for nav icons
-    HeaderMenu.tsx        # The `⋯` menu a page header hangs its actions off —
-                          # list detail's owner and viewer menus, and the
-                          # occasion page's organizer-only one
+    ActionBar.tsx         # Every action on the thing a header or row is about,
+                          # as visible controls (rule 12, ADR 0009). Replaced
+                          # the `⋯` overflow menu. Tones come from tone.ts.
+                          # `collapseOnMobile` is rule 12's one exception — an
+                          # `Actions ⌄` disclosure below `md`, opt-in, and
+                          # granted to two headers (ADR 0010). The trigger wears
+                          # no border and no fill and takes no Tone: it acts on
+                          # the bar, not on the list, and dressed as `neutral` it
+                          # was byte-for-byte the buttons it hides. The chevron
+                          # flips with the state and is aria-hidden — the word is
+                          # the whole accessible name (ADR 0011)
+    tone.ts               # danger | primary | neutral, and the two class maps
+                          # ActionBar and ConfirmDialog read them through
     BackControl.tsx       # The one page-level way back — `← Back` when the app
                           # pushed you here, the page's named parent when it
                           # didn't. Owns the BACK_TO_* destinations
@@ -123,10 +136,13 @@ src/
     ListAttribution.tsx   # "from Jane" / "for Beth · kept by Tom" row lines
     MyShopping.tsx        # The My shopping tab both the occasion and folder
                           # pages mount — the viewer's own claims, grouped by
-                          # list, with the purchase tick and what they paid
+                          # giftee (one card per person in scope, empty or
+                          # not), with the purchase tick and what they paid
     BudgetLine.tsx        # The line at the top of that tab — the viewer's own
                           # spend against their own target, set/edited/cleared
-                          # inline, always disclosing unpriced purchases
+                          # inline, always disclosing unpriced purchases — plus
+                          # the BudgetEditor it and GifteeBudgetLine (one per
+                          # giftee card) both mount
     TabBar.tsx            # The Lists · My shopping bar those two pages share
     ListForFields.tsx     # "Who is this list for?" — the shared-account picker,
                           # falling back to RecipientFields on a normal account
@@ -145,20 +161,30 @@ src/
     family-detail/   # OccasionsSection (the family's occasions, its create
                      # action, and the organizer-only rename and archive)
     list-detail/     # GiftsTab (the page body), SharingSummary (the header's
-                     # "Shared with …" line, and the Change control that opens
-                     # the sharing modal), FolderPicker (the ⋯ menu's
+                     # "Shared with …" line, informational only — the control
+                     # that opens the sharing modal is the header bar's
+                     # `Sharing…` action), FolderPicker (the header's
                      # "Add to a folder…", still an inline panel)
   lib/               # sharing-summary.ts — "Shared with 2 families and 1 person", said
                      # once for the dialog and the create form both;
                      # list-grouping.ts — how Shared with me subdivides under Group by;
                      # attribution.ts, recipient.ts, list-for.ts — who a list is for,
-                     # and how that reads on a row; occasion-choice.ts — the
+                     # and how that reads on a row. `attributionFor`'s
+                     # `withinFamily` option names what the *surface* has already
+                     # established: set it and the family branch steps aside, so
+                     # an occasion-only list reads "from Jane" instead of
+                     # repeating the page's own family. One caller sets it — the
+                     # occasion page's Lists tab — and a folder deliberately does
+                     # not (NEU-1324). It returns null when a blank owner_name
+                     # leaves nothing true to say; occasion-choice.ts — the
                      # sharing control's one-, several-, no-occasion rule;
                      # money.ts — formatMoney, the one place money becomes text;
                      # request-failure.ts — failureMessage, the one place a
                      # transport or server failure becomes text, and null for
                      # "the server answered and rejected you";
-                     # shopping.ts — ShoppingScope and the shoppingKey cache key
+                     # shopping.ts — ShoppingScope and the shoppingKey cache key;
+                     # giftees.ts — how My shopping groups by giftee and labels
+                     # each group, and the "sum of N people's budgets" clause
   types/index.ts     # Types mirroring the backend Pydantic schemas
   test/
     setup.ts         # Vitest setup (Testing Library + MSW)
@@ -178,12 +204,12 @@ src/
 | `/lists` | `Lists` | My lists + everything shared with me, under the actionable banner. Header controls: folder filter, sort, group by — held in the URL as `?folder=` · `?sort=` · `?group=`, all `replace` (plus the strip's `?occasions=all`). **Active only** — the archive is its own page, linked at the foot |
 | `/lists/archive` | `ListsArchive` | Archived lists (owned and shared) and archived folders. Read-only: rows link to the detail pages that own unarchive |
 | `/lists/new` | `CreateList` | Also shows "Share with families" checkboxes |
-| `/lists/:id` | `ListDetail` | Owner view or viewer/claimer view. No tab bar: header, then the gifts. Gift `?sort=` (both views) and `?filter=` (viewer only) are `replace`. Owner header carries the sharing summary line (+ **Change**) and a `⋯` menu holding Add to a folder…, Edit, Archive and Delete; a viewer gets the same menu holding the folder action alone |
+| `/lists/:id` | `ListDetail` | Owner view or viewer/claimer view. No tab bar: header, then the gifts. Gift `?sort=` (both views) and `?filter=` (viewer only) are `replace`. Owner header carries the sharing summary line (informational) and an action bar holding **Sharing…**, Add to a folder…, Edit, Archive and Delete — the bar collapses to one `Actions` disclosure below `md` (ADR 0010); a viewer's header holds the folder action alone, visible at every width |
 | `/people` | `People` | The People tab: families, then individuals, under the actionable banner |
 | `/people/:id` | `ConnectionProfile` | |
 | `/people/families/:id` | `FamilyDetail` | Members, **active** occasions, invites, rename, delete, leave |
 | `/people/families/:id/archive` | `FamilyArchive` | That family's archived occasions, each linking to `/occasions/:id`. Any member may look |
-| `/occasions/:id` | `OccasionDetail` | A family occasion: header, tab bar (**Lists · My shopping**) held in the URL as `?tab=`, `push` — so a tab is linkable and Back closes it — and the lists shared to it. The `⋯` menu's rename and archive are organizer-only |
+| `/occasions/:id` | `OccasionDetail` | A family occasion: header, tab bar (**Lists · My shopping**) held in the URL as `?tab=`, `push` — so a tab is linkable and Back closes it — and the lists shared to it. The heading names the family as a **linked eyebrow** above the occasion name — a link on this page and a plain prefix in every heading that points *at* an occasion. The Lists tab names each list's **owner** rather than its family — the heading has already said the family (NEU-1324). The header's rename and archive are organizer-only, and their bar collapses below `md` behind an `Actions ⌄` disclosure (ADR 0010, 0011) |
 | `/folders/:id` | `FolderDetail` | One user's folder, with the same two tabs, under the same `?tab=` (`push`). There is no `/folders` index — `Folders.tsx` stays unrouted; a **Group by: Folder** heading on `/lists` is the one link here |
 | `/account` | `Account` | Via the user menu |
 | `/admin/invites`, `/admin/users` | `AdminInvites`, `AdminUsers` | Admin-only |
@@ -246,13 +272,29 @@ occasions are **not here at all**: a "View archive" link goes to `/people/famili
 
 **The occasion page** (`pages/OccasionDetail.tsx`, `/occasions/:id`) is where an occasion is met on its
 own: its name and family in the header, a back link to `/people/families/:id`, and a tab bar of
-**Lists · My shopping**. **Lists** is every list shared to the occasion that the viewer can see, from
+**Lists · My shopping**. The heading names the family as a **linked eyebrow** — its own smaller line
+above the occasion name, inside the `<h1>` so the page still announces as "Boone Family Christmas
+2026", and pointing at `/people/families/:id`. It is a link **here and nowhere else**: every heading
+that points *at* an occasion keeps the unlinked `Boone Family · Christmas 2026` prefix, and so does
+the document title. Rule 3's test is what splits them — on the page the viewer has arrived, so the
+family stops disambiguating one Christmas 2026 from another and becomes the parent that administers
+this one (NEU-1323). The rename form carries the same eyebrow, link and all, because at depth > 0 the
+control above reads only `← Back`. **Lists** is every list shared to the occasion that the viewer can see, from
 `/occasions/{id}/lists`, which filters by `can_view_list` so a list the viewer cannot see is *absent*
-rather than greyed; **My shopping** is `components/MyShopping.tsx` scoped to this occasion. The bar is
+rather than greyed. Each row names a **person**: it passes `withinFamily` to `ListAttributionLine`,
+so a list that reached the viewer through this occasion alone reads "from Jane" where every other
+surface reads "Boone Family" — rule 3's test one level down, on the page that has already said the
+family. A row the viewer owns reads "for Beth" or, marked for nobody, **"Mine"** — which is what
+tells your list from the four others at a glance (NEU-1324). A **direct** share still outranks both.
+**My shopping** is `components/MyShopping.tsx` scoped to this occasion, and is the one list-of-lists
+that still names nobody: its payload carries no owner, recipient or routes at all, so fixing it needs
+a backend change (deferred by NEU-1324). The bar is
 driven by a `TABS` array and the body by the active key, which is what made the second tab an entry
-plus a panel rather than a reshaping. The `⋯` menu carries rename and archive, **organizer
+plus a panel rather than a reshaping. The header's action bar carries rename and archive, **organizer
 only** and gated on the family's members exactly as the family page's controls are — the backend
-enforces both, so a 403 still has a message. An **archived** occasion renders like any other, carrying
+enforces both, so a 403 still has a message. It is one of the two bars that **collapse below `md`**,
+behind a labelled `Actions` disclosure (ADR 0010): this header is also the one that never stacked,
+and it now does, which is what leaves the two-line heading its width on a phone. An **archived** occasion renders like any other, carrying
 an Archived pill and offering Unarchive: archiving takes an occasion out of the default views and does
 nothing else (project spec §5.4).
 
@@ -290,14 +332,14 @@ An **archived** occasion is never a choice, but it still arrives on a family who
 before it was archived: archiving blocks new shares and nothing else, so the row stays operable (it
 is the only way to switch that grant off) and names the occasion "— archived".
 
-- **Who can see this list** (`components/SharingModal.tsx`) — the one owner-facing sharing surface, opened on a list by the header's **Change** control and held open at `?share=open`, so it is linkable and the mobile back gesture closes it. A **modal** since NEU-1306, not the inline region it was: as a region it pushed the list's own gifts down the page. It lives in `components/` because New List mounts the same control (NEU-1307). It is **controlled**: the rows, the filter, the three-state occasion rule, the refusal and the summary are the shell's, and the data behind them belongs to one of two containers — `ListSharingModal` (a list that exists: the three queries, the mutations every tick makes, the revoke dialog) or `DraftSharingModal` (a list being created: two reads, no writes, and the ticks held by the form). Both drive the rows through one `SharingSelection` — `familyOccasions` and `userIds`, the **intended** state and never a delta — so the two surfaces cannot drift. One **filter box** narrows both sections at once on family name, person name and person email — and never drops a disabled row specially, so "why can't I share with Gran?" is answered by typing "gran" and seeing Gran greyed with the reason (rule 6). A **"Shared with 2 families and 1 person"** line counts what is ticked; it counts rather than naming, because the header's `SharingSummary` already names and is unreadable behind the modal. A **Families** group (one per family, per the table above) and a **People** group (one checkbox per connection, checked when shared), in that order — the same order the summary line reads in. Families leads because it is the broader stroke and it decides what the People rows can offer at all (below). It writes through `/lists/{id}/shares` and `/lists/{id}/occasions/{occasion_id}`; there is no combined sharing endpoint. The **families half reads `/lists/{id}/families`** — the resource is still "which families can this list reach", each carrying its occasions. A family with several keeps its select once shared, **disabled** and naming the occasion reached: the row holds one shape as the box is ticked, and moving a share is untick-then-tick, which is also the only order in which the claims question can be asked.
+- **Who can see this list** (`components/SharingModal.tsx`) — the one owner-facing sharing surface, opened on a list by the header bar's **Sharing…** action and held open at `?share=open`, so it is linkable and the mobile back gesture closes it. A **modal** since NEU-1306, not the inline region it was: as a region it pushed the list's own gifts down the page. It lives in `components/` because New List mounts the same control (NEU-1307). It is **controlled**: the rows, the filter, the three-state occasion rule, the refusal and the summary are the shell's, and the data behind them belongs to one of two containers — `ListSharingModal` (a list that exists: the three queries, the mutations every tick makes, the revoke dialog) or `DraftSharingModal` (a list being created: two reads, no writes, and the ticks held by the form). Both drive the rows through one `SharingSelection` — `familyOccasions` and `userIds`, the **intended** state and never a delta — so the two surfaces cannot drift. One **filter box** narrows both sections at once on family name, person name and person email — and never drops a disabled row specially, so "why can't I share with Gran?" is answered by typing "gran" and seeing Gran greyed with the reason (rule 6). A **"Shared with 2 families and 1 person"** line counts what is ticked; it counts rather than naming, because the header's `SharingSummary` already names and is unreadable behind the modal. A **Families** group (one per family, per the table above) and a **People** group (one checkbox per connection, checked when shared), in that order — the same order the summary line reads in. Families leads because it is the broader stroke and it decides what the People rows can offer at all (below). It writes through `/lists/{id}/shares` and `/lists/{id}/occasions/{occasion_id}`; there is no combined sharing endpoint. The **families half reads `/lists/{id}/families`** — the resource is still "which families can this list reach", each carrying its occasions. A family with several keeps its select once shared, **disabled** and naming the occasion reached: the row holds one shape as the box is ticked, and moving a share is untick-then-tick, which is also the only order in which the claims question can be asked.
 - A **409 on the PUT** means the occasion was archived after the modal loaded. It is surfaced as its own message naming the cause and the way out — not the generic failure toast, which would leave the owner clicking a box that is never going to tick.
 - **A person a family already reaches** gets the same "listed, disabled, reason given" treatment as a family with no active occasion: their box is dead because ticking it would grant nothing, and the detail line reads "Already sees this through The Boones and The Smiths" — every covering family, in place of their email. Membership comes from `member_ids` on `/lists/{id}/families` (both halves of the modal read that one query, so ticking a family repaints the People rows off the existing invalidation). Three limits: it keys off a **live** occasion share (`shared && !is_archived`), so a person covered only by an archived-but-standing share keeps an enabled, unannotated row — that route is winding down and the direct share is the useful offer; it disables an **unticked** box only, because this modal is the only place to revoke a direct share; and it is a **nudge, not a permission** — `POST /lists/{id}/shares` still accepts the grant, the one deliberate exception to "anything the UI hides is also refused server-side" (CONTEXT.md rule 1). It is **inert on the create form**: a draft tick is not a share, nobody is covered until the list exists, and a row going dead and live again under the cursor as families are ticked mid-form would be worse than no nudge at all (NEU-1307).
-- **Owner-only.** The header summary line names who the list actually reaches — each occasion as "Boone Family · Christmas 2026" first, then people, because naming the family alone would claim more reach than the list has — and always carries the Change control that opens the modal. A list that reaches **nobody** says so outright — "This list isn't shared with anyone." in a line set apart from the ordinary summary — because since simple mode was retired nothing grants a list to a family on the owner's behalf (project spec §8). It is the mitigation for that, not decoration — but it is not a warning either, because a private list is a legitimate choice. A failed `shares` or `families` fetch is **not** an empty one and says so instead. Like every owner-facing surface it reveals nothing about claims.
+- **Owner-only.** The header summary line names who the list actually reaches — each occasion as "Boone Family · Christmas 2026" first, then people, because naming the family alone would claim more reach than the list has — and is informational: the control that opens the modal is the header bar's **Sharing…** action (NEU-1323), so one bar is the whole answer to what an owner can do to a list. A list that reaches **nobody** says so outright — "This list isn't shared with anyone." in a line set apart from the ordinary summary — because since simple mode was retired nothing grants a list to a family on the owner's behalf (project spec §8). It is the mitigation for that, not decoration — but it is not a warning either, because a private list is a legitimate choice. A failed `shares` or `families` fetch is **not** an empty one and says so instead. Like every owner-facing surface it reveals nothing about claims.
 - A **409 on `POST /lists`** is the same archived occasion, caught between the create form loading and being submitted. It gets its own message for the same reason: "try again" is a lie when the identical submission will keep failing.
 - **Share a list** (`components/OccasionSharingModal.tsx`, NEU-1308) — the **second** sharing mode, and the reverse of the one above: the occasion is fixed and the **list** is chosen. Every other flow in the app starts from a list, which left `/occasions/:id` — the page ADR 0007 argued was worth reaching — saying "No lists are shared to this occasion yet." and offering nothing. Its population is `GET /lists?filter=owned&archived=false`, and each tick is one `PUT /lists/{list_id}/occasions/{occasion_id}`: the endpoint already existed and is `OwnedList`-gated, so there is **no new endpoint and no new authorization** — a member can only offer lists they own, which is also why the control sits on a card any member can see rather than an organizer's. The **ticked set is an intersection**, not a field: `shared_via` is empty on every list the caller owns, so `GET /occasions/{id}/lists` ∩ the owned rows is the answer, and both reads are ones the surfaces that open this dialog already warm. A list already here is **ticked, disabled, with the reason** — rule 6's third arm, the one place its *tick* is the dead one, because the write is add-only and revoking lives on the list's own modal. Three entry points, one `ShareIntoOccasionButton`: the occasion page's Lists tab in **both** states, and the **empty card** in the `/lists` strip. The **strip mounts the dialog, the card only opens it** — a successful share takes `list_count` from 0 to 1, which is exactly what makes the card's body slot stop rendering. On `/lists` the address is `?share=<occasionId>` rather than `?share=open`, because fifteen cards make `open` meaningless, and it is healed against the occasion index **once that query answers**. A successful share invalidates four keys: `["occasion-lists", id]`, `["occasions"]`, `["lists"]` and `["list", listId]`. Archived: the control renders **disabled with the reason** on an archived occasion, `?share=open` is **stripped** rather than mounted there (a pasted or Back-reached link must not reach a live dialog either), and a 409 mid-session says the same sentence plus the way out — one fact, stated once in `lib/sharing-summary`.
 
-- **Create form** (`CreateList.tsx`) — a `Who can see this list` section: the same summary sentence the dialog shows, `You can change this later from the list itself.`, and a **`Choose…`** button that mounts `DraftSharingModal` over the form at `?share=open` (`Choose…` rather than `Change`, because the form's default is nothing to change). **Nothing is pre-checked** since NEU-1307 — the project's one user-visible behaviour change: a list created to hold a private idea is visible to nobody until the owner says otherwise, and with nothing ticked the section is optional rather than something to audit before submitting. That is also what retires the two submit guards the fan-out needed: submitting before the reads answer now shares with nobody, which is exactly what was asked for. The draft's family rows come from `GET /families` + the `GET /occasions` index rather than the old 1+N fan-out — `member_ids` is empty and `shared` false throughout, both honest for a list that does not exist. Submit posts `occasion_ids` on `POST /lists`, then one `POST /lists/{id}/shares` per person ticked (there is no `user_ids` on create): `Promise.allSettled`, and **navigation happens either way** — the list exists, and the page it lands on is where a failed share is fixed, so the toast names the people it could not share with.
+- **Create form** (`CreateList.tsx`) — a `Who can see this list` section: the same summary sentence the dialog shows, `You can change this later from the list itself.`, and a **`Choose…`** button that mounts `DraftSharingModal` over the form at `?share=open` (`Choose…` rather than `Sharing…`, because the form's default is nothing to change yet). **Nothing is pre-checked** since NEU-1307 — the project's one user-visible behaviour change: a list created to hold a private idea is visible to nobody until the owner says otherwise, and with nothing ticked the section is optional rather than something to audit before submitting. That is also what retires the two submit guards the fan-out needed: submitting before the reads answer now shares with nobody, which is exactly what was asked for. The draft's family rows come from `GET /families` + the `GET /occasions` index rather than the old 1+N fan-out — `member_ids` is empty and `shared` false throughout, both honest for a list that does not exist. Submit posts `occasion_ids` on `POST /lists`, then one `POST /lists/{id}/shares` per person ticked (there is no `user_ids` on create): `Promise.allSettled`, and **navigation happens either way** — the list exists, and the page it lands on is where a failed share is fixed, so the toast names the people it could not share with.
 - **Revoke dialog** — a 409 from the occasion DELETE means members of that occasion's family hold claims that revoking would orphan. The modal offers **Release those claims** / **Keep them claimed** / **Cancel**, re-issuing with `claims=release` or `claims=keep`. It shows **no counts and no gift or claimer names**: owners are blind to claim state on their own lists.
 
 ## Claims and purchases
@@ -374,10 +416,25 @@ because the two reads (`GET /occasions/{id}/shopping`, `GET /folders/{id}/shoppi
 `ShoppingItem[]` from the same backend select and differ only in what bounds the set: an occasion the
 claims are *filed under*, or a folder the claimed-from lists are *in*. Keyed `["shopping", kind, id]`.
 
+**Grouped by giftee since NEU-1326** — the person a list is *for*, which the server derives from the
+list and hands over as an opaque key on `giftees[]` and on each item's `giftee_key`. One card per
+entry of `giftees[]`, in array order (the server sorts: people with a row first, then the rest, by
+name), headed by the giftee's label, with that giftee's own budget line beneath the heading and the
+viewer's rows beneath that. `lib/giftees.ts` holds the rules:
+- `groupByGiftee` never drops a row: an item whose key matches no giftee gets a group of its own
+  rather than vanishing from a section that claims to hold everything.
+- **Every giftee in scope gets a card, empty or not** — "Nothing claimed for Gran yet." — because
+  that is what lets a person be budgeted before anything is claimed for them. The scope-level
+  empty state renders only when `giftees` *and* `items` are both empty.
+- `gifteeLabel` is the name alone unless another giftee in scope shares it (case-insensitive), in
+  which case the keeper is added in the words `attribution.ts` already uses — "Gran · Tom's
+  account", "Beth · kept by Tom". Two owners with one name stay identical.
+- A row shows a muted `from {list name}` only when its giftee's `list_count` is greater than one.
+
 - **Only ever the viewer's own claims.** The endpoints take no parameter that could widen it, so this
   is structural rather than a filter applied here (`CONTEXT.md` rule 2).
-- **Grouped on `list_id`, never on `list_name`** — two lists routinely share a name and grouping on
-  it would silently merge them under one heading. Order comes from the backend and is stable.
+- **Grouped on `giftee_key`, never on a name** — two people routinely share a name, and two lists
+  for one person are one group. Order comes from the backend and is stable.
 - **Two amount paths, deliberately not one.** Ticking an unbought claim reveals the same prompt list
   detail's `PurchaseControl` does — Save and Skip commit, the asking price is a "listed at $39" hint
   beside the field and never inside it. A claim that is *already* bought is corrected in place
@@ -390,13 +447,15 @@ claims are *filed under*, or a folder the claimed-from lists are *in*. Keyed `["
 - An archived occasion still serves its shopping payload — archiving takes an occasion out of the
   default views and does nothing else.
 - A change here invalidates `["list", listId]` too, because it is the same claim list detail renders.
-- **The read is a payload, not a list.** `GET .../shopping` returns `{ budget, items }` — the rollup
-  travels *with* the claims because the two are one screen and must agree, and a budget line fetched
-  behind a second request can render a total the list beneath it contradicts. A purchase moves
-  `spent` as well as the row, so one invalidation of that key refreshes both.
-- **The cache key is `lib/shopping.ts`'s `shoppingKey(scope)`, not a literal.** Two components read
-  and write the entry (`MyShopping` the whole payload, `BudgetLine` its budget half), and a key
-  restated in a second file is a cache bug waiting to happen. `ShoppingScope` lives there with it —
+- **The read is a payload, not a list.** `GET .../shopping` returns `{ budget, giftees, items }` —
+  the rollup and the giftees travel *with* the claims because the three are one screen and must
+  agree, and a budget line fetched behind a second request can render a total the list beneath it
+  contradicts. A purchase moves `spent` as well as the row, so one invalidation of that key
+  refreshes all of it.
+- **The cache key is `lib/shopping.ts`'s `shoppingKey(scope)`, not a literal.** Three components
+  read and write the entry (`MyShopping` the whole payload, `BudgetLine` its budget half,
+  `GifteeBudgetLine` the budget and giftees halves), and a key restated in a second file is a
+  cache bug waiting to happen. `ShoppingScope` lives there with it —
   out of the component modules so Fast Refresh keeps working.
 
 ## Budget line
@@ -428,17 +487,40 @@ $142 of $200 spent · $58 left            [ Edit budget ]
 - **Both writes return the recomputed rollup and it is written into the cache**, so the line is one
   round trip rather than a write followed by a re-read. A *failed* write re-reads instead: the line
   may be asserting a budget someone already removed elsewhere.
-- The editor seeds from the target already set, never from the spend so far.
+- The editor seeds from the target already set, never from the spend so far — and never from what
+  is left to allocate, which a giftee's field may *show* as a placeholder but never holds.
 - **Every clause is built from a formatted value and dropped when that value will not format**
   (ADR 0003). Nothing falls back to the raw wire string under a bare `$`, and nothing substitutes a
   zero. An overspend moves the sign into the word — the leading `-` is dropped and `$12.00 over`
   printed — rather than round-tripping the amount through `Number`.
 
+**Giftee budgets (NEU-1326).** `BudgetLine.tsx` is now three things: `BudgetEditor`, the field and
+its Save / Cancel / Remove and failure behaviour, parameterised by the two writes it makes and
+what to do with what they return; `BudgetLine`, the overall's line, mounting it with the overall
+endpoints and writing the returned rollup into the cache; and `GifteeBudgetLine`, one per giftee
+card, mounting it with `.../giftees/{key}/budget` and writing the returned `BudgetBlock` — both
+`budget` and `giftees`, leaving `items` alone — because a giftee write moves that giftee's line
+*and* the overall's allocation at once. Its field is labelled `Budget for {name}` with id
+`budget-amount-{key}`, so several editors can be open at once.
+- **The money line measures against `target`, not `amount`.** With no overall set and people
+  budgeted, `target` is their sum and the line reads exactly as a set budget would; the tally then
+  says `budget is the sum of 3 people's budgets`. The Set / Edit button still reads `amount === null`,
+  so a derived target offers **Set budget**, and setting one replaces the derived figure.
+- **The tally's allocation clause**, after the bought and unpriced clauses: `$150.00 of $200.00
+  allocated to people` while the allocation fits; `$230.00 allocated · $30.00 over your budget` when
+  it does not — stated, never refused, the same rule as an overspend; nothing when nothing is
+  allocated, which is also every giftee's own line.
+- **An unbudgeted giftee is told what is left.** With an overall set and no budget of their own, the
+  giftee's tally ends `$50.00 of your $200.00 not yet allocated` and the field carries that figure
+  as its placeholder — or `$30.00 over your budget` and no placeholder once the allocation is
+  already over. With no overall set, neither appears. The placeholder is never the saved value:
+  saving with the field empty saves nothing.
+
 ## Recipients
 
 A list can name a recipient, and since NEU-1241 that means exactly one thing: **a person who does not use the app**. The co-resident case the old "they use this app" radio described is the account-people picker instead (see below), so a recipient name is on its own the whole predicate — claims are hidden from the keeper and the keeper cannot claim, always.
 
-`RecipientFields.tsx` is the shared "this list is for someone else" control (create form and edit header); `lib/recipient.ts` holds its value type and payload mapping, `lib/attribution.ts` turns a list into its display line, and `ListAttribution.tsx` renders it — "from Jane" for a list someone shared, "for Beth · kept by Tom" for one kept on behalf of a person with no account. The keeper's warning under the name field is unconditional: it is the only case left.
+`RecipientFields.tsx` is the shared "this list is for someone else" control (create form and edit header); `lib/recipient.ts` holds its value type and payload mapping, `lib/attribution.ts` turns a list into its display line, and `ListAttribution.tsx` renders it — "from Jane" for a list someone shared, "for Beth · kept by Tom" for one kept on behalf of a person with no account, and "Mine" on the viewer's own row when it is marked for nobody. The keeper's warning under the name field is unconditional: it is the only case left.
 
 ## Who is this list for?
 
@@ -477,12 +559,12 @@ heading on `/lists` (NEU-1277). Its back link and its post-delete redirect both 
 because there is no folder index to return to.
 
 **Membership is an action on the list, not a tab.** `list-detail/FolderPicker.tsx` is opened by
-"Add to a folder…" in list detail's `⋯` menu — a checkbox per folder, ticked where this list is
+"Add to a folder…" on list detail's header — a checkbox per folder, ticked where this list is
 already a member, plus a field that creates one and files the list under it in a single step. It
 replaces the tab retired in NEU-1240.
 
 - **Owner or viewer.** Filing someone else's list under "Christmas 2026" is the main use of the
-  feature, so the `⋯` menu exists on the viewer header too, holding this one item. It is a viewer's
+  feature, so the action stands on the viewer header too, as the only thing on it. It is a viewer's
   only entry point to folders, so it must keep working for them.
 - A folder is private to whoever owns it: the picker always shows the *viewer's* own folders,
   and nothing about the list or its owner travels through it.
@@ -560,8 +642,8 @@ section that claims to hold everything shared with the viewer.
   unconditionally and `OccasionsSection` likewise; the `showArchived` state, both toggle buttons and
   every branch that hung off them are deleted. That is what makes "nothing archived appears in a
   default view" structural rather than a default someone has to keep choosing.
-- **Nothing is unarchived from an archive view.** List detail's `⋯` menu, the folder page's header
-  and the occasion page's organizer-only `⋯` menu already own that mutation — with its confirm, its
+- **Nothing is unarchived from an archive view.** List detail's header, the folder page's header
+  and the occasion page's organizer-only header actions already own that mutation — with its confirm, its
   403 handling and its gating — so the rows are **links to those pages** and the archive stays a way
   of finding them. A second copy of Unarchive would be a second thing to keep honest, and the
   occasion one would have to re-derive organizer-ness the occasion page already knows.
@@ -584,8 +666,13 @@ section that claims to hold everything shared with the viewer.
   organizer-only act; unarchiving is, and that is enforced where it happens.
 
 ## Testing
-- 699 test cases across 53 files, run inside the container via `task test`
+- 912 test cases across 61 files, run inside the container via `task test`
 - MSW mocks live in `src/test/mocks/handlers.ts` (default `/auth/refresh → 401`); setup in `src/test/setup.ts`
+- **The suite renders at a desktop width.** jsdom has no layout, so `src/test/viewport.ts` answers
+  `matchMedia` by hand: `(min-width: 768px)` matches and nothing else does, which is the arm every
+  existing assertion was written against. A case that wants a phone calls `mockViewport("mobile")`
+  first; `setup.ts` restores the default after every test. Only `ActionBar` branches on this
+  (ADR 0010, 0011) — CSS is still how the rest of the app answers a width question
 
 ## Critical conventions
 - **Docker**: `node_modules` lives in a named volume so the bind mount can't shadow it. After `task add`, rebuild the image.

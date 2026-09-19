@@ -152,10 +152,9 @@ function renderListDetail(token: string, list: object = ownerList) {
   );
 }
 
-/** Open the owner header's `⋯` and press one of its items. */
-async function fromListMenu(label: string) {
+/** Press one of the owner header's actions, which stand on the header itself. */
+async function fromListHeader(label: string) {
   await screen.findByText("My Wishlist");
-  await userEvent.click(screen.getByRole("button", { name: "List actions" }));
   await userEvent.click(screen.getByRole("button", { name: label }));
 }
 
@@ -241,10 +240,18 @@ function renderOccasionDetail() {
     http.post(`${API}/auth/refresh`, () =>
       HttpResponse.json({ access_token: tokenFor(1), token_type: "bearer" })
     ),
-    http.get(`${API}/occasions/3`, () => HttpResponse.json({ ...familyOccasion, family_id: 7 })),
+    // The detail read names the family (NEU-1321); the family occasions list
+    // `familyOccasion` also feeds does not, which is why it is spread here.
+    http.get(`${API}/occasions/3`, () =>
+      HttpResponse.json({ ...familyOccasion, family_id: 7, family_name: "Boone Family" })
+    ),
     http.get(`${API}/occasions/3/lists`, () => HttpResponse.json([])),
     http.get(`${API}/occasions/3/shopping`, () =>
-      HttpResponse.json({ budget: { amount: null, spent: "0.00", remaining: null }, items: [] })
+      HttpResponse.json({
+        budget: { amount: null, spent: "0.00", remaining: null, target: null, allocated: "0.00" },
+        giftees: [],
+        items: [],
+      })
     ),
     http.get(`${API}/families/7`, () =>
       HttpResponse.json({
@@ -326,6 +333,7 @@ function renderBudgetLine() {
         budget={{
           amount: "200.00", spent: "142.00", remaining: "58.00",
           bought_count: 3, total_count: 7, unpriced_count: 0,
+          allocated: "0.00", unallocated: "200.00", target: "200.00", allocation_count: 0,
         }}
         scope={{ kind: "occasion", id: 3 }}
       />
@@ -383,7 +391,7 @@ describe("the confirmation policy — what asks nothing", () => {
       }),
     );
 
-    await fromListMenu("Archive");
+    await fromListHeader("Archive");
 
     await noDialogRaised(() => expect(archived).toBe(true));
     // Nothing is announced either. `ListHeader` takes `isArchived`, so the page
@@ -403,7 +411,7 @@ describe("the confirmation policy — what asks nothing", () => {
       }),
     );
 
-    await fromListMenu("Unarchive");
+    await fromListHeader("Unarchive");
 
     await noDialogRaised(() => expect(archived).toBe(false));
   });
@@ -440,7 +448,7 @@ describe("the confirmation policy — what asks nothing", () => {
     );
 
     await screen.findByText("My Wishlist");
-    await userEvent.click(screen.getByRole("button", { name: "Remove" }));
+    await userEvent.click(screen.getByRole("button", { name: "Remove My Wishlist" }));
 
     await noDialogRaised(() => expect(removed).toBe(true));
   });
@@ -458,7 +466,7 @@ describe("the confirmation policy — what asks nothing", () => {
     );
 
     await screen.findByText("Boone Family");
-    await userEvent.click(within(zone("Members")).getByRole("button", { name: "Make Organizer" }));
+    await userEvent.click(within(zone("Members")).getByRole("button", { name: "Make Organizer Bob" }));
 
     await noDialogRaised(() => expect(promoted).toBe(true));
   });
@@ -529,7 +537,7 @@ describe("the confirmation policy — what asks, and names what it is acting on"
   it("deleting a list asks", async () => {
     renderListDetail(tokenFor(1));
 
-    await fromListMenu("Delete");
+    await fromListHeader("Delete");
 
     expect(await screen.findByRole("dialog")).toHaveAccessibleName("Delete this list?");
   });
@@ -559,7 +567,7 @@ describe("the confirmation policy — what asks, and names what it is acting on"
 
     await screen.findByText("Boone Family");
     const dialog = await dialogFrom(
-      within(zone("Members")).getByRole("button", { name: "Remove" })
+      within(zone("Members")).getByRole("button", { name: "Remove Bob" })
     );
 
     expect(dialog).toHaveAccessibleName("Remove Bob from Boone Family?");
@@ -590,8 +598,7 @@ describe("the confirmation policy — what asks, and names what it is acting on"
   it("archiving an occasion from its own page asks", async () => {
     renderOccasionDetail();
 
-    await screen.findByRole("heading", { level: 1, name: "Christmas 2026" });
-    await userEvent.click(screen.getByRole("button", { name: "Occasion actions" }));
+    await screen.findByRole("heading", { level: 1, name: "Boone Family Christmas 2026" });
     const dialog = await dialogFrom(screen.getByRole("button", { name: "Archive" }));
 
     // The page's own heading names the occasion above the dialog, so the title
@@ -638,8 +645,7 @@ describe("the confirmation policy — what asks, and names what it is acting on"
     renderPeople();
 
     await screen.findByRole("link", { name: "Alice" });
-    await userEvent.click(screen.getByRole("button", { name: "Actions for Alice" }));
-    const dialog = await dialogFrom(screen.getByRole("button", { name: "Remove" }));
+    const dialog = await dialogFrom(screen.getByRole("button", { name: "Remove Alice" }));
 
     expect(dialog).toHaveAccessibleName("Remove Alice?");
   });
@@ -669,7 +675,7 @@ describe("the confirmation policy — cancelling never writes", () => {
     );
 
     await screen.findByText("Boone Family");
-    await userEvent.click(within(zone("Members")).getByRole("button", { name: "Remove" }));
+    await userEvent.click(within(zone("Members")).getByRole("button", { name: "Remove Bob" }));
 
     const dialog = await screen.findByRole("dialog");
     await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
