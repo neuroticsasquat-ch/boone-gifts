@@ -8,6 +8,12 @@ updates:
       time: "09:00"
       timezone: America/New_York
     target-branch: updates/dependencies
+    ignore:
+      # msw 3 is a breaking migration, and @vitest/mocker still peers msw ^2.
+      # Remove once vitest supports msw 3 and the migration (NEU-1531) is done.
+      - dependency-name: msw
+        update-types:
+          - version-update:semver-major
     groups:
       minor-and-patch:
         update-types:
