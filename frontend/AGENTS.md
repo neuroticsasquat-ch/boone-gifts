@@ -711,11 +711,11 @@ Pre-commit will live **on the host** (system Python), not in the container; its 
 ## Production
 - **Deploy**: push `main` → Cloudflare Pages builds (`npm ci && npm run build`) and deploys to the CDN.
 - **Domain**: `app.boone.gift`
-- **Sentry**: `VITE_SENTRY_DSN`, initialised in `main.tsx`; the Sentry Vite plugin uploads source maps with `SENTRY_AUTH_TOKEN`.
+- **Errors → Bugsink** (Sentry protocol): `VITE_SENTRY_DSN`, initialised in `main.tsx` with `release` = the commit SHA (`__SENTRY_RELEASE__`, defined in `vite.config.ts` from `CF_PAGES_COMMIT_SHA`/`SOURCE_COMMIT`). With `SENTRY_AUTH_TOKEN` set, the Sentry Vite plugin uploads debug-ID source maps to `SENTRY_URL` and deletes them from `dist/`; without it, no maps are built. `?test-error` on any page throws a `BugsinkTestError` through the top-level ErrorBoundary. Variables: README "Error reporting".
 
 ## Environment essentials
 | Variable | Notes |
 |---|---|
 | `VITE_API_URL` | Backend base URL (prod: `https://api.boone.gift`) |
-| `VITE_SENTRY_DSN` | Leave empty to disable Sentry |
-| `SENTRY_AUTH_TOKEN` | Build-time only, for source map upload |
+| `VITE_SENTRY_DSN` | Bugsink DSN; leave empty to disable error reporting |
+| `SENTRY_AUTH_TOKEN` | Build-time only, for source map upload (with `SENTRY_URL`, `SENTRY_ORG`, `SENTRY_PROJECT`) |
