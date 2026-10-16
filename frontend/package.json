@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "wrangler deploy"
   },
   "dependencies": {
     "@sentry/react": "^11.5.0",
@@ -34,6 +35,7 @@
     "tailwindcss": "^4.1.18",
     "typescript": "~7.0.2",
     "vite": "^8.3.3",
-    "vitest": "^5.0.3"
+    "vitest": "^5.0.3",
+    "wrangler": "^4.151.1"
   }
 }

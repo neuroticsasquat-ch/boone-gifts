@@ -709,13 +709,14 @@ section that claims to hold everything shared with the viewer.
 Pre-commit will live **on the host** (system Python), not in the container; its hooks delegate to `task` commands that run the checks inside Docker (`task lint`, `task test`). Never install pre-commit or its hooks inside the container.
 
 ## Production
-- **Deploy**: push `main` → Cloudflare Pages builds (`npm ci && npm run build`) and deploys to the CDN.
+- **Deploy**: an assets-only Cloudflare Worker (`wrangler.jsonc`, no `main`) built by Workers Builds — build command `npm run build`, deploy command `npx wrangler deploy`. `not_found_handling: "single-page-application"` serves `index.html` for deep links; there is no `_redirects`. Build variables and local checks: README "Deployment".
 - **Domain**: `app.boone.gift`
-- **Errors → Bugsink** (Sentry protocol): `VITE_SENTRY_DSN`, initialised in `main.tsx` with `release` = the commit SHA (`__SENTRY_RELEASE__`, defined in `vite.config.ts` from `CF_PAGES_COMMIT_SHA`/`SOURCE_COMMIT`). With `SENTRY_AUTH_TOKEN` set, the Sentry Vite plugin uploads debug-ID source maps to `SENTRY_URL` and deletes them from `dist/`; without it, no maps are built. `?test-error` on any page throws a `BugsinkTestError` through the top-level ErrorBoundary. Variables: README "Error reporting".
+- **Errors → Bugsink** (Sentry protocol): `VITE_SENTRY_DSN`, initialised in `main.tsx` with `release` = the commit SHA (`__SENTRY_RELEASE__`, defined in `vite.config.ts` from `SOURCE_COMMIT`/`WORKERS_CI_COMMIT_SHA`/`CF_PAGES_COMMIT_SHA`). With `SENTRY_AUTH_TOKEN` set, the Sentry Vite plugin uploads debug-ID source maps to `SENTRY_URL` and deletes them from `dist/`; without it, no maps are built. `?test-error` on any page throws a `BugsinkTestError` through the top-level ErrorBoundary. Variables: README "Error reporting".
 
 ## Environment essentials
 | Variable | Notes |
 |---|---|
 | `VITE_API_URL` | Backend base URL (prod: `https://api.boone.gift`) |
 | `VITE_SENTRY_DSN` | Bugsink DSN; leave empty to disable error reporting |
-| `SENTRY_AUTH_TOKEN` | Build-time only, for source map upload (with `SENTRY_URL`, `SENTRY_ORG`, `SENTRY_PROJECT`) |
+| `VITE_SENTRY_ENVIRONMENT` | Environment tag; defaults to `production` |
+| `SENTRY_AUTH_TOKEN` | Build-time only, for source map upload (with `SENTRY_URL`; `SENTRY_ORG`/`SENTRY_PROJECT` default to `bugsinkhasnoorgs`/`boone-gifts-frontend`) |

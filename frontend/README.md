@@ -87,13 +87,36 @@ Errors go to [Bugsink](https://www.bugsink.com/), which speaks the Sentry protoc
 |---|---|
 | `SENTRY_AUTH_TOKEN` | Bugsink auth token. Without it the build still succeeds, but emits no source maps and uploads nothing |
 | `SENTRY_URL` | The Bugsink host, e.g. `https://bugsink.neuroticsasquat.ch` |
-| `SENTRY_ORG` | Any value. Bugsink has no organisations, but `sentry-cli` requires one |
-| `SENTRY_PROJECT` | The Bugsink project slug |
-| `CF_PAGES_COMMIT_SHA` / `SOURCE_COMMIT` | Set by Cloudflare Pages / Coolify. Becomes the `release` on every event and on the uploaded maps |
+| `SENTRY_ORG` | Any value; defaults to `bugsinkhasnoorgs`. Bugsink has no organisations, but `sentry-cli` requires one |
+| `SENTRY_PROJECT` | The Bugsink project slug; defaults to `boone-gifts-frontend` |
+| `SOURCE_COMMIT` / `WORKERS_CI_COMMIT_SHA` / `CF_PAGES_COMMIT_SHA` | Set by Coolify / Workers Builds / Cloudflare Pages; the first that is set and not Coolify's literal `unknown` wins. Becomes the `release` on every event and on the uploaded maps |
 
 With a token, Vite emits hidden source maps, the plugin injects debug IDs and uploads them to Bugsink as an artifact bundle, then deletes every `.map` from `dist/`, so none is published to the CDN.
 
 To check reporting end to end, load any page with `?test-error` (e.g. `https://app.boone.gift/?test-error`). It throws a `BugsinkTestError`, which the top-level `Sentry.ErrorBoundary` catches and reports. Nothing links to it.
+
+## Deployment
+
+The app deploys as a Cloudflare Worker with static assets, built and deployed by Workers Builds. `wrangler.jsonc` declares an **assets-only** Worker — no `main`, so no Worker script runs: the platform serves `dist/` directly and answers unknown paths with `index.html` (`not_found_handling: "single-page-application"`), so deep links reach the router. There is no `_redirects` file; that setting replaces it.
+
+Workers Builds settings:
+
+- **Build command:** `npm run build`
+- **Deploy command:** `npx wrangler deploy` (the `deploy` script runs the same thing)
+- **Root directory:** the repo root
+
+Build variables the app reads — set them as **build** variables, not Worker runtime variables, because the bundle is static and every value is fixed at build time:
+
+| Variable | Purpose |
+|---|---|
+| `VITE_API_URL` | Backend base URL (`https://api.boone.gift`) |
+| `VITE_SENTRY_DSN` | Bugsink DSN; unset leaves error reporting off |
+| `VITE_SENTRY_ENVIRONMENT` | Environment tag; defaults to `production` |
+| `SENTRY_URL` / `SENTRY_AUTH_TOKEN` | Source map upload (see "Error reporting" above); `SENTRY_ORG` / `SENTRY_PROJECT` default correctly (a blank value counts as unset) |
+
+The release SHA needs no variable: Workers Builds sets `WORKERS_CI_COMMIT_SHA` itself.
+
+To check the Worker locally, from `task shell -- web`: `npm run build && npx wrangler deploy --dry-run` lists the assets it would upload, and `npx wrangler dev` serves `dist/` the way production does.
 
 ## Testing
 
