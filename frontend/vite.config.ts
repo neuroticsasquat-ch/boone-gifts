@@ -6,10 +6,14 @@ import { sentryVitePlugin } from "@sentry/vite-plugin";
 
 // The commit being built, which is the release every error is filed under.
 // Coolify passes SOURCE_COMMIT (a literal "unknown" unless "Include
-// SOURCE_COMMIT in build" is on); Cloudflare Pages passes CF_PAGES_COMMIT_SHA.
-const release = [process.env.SOURCE_COMMIT, process.env.CF_PAGES_COMMIT_SHA].find(
-  (sha) => sha && sha !== "unknown",
-);
+// SOURCE_COMMIT in build" is on); Workers Builds passes WORKERS_CI_COMMIT_SHA;
+// Cloudflare Pages passes CF_PAGES_COMMIT_SHA (kept until the Pages project is
+// retired).
+const release = [
+  process.env.SOURCE_COMMIT,
+  process.env.WORKERS_CI_COMMIT_SHA,
+  process.env.CF_PAGES_COMMIT_SHA,
+].find((sha) => sha && sha !== "unknown");
 
 // Source maps go to Bugsink and nowhere else: without a token they are not
 // generated at all, and with one they are emitted "hidden" (no
@@ -29,8 +33,9 @@ export default defineConfig({
     tailwindcss(),
     sentryVitePlugin({
       url: process.env.SENTRY_URL,
-      org: process.env.SENTRY_ORG,
-      project: process.env.SENTRY_PROJECT,
+      // Bugsink has no organisations, but sentry-cli requires one.
+      org: process.env.SENTRY_ORG || "bugsinkhasnoorgs",
+      project: process.env.SENTRY_PROJECT || "boone-gifts-frontend",
       authToken: process.env.SENTRY_AUTH_TOKEN,
       disable: !uploadSourceMaps,
       telemetry: false,
