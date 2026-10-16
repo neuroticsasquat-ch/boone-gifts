@@ -76,8 +76,24 @@ See [`.env.example`](.env.example) for the annotated set.
 | Variable | Notes |
 |---|---|
 | `VITE_API_URL` | Backend base URL, as reached by the browser |
-| `VITE_SENTRY_DSN` | Leave empty to disable Sentry locally |
-| `SENTRY_AUTH_TOKEN` | Build-time only, for source map upload |
+| `VITE_SENTRY_DSN` | Bugsink DSN for this project. Leave empty to disable error reporting locally |
+| `VITE_SENTRY_ENVIRONMENT` | Environment tag on every event; defaults to `production` |
+
+### Error reporting (Bugsink)
+
+Errors go to [Bugsink](https://www.bugsink.com/), which speaks the Sentry protocol, so the client is still `@sentry/react` and the build still uses `@sentry/vite-plugin`. These are **build-time** variables, read from the build host's environment rather than from `.env`, and none of them reaches the bundle except the release SHA:
+
+| Variable | Notes |
+|---|---|
+| `SENTRY_AUTH_TOKEN` | Bugsink auth token. Without it the build still succeeds, but emits no source maps and uploads nothing |
+| `SENTRY_URL` | The Bugsink host, e.g. `https://bugsink.neuroticsasquat.ch` |
+| `SENTRY_ORG` | Any value. Bugsink has no organisations, but `sentry-cli` requires one |
+| `SENTRY_PROJECT` | The Bugsink project slug |
+| `CF_PAGES_COMMIT_SHA` / `SOURCE_COMMIT` | Set by Cloudflare Pages / Coolify. Becomes the `release` on every event and on the uploaded maps |
+
+With a token, Vite emits hidden source maps, the plugin injects debug IDs and uploads them to Bugsink as an artifact bundle, then deletes every `.map` from `dist/`, so none is published to the CDN.
+
+To check reporting end to end, load any page with `?test-error` (e.g. `https://app.boone.gift/?test-error`). It throws a `BugsinkTestError`, which the top-level `Sentry.ErrorBoundary` catches and reports. Nothing links to it.
 
 ## Testing
 
