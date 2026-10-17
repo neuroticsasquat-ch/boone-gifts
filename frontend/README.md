@@ -109,6 +109,7 @@ Build variables the app reads — set them as **build** variables, not Worker ru
 
 | Variable | Purpose |
 |---|---|
+| `NODE_VERSION` | `22`, matching CI and the Dockerfile; the repo pins no version, so the build image's default applies otherwise |
 | `VITE_API_URL` | Backend base URL (`https://api.boone.gift`) |
 | `VITE_SENTRY_DSN` | Bugsink DSN; unset leaves error reporting off |
 | `VITE_SENTRY_ENVIRONMENT` | Environment tag; defaults to `production` |
