@@ -1,0 +1,33 @@
+minimum_pre_commit_version: "3.5.0"
+
+# All hooks run INSIDE the `web` dev container, never the host: the container's
+# node_modules is the single source of truth for oxlint / tsc / vitest, so a
+# commit is checked against the exact toolchain the project pins -- not whatever
+# sits on the host. This mirrors the Taskfile's EXEC_T (`docker compose exec -T
+# web ...`). `-T` disables TTY allocation, required because pre-commit runs
+# non-interactively. The `web` container must be up (`task up`) for a commit to
+# run its checks. oxlint and vitest are what CI runs; tsc -b is what the
+# production build runs first.
+repos:
+  - repo: local
+    hooks:
+      - id: oxlint
+        name: oxlint (container)
+        entry: docker compose exec -T web npx oxlint
+        language: system
+        pass_filenames: false
+        files: \.(ts|tsx)$
+
+      - id: typecheck
+        name: tsc -b (container)
+        entry: docker compose exec -T web npx tsc -b
+        language: system
+        pass_filenames: false
+        files: \.(ts|tsx)$|^tsconfig.*\.json$
+
+      - id: vitest
+        name: vitest (container)
+        entry: docker compose exec -T web npx vitest run
+        language: system
+        pass_filenames: false
+        always_run: true
