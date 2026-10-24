@@ -11,7 +11,7 @@ For architecture, routes, and conventions, see [`AGENTS.md`](AGENTS.md).
 - **React Router v7** (routing)
 - **TanStack Query v5** + **Axios** (data fetching)
 - **Vitest** + **React Testing Library** + **MSW** (testing)
-- **Docker Compose** (the web container, behind the shared tbc-localdev-infra Traefik)
+- **Docker Compose** (the frontend container, behind the shared tbc-localdev-infra Traefik)
 
 ## Prerequisites
 
@@ -33,7 +33,7 @@ For architecture, routes, and conventions, see [`AGENTS.md`](AGENTS.md).
 
 2. Make sure this app's origin is in the backend's `APP_CORS_ORIGINS` — `https://boone-gifts.localhost`.
 
-3. Start the shared infra and the web container:
+3. Start the shared infra and the frontend container:
 
    ```
    task up
@@ -45,37 +45,41 @@ For architecture, routes, and conventions, see [`AGENTS.md`](AGENTS.md).
    pre-commit install
    ```
 
-   They run oxlint, `tsc -b` and vitest inside the `web` container, so it must be up to commit.
+   They run `task lint`, `task typecheck` and `task test` inside the `boone-gifts-frontend` container, so it must be up to commit.
 
 The app is available at `https://boone-gifts.localhost`, the API at `https://boone-gifts-api.localhost`, and Mailpit at `https://mailpit.localhost`.
 
 ## Development
 
 ```
-task up                  # Start the shared infra, then the web container
-task down                # Stop the web container (the shared infra keeps running)
-task logs                # Follow the web container's logs
-task restart             # Restart the web container
-task rebuild             # Rebuild the image and recreate the container
-task shell               # Shell into the web container
+task up                  # Start the shared infra, then the frontend container
+task down                # Stop the frontend container (the shared infra keeps running)
+task logs                # Follow the frontend container's logs
+task restart             # Restart the frontend container
+task build               # Rebuild the image, sync deps into node_modules, recreate the container
+task shell               # Shell into the frontend container
+task ps                  # Compose service status
 task infra:status        # Shared infra status (also infra:up / infra:down / infra:logs)
 ```
 
-Every other task runs inside the web container — nothing needs node on the host:
+Every other task runs inside the frontend container — nothing needs node on the host:
 
 ```
 task test                # Run test suite
-task test-file -- <path> # Run a specific test file
-task test-watch          # Run tests in watch mode
+task test -- <path>      # Run a specific test file
+task test:watch          # Run tests in watch mode
 task lint                # oxlint
 task typecheck           # tsc -b
-task build               # Production build (tsc -b && vite build)
-task add -- <pkg>        # Install a package
-task remove -- <pkg>     # Remove a package
+task build:app           # Production build (vite build)
+task deps:add -- <pkg>   # Install a package
+task deps:add-dev -- <pkg> # Install a dev dependency
+task deps:remove -- <pkg>  # Remove a package
 task install             # Reinstall deps from the lock file, after pulling updates
 ```
 
-After `task add`, rebuild the image (`task rebuild`) so the dependency survives container recreation — `node_modules` lives in a named volume.
+After a dependency change, yours or pulled, run `task build`. `node_modules` lives in a named volume, which hides a rebuilt image's packages; `task build` syncs them into it.
+
+The Taskfile, compose file and hooks follow the shared contract in `~/projects/tbc-localdev-infra/CONVENTIONS.md`.
 
 ## Environment Variables
 
@@ -125,7 +129,7 @@ Build variables the app reads — set them as **build** variables, not Worker ru
 
 The release SHA needs no variable: Workers Builds sets `WORKERS_CI_COMMIT_SHA` itself.
 
-To check the Worker locally, from `task shell -- web`: `npm run build && npx wrangler deploy --dry-run` lists the assets it would upload, and `npx wrangler dev` serves `dist/` the way production does.
+To check the Worker locally, from `task shell`: `npm run build && npx wrangler deploy --dry-run` lists the assets it would upload, and `npx wrangler dev` serves `dist/` the way production does.
 
 ## Testing
 
