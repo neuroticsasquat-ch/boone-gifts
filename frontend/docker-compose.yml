@@ -1,5 +1,5 @@
 services:
-  web:
+  boone-gifts-frontend:
     build:
       context: .
       target: dev
@@ -14,10 +14,18 @@ services:
     # the api container. No published port: Traefik is the only route in.
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
       - "traefik.http.routers.boone-gifts-web.rule=Host(`boone-gifts.localhost`)"
       - "traefik.http.routers.boone-gifts-web.entrypoints=websecure"
       - "traefik.http.routers.boone-gifts-web.tls=true"
       - "traefik.http.services.boone-gifts-web.loadbalancer.server.port=5173"
+    # The SPA has no health route; Vite answering `/` is the readiness signal.
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5173/').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
     networks:
       - proxy
 
