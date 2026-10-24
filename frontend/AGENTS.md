@@ -5,21 +5,24 @@ React 19 SPA for Boone Gifts. TypeScript, Vite, Tailwind v4. Runs entirely in Do
 ## Quick start
 ```bash
 cp .env.example .env              # VITE_API_URL points at the backend
-task -d .. up                     # start the whole stack (api, web, mail)
+task up                           # shared infra (Traefik, Mailpit), then the web container
+task -d ../boone-gifts-backend up # the API, from its own repo
+pre-commit install                # once: hooks run oxlint, tsc and vitest in the container
 ```
-Dev web on `http://localhost:5173`, API on `http://localhost:8000`, Mailpit on `http://localhost:8025`.
+Dev web on `https://boone-gifts.localhost`, API on `https://boone-gifts-api.localhost`, Mailpit on `https://mailpit.localhost` — all through the shared Traefik in `~/projects/tbc-localdev-infra`.
 
 ## Commands
 
-**Stack lifecycle lives in the workspace root** (`~/project/Taskfile.yml`), not here — the compose file is one level up and is rendered by the Coder template, so don't edit it in the workspace:
-- `task up` / `task down` / `task ps` — whole stack
-- `task restart -- web` / `task rebuild -- web` / `task logs -- web` / `task shell -- web`
+**Lifecycle** — this repo's `docker-compose.yml` runs only the `web` service, on the external `proxy` network. Traefik and Mailpit come from tbc-localdev-infra (`task infra:up`, included from `../../tbc-localdev-infra`); the backend runs from its own repo:
+- `task up` — `infra:up`, then `docker compose up -d --build`
+- `task down` / `task stop` / `task restart` / `task rebuild` / `task logs` / `task shell`
 
-**Repo tasks** (from this directory, or prefixed `fe:` from the root). Every one runs **inside the container**:
+**Repo tasks**. Every one runs **inside the container** — never the host's node:
 - `task test` — `npx vitest run`
 - `task test-file -- <path>` — a single test file
 - `task test-watch` — `npx vitest` in watch mode
 - `task lint` — `npx oxlint`
+- `task typecheck` — `npx tsc -b`
 - `task build` — `npx vite build` (production build)
 - `task add -- <pkg>` / `task remove -- <pkg>` — npm install/uninstall
 - `task install` — `npm ci`, after pulling lockfile changes
@@ -45,7 +48,9 @@ Dev web on `http://localhost:5173`, API on `http://localhost:8000`, Mailpit on `
 
 ```
 Dockerfile           # node:22-slim, npm ci, idles
-Taskfile.yml         # Repo tasks (stack lifecycle lives one level up)
+docker-compose.yml   # Dev: the web service on the shared proxy network
+Taskfile.yml         # Lifecycle + repo tasks, all run in the container
+.pre-commit-config.yaml # oxlint, tsc and vitest hooks, run in the container
 index.html           # Vite entry HTML
 vite.config.ts       # Vite + Tailwind + Vitest + Sentry plugin config
 src/
@@ -676,7 +681,8 @@ section that claims to hold everything shared with the viewer.
 
 ## Critical conventions
 - **Docker**: `node_modules` lives in a named volume so the bind mount can't shadow it. After `task add`, rebuild the image.
-- **Vite HMR**: WSS on port 443 (`clientPort`) so it works behind the workspace's TLS proxy.
+- **Vite HMR**: WSS on port 443 (`clientPort`) so it works behind Traefik's TLS.
+- **Pre-commit**: `.pre-commit-config.yaml` runs oxlint, `tsc -b` and vitest via `docker compose exec -T web`, so the `web` container must be up to commit.
 - **Never store the access token in localStorage** — `src/api/client.ts` keeps it in memory and exports `setAccessToken` / `getAccessToken` / `clearAccessToken`.
 - **Type imports**: use `import type { ... }` — `verbatimModuleSyntax` is on.
 - **Types** in `src/types/index.ts`: `AuthUser` is decoded from the JWT payload (`role`), and `Gift` vs `GiftOwnerView` are separate because owners get responses without claim fields.
