@@ -11,14 +11,15 @@ For architecture, routes, and conventions, see [`AGENTS.md`](AGENTS.md).
 - **React Router v7** (routing)
 - **TanStack Query v5** + **Axios** (data fetching)
 - **Vitest** + **React Testing Library** + **MSW** (testing)
-- **Docker Compose** (web, api and a Mailpit mail catcher)
+- **Docker Compose** (the frontend container, behind the shared tbc-localdev-infra Traefik)
 
 ## Prerequisites
 
 - Docker
 - [go-task](https://taskfile.dev/)
-
-The compose file lives one directory up and starts the whole stack — this app, the backend API, and Mailpit — so there's no separate backend to launch by hand.
+- [pre-commit](https://pre-commit.com) (`brew install pre-commit`)
+- [tbc-localdev-infra](https://github.com/tomboone/tbc-localdev-infra) checked out at `~/projects/tbc-localdev-infra` (Traefik, Mailpit and the `proxy` network)
+- The backend, [boone-gifts-backend](../boone-gifts-backend), checked out beside this repo and started with its own `task up`
 
 ## Setup
 
@@ -28,46 +29,57 @@ The compose file lives one directory up and starts the whole stack — this app,
    cp .env.example .env
    ```
 
-   `VITE_API_URL` must be a URL the **browser** can reach. `http://localhost:8000` works when you're on the machine running the stack; on a remote workspace, use the api subdomain it publishes.
+   `VITE_API_URL` must be a URL the **browser** can reach: `https://boone-gifts-api.localhost`, the backend's Traefik host.
 
-2. Make sure this app's origin is in the backend's `APP_CORS_ORIGINS` — `http://localhost:5173` by default.
+2. Make sure this app's origin is in the backend's `APP_CORS_ORIGINS` — `https://boone-gifts.localhost`.
 
-3. Start the stack (from the workspace root, or with `task -d ..` from here):
+3. Start the shared infra and the frontend container:
 
    ```
    task up
    ```
 
-The app is available at `http://localhost:5173`, the API at `http://localhost:8000`, and Mailpit at `http://localhost:8025`.
+4. Install the git hooks (once):
+
+   ```
+   pre-commit install
+   ```
+
+   They run `task lint`, `task typecheck` and `task test` inside the `boone-gifts-frontend` container, so it must be up to commit.
+
+The app is available at `https://boone-gifts.localhost`, the API at `https://boone-gifts-api.localhost`, and Mailpit at `https://mailpit.localhost`.
 
 ## Development
 
-Stack lifecycle lives in the workspace root Taskfile:
-
 ```
-task up                  # Start db, mail, api, web
-task down                # Stop the stack
-task ps                  # Service status
-task logs -- web         # Follow one service's logs
-task restart -- web      # Restart one service
-task rebuild -- web      # Rebuild and recreate one service
-task shell -- web        # Shell into a service
+task up                  # Start the shared infra, then the frontend container
+task down                # Stop the frontend container (the shared infra keeps running)
+task logs                # Follow the frontend container's logs
+task restart             # Restart the frontend container
+task build               # Rebuild the image, sync deps into node_modules, recreate the container
+task shell               # Shell into the frontend container
+task ps                  # Compose service status
+task infra:status        # Shared infra status (also infra:up / infra:down / infra:logs)
 ```
 
-Repo tasks run inside the web container — from this directory, or prefixed `fe:` from the root:
+Every other task runs inside the frontend container — nothing needs node on the host:
 
 ```
 task test                # Run test suite
-task test-file -- <path> # Run a specific test file
-task test-watch          # Run tests in watch mode
+task test -- <path>      # Run a specific test file
+task test:watch          # Run tests in watch mode
 task lint                # oxlint
-task build               # Production build (tsc -b && vite build)
-task add -- <pkg>        # Install a package
-task remove -- <pkg>     # Remove a package
+task typecheck           # tsc -b
+task build:app           # Production build (vite build)
+task deps:add -- <pkg>   # Install a package
+task deps:add-dev -- <pkg> # Install a dev dependency
+task deps:remove -- <pkg>  # Remove a package
 task install             # Reinstall deps from the lock file, after pulling updates
 ```
 
-After `task add`, rebuild the image (`task rebuild -- web` from the root) so the dependency survives container recreation — `node_modules` lives in a named volume.
+After a dependency change, yours or pulled, run `task build`. `node_modules` lives in a named volume, which hides a rebuilt image's packages; `task build` syncs them into it.
+
+The Taskfile, compose file and hooks follow the shared contract in `~/projects/tbc-localdev-infra/CONVENTIONS.md`.
 
 ## Environment Variables
 
@@ -117,7 +129,7 @@ Build variables the app reads — set them as **build** variables, not Worker ru
 
 The release SHA needs no variable: Workers Builds sets `WORKERS_CI_COMMIT_SHA` itself.
 
-To check the Worker locally, from `task shell -- web`: `npm run build && npx wrangler deploy --dry-run` lists the assets it would upload, and `npx wrangler dev` serves `dist/` the way production does.
+To check the Worker locally, from `task shell`: `npm run build && npx wrangler deploy --dry-run` lists the assets it would upload, and `npx wrangler dev` serves `dist/` the way production does.
 
 ## Testing
 

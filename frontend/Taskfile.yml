@@ -1,43 +1,93 @@
-version: "3"
+version: '3'
 
-# The workspace owns the compose file one level up; stack lifecycle (up, down,
-# logs, restart) lives in ~/project/Taskfile.yml, not here.
+# Traefik, Mailpit and the external `proxy` network are the shared
+# tbc-localdev-infra stack; `task infra:up` starts it. Optional, so a checkout
+# without it (CI) still loads every task that doesn't need it. The backend runs
+# from its own repo (../boone-gifts-backend, `task up` there).
+includes:
+  infra:
+    taskfile: ~/projects/tbc-localdev-infra/Taskfile.yml
+    dir: ~/projects/tbc-localdev-infra
+    optional: true
+
+# Everything but the release tasks runs INSIDE the dev container, never on the
+# host: the container's node_modules is the single toolchain.
 vars:
-  COMPOSE: "docker compose -f ../docker-compose.yml"
-  SVC: web
-  EXEC: "docker compose -f ../docker-compose.yml exec web"
+  COMPOSE: docker compose
+  SVC: boone-gifts-frontend
+  EXEC: "{{.COMPOSE}} exec {{.SVC}}"
 
 tasks:
+  up:
+    desc: Start the shared infra, then the frontend container (detached)
+    cmds:
+      - task: infra:up
+      - "{{.COMPOSE}} up -d"
+
+  down:
+    desc: Stop and remove the frontend container (leaves the shared infra running)
+    cmd: "{{.COMPOSE}} down"
+
+  restart:
+    desc: Restart the frontend container
+    cmd: "{{.COMPOSE}} restart {{.SVC}}"
+
+  # The named node_modules volume is filled from the image only when it is first
+  # created, so a rebuilt image alone never reaches the running container. The
+  # throwaway `npm ci` writes the new lockfile's packages into the volume.
+  build:
+    desc: Rebuild the image, sync deps into the node_modules volume, recreate the container
+    cmds:
+      - "{{.COMPOSE}} build"
+      - "{{.COMPOSE}} run --rm --no-deps {{.SVC}} npm ci"
+      - "{{.COMPOSE}} up -d"
+
+  logs:
+    desc: Follow the frontend container logs
+    cmd: "{{.COMPOSE}} logs -f {{.SVC}}"
+
+  shell:
+    desc: Open a shell in the frontend container
+    cmd: "{{.EXEC}} bash"
+
+  ps:
+    desc: Show compose service status
+    cmd: "{{.COMPOSE}} ps"
+
   install:
-    desc: Reinstall dependencies from lock file (use after pulling dependency updates)
+    desc: Reinstall dependencies from the lock file into the running container
     cmd: "{{.EXEC}} npm ci"
 
-  build:
-    desc: Build for production
+  build:app:
+    desc: Build for production (vite build)
     cmd: "{{.EXEC}} npx vite build"
 
   lint:
     desc: Run oxlint
     cmd: "{{.EXEC}} npx oxlint"
 
+  typecheck:
+    desc: Type-check the project (tsc -b, the first half of npm run build)
+    cmd: "{{.EXEC}} npx tsc -b"
+
   test:
-    desc: Run tests
-    cmd: "{{.EXEC}} npx vitest run"
-
-  test-watch:
-    desc: Run tests in watch mode
-    cmd: "{{.EXEC}} npx vitest"
-
-  test-file:
-    desc: "Run a specific test file (usage: task test-file -- src/path/to/file.test.tsx)"
+    desc: "Run the test suite (usage: task test [-- src/path/to/file.test.tsx])"
     cmd: "{{.EXEC}} npx vitest run {{.CLI_ARGS}}"
 
-  add:
-    desc: "Add a package (usage: task add -- <package>)"
+  test:watch:
+    desc: Run tests in watch mode
+    cmd: "{{.EXEC}} npx vitest {{.CLI_ARGS}}"
+
+  deps:add:
+    desc: "Add a package (usage: task deps:add -- <package>)"
     cmd: "{{.EXEC}} npm install {{.CLI_ARGS}}"
 
-  remove:
-    desc: "Remove a package (usage: task remove -- <package>)"
+  deps:add-dev:
+    desc: "Add a dev dependency (usage: task deps:add-dev -- <package>)"
+    cmd: "{{.EXEC}} npm install -D {{.CLI_ARGS}}"
+
+  deps:remove:
+    desc: "Remove a package (usage: task deps:remove -- <package>)"
     cmd: "{{.EXEC}} npm uninstall {{.CLI_ARGS}}"
 
   # Release tasks run on the HOST, not in the container: git, git-cliff and gh

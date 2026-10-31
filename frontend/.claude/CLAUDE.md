@@ -4,6 +4,9 @@ Project documentation lives in [`AGENTS.md`](../AGENTS.md) — architecture, com
 routes, and production details. Read it first; this file holds only the settings that
 are specific to Claude Code and the personal skills.
 
+The Taskfile, compose file and pre-commit hooks follow `~/projects/tbc-localdev-infra/CONVENTIONS.md`:
+`task build` rebuilds the dev image, and the production bundle is `task build:app`.
+
 <!-- Specs/plans live under this repo's own docs/ (not the umbrella). This overrides the
      personal-skills DOCS_DIR auto-resolution so /planit, /implementit, /reviewit, and the loop
      resolve DOCS_DIR = <repo>/docs and find files in docs/superpowers/{specs,plans}. -->
