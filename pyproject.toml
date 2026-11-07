@@ -9,8 +9,8 @@ dependencies = [
     # release caps sqlalchemy<2.1 and skips itself on 2.1, so no SQL spans reach SigNoz.
     # The strict xfail in tests/integration/test_opentelemetry_startup.py fails CI once
     # a release lifts the cap (contrib #5120) -- then drop this, it and the Dependabot ignore.
-    "sqlalchemy>=2.0.55,<2.1",
-    "pydantic>=2.14.1",
+    "sqlalchemy>=2.0.57,<2.1",
+    "pydantic>=2.14.2",
     "pydantic-settings>=2.16.2",
     "pyjwt>=2.15.1",
     "bcrypt>=5.0.0",
@@ -19,7 +19,7 @@ dependencies = [
     "slowapi>=0.1.10",
     "sentry-sdk[fastapi]>=2.73.0",
     "opentelemetry-distro>=0.66b1",
-    "opentelemetry-exporter-otlp-proto-http>=1.45.1",
+    "opentelemetry-exporter-otlp-proto-http>=1.45.2",
     "opentelemetry-instrumentation-fastapi>=0.66b1",
     "opentelemetry-instrumentation-sqlalchemy>=0.66b1",
     "opentelemetry-instrumentation-httpx>=0.66b1",
