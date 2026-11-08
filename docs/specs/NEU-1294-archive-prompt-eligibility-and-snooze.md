@@ -43,21 +43,16 @@ Three pieces: one migration, one read endpoint, one write endpoint.
 
 ```python
 op.create_table(
-    "occasion_archive_prompts",
-    sa.Column("id", sa.Integer(), nullable=False),
-    sa.Column("user_id", sa.Integer(), nullable=False),
-    sa.Column("occasion_id", sa.Integer(), nullable=False),
-    sa.Column("dismissed_until", sa.DateTime(), nullable=False),
-    sa.ForeignKeyConstraint(
-        ["user_id"],
-        ["users.id"],
-    ),
-    sa.ForeignKeyConstraint(
-        ["occasion_id"],
-        ["occasions.id"],
-    ),
-    sa.PrimaryKeyConstraint("id"),
-    sa.UniqueConstraint("user_id", "occasion_id", name="uq_occasion_archive_prompts_user_occasion"),
+    'occasion_archive_prompts',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('user_id', sa.Integer(), nullable=False),
+    sa.Column('occasion_id', sa.Integer(), nullable=False),
+    sa.Column('dismissed_until', sa.DateTime(), nullable=False),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['occasion_id'], ['occasions.id'], ),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('user_id', 'occasion_id',
+                        name='uq_occasion_archive_prompts_user_occasion'),
 )
 ```
 

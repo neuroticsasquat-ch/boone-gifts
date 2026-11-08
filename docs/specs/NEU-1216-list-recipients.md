@@ -36,7 +36,6 @@ see §4 for what that deliberately excludes.
 recipient_name: Mapped[str | None] = mapped_column(String(255), default=None)
 recipient_has_account: Mapped[bool | None] = mapped_column(Boolean, default=None)
 
-
 @property
 def kept_for_absent_person(self) -> bool:
     """This list is kept on behalf of someone who has no account and will never
@@ -68,8 +67,8 @@ on the downgrade:
 ```python
 # Use ADD COLUMN directly (SQLite supports it natively for simple additions)
 # to avoid batch mode's drop/recreate which fails on FK constraints.
-op.add_column("lists", sa.Column("recipient_name", sa.String(length=255), nullable=True))
-op.add_column("lists", sa.Column("recipient_has_account", sa.Boolean(), nullable=True))
+op.add_column('lists', sa.Column('recipient_name', sa.String(length=255), nullable=True))
+op.add_column('lists', sa.Column('recipient_has_account', sa.Boolean(), nullable=True))
 ```
 
 **No `server_default` and no backfill.** Existing rows come out NULL, which is exactly today's
@@ -103,7 +102,6 @@ def normalize_recipient_name(cls, v: str | None) -> str | None:
     if v is None:
         return None
     return v.strip() or None
-
 
 @model_validator(mode="after")
 def require_name_with_account_answer(self):

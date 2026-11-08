@@ -171,7 +171,7 @@ Response schema:
 
 ```python
 class ListFamilyShareState(BaseModel):
-    id: int  # family id
+    id: int          # family id
     name: str
     shared: bool
 ```

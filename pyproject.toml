@@ -49,7 +49,7 @@ dev = [
 [tool.ruff]
 line-length = 100
 target-version = "py314"
-extend-exclude = [".claude", "frontend"]
+extend-exclude = [".claude", "frontend", "docs"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]

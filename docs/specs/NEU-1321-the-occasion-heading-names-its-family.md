@@ -132,12 +132,12 @@ in the interim: it prints the placeholder `Family` until the real name arrives. 
 
 ```python
 def _require_member(db, family_id, actor) -> FamilyMember:
-    family = families_repo.get_family(db, family_id)  # ← already fetched
+    family = families_repo.get_family(db, family_id)      # ← already fetched
     if family is None:
         raise NotFoundError("Family not found.")
     membership = families_repo.get_family_member(...)
     ...
-    return membership  # ← family discarded
+    return membership                                      # ← family discarded
 ```
 
 Every occasion read already pays for this row, on the existence check. So `family_name` is a field
