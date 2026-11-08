@@ -26,7 +26,7 @@ const ALL_LISTS = "all";
 /** `?folder=` read as an id, or null when it is not one syntactically.
  *
  *  A folder id is a positive integer or it is not an id at all — the same rule
- *  `NumericId` applies to a route id (ADR 0006), applied to a param. `abc`,
+ *  `NumericId` applies to a route id (ADR 0012), applied to a param. `abc`,
  *  `-1`, `0` and `1.5` are all treated as absent. Whether a well-formed id names
  *  a folder the *viewer owns* cannot be known until `getFolders()` resolves, and
  *  is the second stage, below. */
@@ -161,7 +161,7 @@ export function Lists() {
   // "Most recent" is the order the server already returns, so the section renders
   // the server's merge of the direct and family grants until the viewer says
   // otherwise. Sorting reorders that; grouping subdivides it, and only when the
-  // viewer switches it on (ADR 0005).
+  // viewer switches it on (ADR 0011).
   const visibleShared = useMemo(
     () => visibleLists(sharedLists.data ?? [], { filtering, folderIds: folderListIds, sortBy }),
     [sharedLists.data, filtering, folderListIds, sortBy],
@@ -203,7 +203,7 @@ export function Lists() {
 
       {/* The way in to the occasions the viewer is shopping for. Renders
           nothing when they have none, and never delays the lists below
-          (ADR 0007). */}
+          (ADR 0013). */}
       <OccasionStrip />
 
       <header>
@@ -320,7 +320,7 @@ export function Lists() {
               family grants and ordered them (NEU-1227). The source shows as a label
               on the row; it becomes a heading only when the viewer asks for one
               through Group by, and that heading links only where the page behind
-              it carries more than the grouping does (ADR 0007). */}
+              it carries more than the grouping does (ADR 0013). */}
           <section>
             <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
               <HandshakeIcon className="h-5 w-5" /> Shared with Me
@@ -348,7 +348,7 @@ export function Lists() {
                     <section key={group.key}>
                       {/* The qualifier stays plain text: an occasion heading
                           reads "Boone Family · Christmas 2026", and only the
-                          occasion name leads to the occasion (ADR 0007). */}
+                          occasion name leads to the occasion (ADR 0013). */}
                       <h3 className="text-sm font-semibold text-gray-700">
                         {group.qualifier && `${group.qualifier} · `}
                         {group.href ? (

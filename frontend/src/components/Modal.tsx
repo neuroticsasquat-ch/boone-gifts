@@ -50,7 +50,7 @@ const stack: string[] = [];
  * trap, Escape, the backdrop click and focus return. Hand-rolled on a div
  * rather than a native `<dialog>`, because jsdom 30 implements only the `open`
  * property — the behaviours below are ours precisely so they can be asserted
- * rather than assumed. See ADR 0008 and its NEU-1306 amendment.
+ * rather than assumed. See ADR 0014 and its NEU-1306 amendment.
  *
  * The caller owns its own heading and passes `labelledBy`, so each keeps its
  * own layout while the shell keeps the accessible name.

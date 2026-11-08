@@ -23,7 +23,7 @@ import { SharedRows } from "../components/SharedListRows";
  *
  * It lists no occasions. That is the family's business and belongs on the
  * occasion card; this page stays a label's destination, not a second index —
- * which is also why person headings lead nowhere (ADR 0007).
+ * which is also why person headings lead nowhere (ADR 0013).
  */
 export function ConnectionProfile() {
   const connectionId = useNumericId();

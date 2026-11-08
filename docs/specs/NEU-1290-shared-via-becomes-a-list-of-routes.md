@@ -19,7 +19,7 @@ occasion, lower occasion id breaks ties.
 
 The discard is what breaks grouping. On `/lists`, a both-ways list is labelled "from Carol" and
 therefore knows about no occasion, so Group by Occasion drops it into **"Not in an occasion"** —
-the leftover bucket ADR 0005 introduced precisely so nothing shared with the viewer could silently
+the leftover bucket ADR 0011 introduced precisely so nothing shared with the viewer could silently
 vanish from a section claiming to be complete. A list shared to two occasions appears under one of
 them arbitrarily.
 

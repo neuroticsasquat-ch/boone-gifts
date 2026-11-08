@@ -172,7 +172,7 @@ describe("AuthContext", () => {
 
 // Pinned at the seam rather than per-screen: one assertion that the cache is empty after
 // an identity change is worth more than a test per page, and it does not rot as pages are
-// added. See ADR 0004.
+// added. See ADR 0010.
 describe("AuthContext — the query cache at the identity boundary", () => {
   it("empties the cache when the viewer logs out", async () => {
     server.use(loginReturns(fakeAccessToken), logoutSucceeds);
@@ -404,7 +404,7 @@ describe("AuthContext — the query cache at the identity boundary", () => {
   it("does not loop when a second request fails after the session has ended", async () => {
     // clear() drops entries that still have observers, so those refetch once against a
     // dead token and reject. The second failure changes no id, so it triggers no further
-    // clear. ADR 0004, "Bad, and accepted".
+    // clear. ADR 0010, "Bad, and accepted".
     let refreshAttempts = 0;
     server.use(
       loginReturns(fakeAccessToken),

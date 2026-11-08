@@ -338,7 +338,7 @@ function unallocatedHint(
  * and hiding it until they commit to a number would be tidier and less honest.
  *
  * **Every clause is built from a formatted value and dropped when that value
- * will not format** (ADR 0003). Nothing here falls back to the raw wire string
+ * will not format** (ADR 0009). Nothing here falls back to the raw wire string
  * under a bare `$`, and nothing substitutes a zero for an amount that is
  * missing — those are the two accidents the shared formatter exists to end.
  */

@@ -6,7 +6,7 @@ import { Modal } from "./Modal";
  * filter box and its state, the summary line, the scrolling column of rows and
  * the `Done` footer.
  *
- * Two callers shape it, which is the only reason it exists — ADR 0008's
+ * Two callers shape it, which is the only reason it exists — ADR 0014's
  * argument about `Modal` applies here word for word: *"a shell primitive
  * designed against one caller is a guess […] it can be extracted then, with two
  * callers to shape it."* `SharingModal` is list mode (families and people) and

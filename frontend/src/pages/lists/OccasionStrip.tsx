@@ -24,7 +24,7 @@ const EXPANDED = "all";
  *
  * `/occasions/:id` holds the viewer's budget and their shopping tab and is the
  * hardest page in the app to reach — People, then a family, then its Occasions
- * section. Nobody looks for Christmas under "People" (ADR 0007). This is the
+ * section. Nobody looks for Christmas under "People" (ADR 0013). This is the
  * way in, on the page the app opens on.
  *
  * Renders **nothing at all** when the viewer has no occasions — no empty card,
@@ -158,7 +158,7 @@ export function OccasionStrip() {
  *
  * **Every** occasion keeps its route to `/occasions/:id`, the empty ones
  * included — that page holds the budget and the shopping tab, which is the
- * whole argument of ADR 0007.
+ * whole argument of ADR 0013.
  */
 function OccasionCard({
   occasion,

@@ -130,7 +130,7 @@ export function ActionableBanner() {
     onError: () => toast.error("Failed to archive the occasion."),
     // The dialog closes when the mutation settles rather than on the click, so
     // it can stay open with every button disabled while the archive is in
-    // flight instead of vanishing mid-mutation (ADR 0008).
+    // flight instead of vanishing mid-mutation (ADR 0014).
     onSettled: () => setConfirming(null),
   });
 

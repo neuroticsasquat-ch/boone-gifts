@@ -3,7 +3,7 @@
  * asks and the bar that offers (`ActionBar`, `ConfirmDialog`). Two class maps,
  * one set of names: a `danger` action and the `danger` button inside the dialog
  * it opens describe themselves with the same word, which is what stops a second
- * vocabulary growing alongside the first (ADR 0009).
+ * vocabulary growing alongside the first (ADR 0015).
  */
 export type Tone = "danger" | "primary" | "neutral";
 
@@ -21,8 +21,8 @@ export const CONFIRM_TONE_CLASSES: Record<Tone, string> = {
  * On a header or a row, where the actions sit beside the thing they act on and
  * must not out-shout it. `danger` is an outline rather than a fill: that is the
  * answer to the "column of red buttons" objection the old `⋯` existed to avoid
- * (ADR 0009), and solid red is wasted on a control that is one click from a
- * confirmation anyway (ADR 0008). The transparent border on `neutral` keeps
+ * (ADR 0015), and solid red is wasted on a control that is one click from a
+ * confirmation anyway (ADR 0014). The transparent border on `neutral` keeps
  * every button in a bar the same height as an outlined one.
  *
  * `primary` is here because the map is total over a vocabulary the dialog owns,

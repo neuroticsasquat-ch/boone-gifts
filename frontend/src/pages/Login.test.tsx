@@ -26,7 +26,7 @@ const fakeAccessToken = [
 ].join(".");
 
 function renderLogin() {
-  // AuthProvider clears the query cache at the identity boundary (ADR 0004), so it needs
+  // AuthProvider clears the query cache at the identity boundary (ADR 0010), so it needs
   // a QueryClientProvider above it, exactly as App.tsx gives it one.
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(

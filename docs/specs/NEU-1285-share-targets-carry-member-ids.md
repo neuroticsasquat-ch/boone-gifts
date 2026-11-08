@@ -74,7 +74,7 @@ covers. The frontend disable is a **redundancy nudge, not a permission**: a dire
 grant that survives the person leaving the family or the occasion share being revoked, so refusing
 it would quietly narrow who can see the list.
 
-This is the deliberate exception to `frontend/CONTEXT.md` rule 1 ("anything the UI hides is also
+This is the deliberate exception to `CONTEXT.md` rule 1 ("anything the UI hides is also
 refused server-side"), recorded there rather than left implicit.
 
 ## Acceptance criteria

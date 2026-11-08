@@ -2,7 +2,7 @@
 
 React SPA for the Boone Gifts platform — a gift list and wishlist app where users create lists, share them with connections and families, and claim gifts without the list's owner seeing who claimed what.
 
-For architecture, routes, and conventions, see [`AGENTS.md`](AGENTS.md).
+For architecture, routes, and conventions, see the *Frontend* section of the root [`AGENTS.md`](../AGENTS.md#frontend).
 
 This is the `frontend/` directory of the `boone-gifts` monorepo; the backend is at the repo root
 (NEU-2237). The compose file, Taskfile and pre-commit hooks are the root ones, and the frontend's

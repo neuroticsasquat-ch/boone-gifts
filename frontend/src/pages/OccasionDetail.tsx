@@ -55,7 +55,7 @@ const SHARE_VALUES = ["open", "closed"] as const;
 /**
  * A family occasion — "Boone Family · Christmas 2026" — and the lists shared to
  * it (project spec §9.2). The route the nav project retired, reintroduced with
- * the family meaning of the word (`docs/adr/0002-occasion-and-folder.md`).
+ * the family meaning of the word (`docs/adr/0008-occasion-and-folder.md`).
  *
  * An **archived** occasion renders exactly like an active one. Archiving blocks
  * new shares and nothing else (project spec §5.4): its lists stay viewable and
@@ -361,7 +361,7 @@ function OccasionHeader({
       ) : (
         // Stacks below `md`, as `ListHeader` and `FolderDetail` always have.
         // This header was the one that never did, which is half of why its
-        // heading had no width left beside its actions (ADR 0010).
+        // heading had no width left beside its actions (ADR 0016).
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           {/* `items-end`, not `items-center`: with a two-line heading, centring
               would float the pill against the eyebrow instead of the occasion

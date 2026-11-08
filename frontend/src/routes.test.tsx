@@ -58,7 +58,7 @@ describe("routes", () => {
   );
 
   // `/occasions/:id` is back, and means a *family's* occasion now — the folder
-  // pages took the old meaning of the word with them (frontend ADR 0002).
+  // pages took the old meaning of the word with them (frontend ADR 0008).
   // `/folders/:id` is routed at last (NEU-1274), the index page still is not.
   it.each([
     "/lists",
@@ -127,7 +127,7 @@ describe("routes", () => {
 
 /**
  * The standing guard that every numeric `:id` route is wrapped in `<NumericId>`
- * (`docs/adr/0006-route-ids-are-validated-at-the-route.md`). It walks the
+ * (`docs/adr/0012-route-ids-are-validated-at-the-route.md`). It walks the
  * `routes` array rather than naming the six, so **adding a seventh `:id` route
  * without a wrapper fails here** — that is its whole job, in the spirit of the
  * standing retirement guard under `src/test/`, which greps the tree for the

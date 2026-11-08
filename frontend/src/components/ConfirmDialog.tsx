@@ -16,7 +16,7 @@ export type ConfirmAction = {
  * The app's only confirmation dialog, and since NEU-1306 one of two callers of
  * `Modal` — which owns the backdrop, the trap, Escape and focus return that
  * used to live here. Its own shape is unchanged: `max-w-md`, content-sized,
- * title then body then the action row (ADR 0008, amended).
+ * title then body then the action row (ADR 0014, amended).
  *
  * Driven declaratively, not as a promise: the caller holds its own "what am I
  * confirming" state and passes `pending`, so the dialog can stay open with
@@ -41,7 +41,7 @@ export function ConfirmDialog({
 
   // `pending` disables every button including Cancel; Escape and the backdrop
   // are ways out too, so they are stopped by the same guard — closing
-  // mid-mutation is the regression ADR 0008 exists to prevent.
+  // mid-mutation is the regression ADR 0014 exists to prevent.
   const close = useCallback(() => {
     if (!pending) onResolve(null);
   }, [pending, onResolve]);

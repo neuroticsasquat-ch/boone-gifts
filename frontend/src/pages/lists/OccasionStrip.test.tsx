@@ -224,7 +224,7 @@ describe("OccasionStrip", () => {
     expect(within(card).getByRole("button", { name: "Share a list" })).toBeInTheDocument();
     expect(within(card).queryByText("No lists yet")).not.toBeInTheDocument();
     // Every occasion keeps its route — that page holds the budget and the
-    // shopping tab, which is the whole argument of ADR 0007.
+    // shopping tab, which is the whole argument of ADR 0013.
     expect(within(card).getByRole("link")).toHaveAttribute("href", "/occasions/9");
   });
 

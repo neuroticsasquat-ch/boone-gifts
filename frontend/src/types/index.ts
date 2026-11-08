@@ -263,7 +263,7 @@ export interface FolderDetail {
 /**
  * A family's shared gifting occasion — "Christmas 2026". The unit a list is
  * shared *to*, owned by the family. Not a {@link Folder}, which is one user's
- * private grouping of lists — see `docs/adr/0002-occasion-and-folder.md`.
+ * private grouping of lists — see `docs/adr/0008-occasion-and-folder.md`.
  */
 export interface Occasion {
   id: number;

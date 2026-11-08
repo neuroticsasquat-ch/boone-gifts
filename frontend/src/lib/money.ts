@@ -10,7 +10,7 @@
  * computed rather than stored has no such column behind it at all.
  *
  * **Currency is single and implicit.** Nothing is stored, nothing is chosen,
- * and every amount is US dollars — see `docs/adr/0003-money-is-formatted-in-one-place.md`.
+ * and every amount is US dollars — see `docs/adr/0009-money-is-formatted-in-one-place.md`.
  */
 
 /** Constructed once: `Intl.NumberFormat` is expensive to build and these render

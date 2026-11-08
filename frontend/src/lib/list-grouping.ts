@@ -2,12 +2,12 @@
  * How **Shared with me** subdivides when the viewer asks it to (project spec
  * §9.1).
  *
- * Grouping is opt-in and off by default: ADR 0001 made the section one flat
- * place for every list shared with the viewer, and ADR 0005 reintroduces the
+ * Grouping is opt-in and off by default: ADR 0007 made the section one flat
+ * place for every list shared with the viewer, and ADR 0011 reintroduces the
  * hierarchy only as something the viewer switches on. Source is still a label
  * on the row and never a filter-by-default (`CONTEXT.md` rule 3); a heading
  * leads somewhere only when that page carries what the grouping does not
- * (ADR 0007).
+ * (ADR 0013).
  *
  * Every grouping is a projection of data the page already holds — `shared_via`
  * on the payload, and the folder memberships the filter's select already reads.
@@ -35,7 +35,7 @@ export interface FolderMembership {
  * One bucket of the subdivided section.
  *
  * `href` is the page the heading names, and a heading has one when that page
- * carries something the grouping does not (ADR 0007): `/occasions/:id` has the
+ * carries something the grouping does not (ADR 0013): `/occasions/:id` has the
  * viewer's budget and My shopping tab, `/folders/:id` has membership
  * management. `/people/:id` is the same lists filtered the same way, so a
  * person heading — and every leftover bucket — stays `null`.
@@ -132,7 +132,7 @@ export function groupLists(
         // The family qualifies the heading rather than decorating it — two
         // families routinely both call an occasion "Christmas 2026" — but it is
         // not part of the link: it names a family, and the link goes to an
-        // occasion (ADR 0007). An archived occasion links like any other, and
+        // occasion (ADR 0013). An archived occasion links like any other, and
         // unmarked: a route survives archiving (ADR 0002 §5.4) and `ShareRoute`
         // carries no archived flag, so the client cannot tell one apart.
         into(
@@ -145,7 +145,7 @@ export function groupLists(
         matched = true;
       } else if (grouping === "person" && route.kind === "direct") {
         // `/people/:id` shows the same lists this bucket just showed, so the
-        // heading names a page worth no trip and stays dead (ADR 0007).
+        // heading names a page worth no trip and stays dead (ADR 0013).
         into(`person:${route.person.id}`, null, route.person.name, null, list);
         matched = true;
       }

@@ -28,19 +28,19 @@ const MD = "(min-width: 768px)";
 
 /**
  * Every action on the thing a page header or a list row is about, as visible
- * controls (`CONTEXT.md` rule 12, ADR 0009). It replaced a `⋯` overflow menu
+ * controls (`CONTEXT.md` rule 12, ADR 0015). It replaced a `⋯` overflow menu
  * that nobody read as a menu — two of whose four call sites held a single item.
  *
  * `collapseOnMobile` is that rule's one exception, and it is a width exception
- * rather than a taste one (ADR 0010): below `md` a bar that opts in renders a
+ * rather than a taste one (ADR 0016): below `md` a bar that opts in renders a
  * labelled disclosure instead of its buttons, because a header carrying a
  * heading *and* a group of actions has no room for either on a phone. It is
  * granted to two call sites — the occasion header and a list owner's — and a
  * header holding a single action never gets it, since there is nothing there to
- * group and hiding it would rebuild the exact fault ADR 0009 was filed against.
+ * group and hiding it would rebuild the exact fault ADR 0015 was filed against.
  *
  * The disclosure is a word **and** a chevron carrying `aria-expanded` — never a
- * glyph alone (ADR 0009, narrowed by ADR 0011), and never dressed as one of the
+ * glyph alone (ADR 0015, narrowed by ADR 0017), and never dressed as one of the
  * buttons it hides: it wears no border and no fill, because a trigger identical
  * to the controls it reveals is the one thing on the header that behaves
  * differently and the one thing indistinguishable from its neighbours. It
@@ -115,7 +115,7 @@ export function ActionBar({
         // No `aria-controls`. The panel immediately follows its trigger, which
         // is what a disclosure needs and all it needs.
         //
-        // Neither border nor fill, and so no `Tone` (ADR 0011). `tone.ts` is the
+        // Neither border nor fill, and so no `Tone` (ADR 0017). `tone.ts` is the
         // vocabulary for how loud an *action* is, and this acts on the bar, not
         // on the list — wearing `neutral` made the control that opens the panel
         // byte-for-byte one of the five it hides. The greys are the ones already

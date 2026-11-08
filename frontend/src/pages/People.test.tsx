@@ -487,7 +487,7 @@ describe("People", () => {
 
     // A visible button is already the focused element when clicked, so the
     // dialog captures it as the thing to restore to with no help from the row
-    // — the focus dance `HeaderMenu` needed is gone with it (ADR 0009).
+    // — the focus dance `HeaderMenu` needed is gone with it (ADR 0015).
     await waitFor(() => expect(remove).toHaveFocus());
   });
 
