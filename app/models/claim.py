@@ -40,6 +40,4 @@ class Claim(Base):
     purchased_at: Mapped[datetime | None] = mapped_column(default=None)
     # What the *claimer* spent, as opposed to `gifts.price`, which is the
     # owner's asking price and is public to everyone who can see the list.
-    amount_paid: Mapped[Decimal | None] = mapped_column(
-        Numeric(10, 2), default=None
-    )
+    amount_paid: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), default=None)

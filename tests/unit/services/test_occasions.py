@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
@@ -34,9 +34,7 @@ def _make_family(id: int = 1) -> MagicMock:
     return family
 
 
-def _make_occasion(
-    id: int = 5, family_id: int = 1, created_by_id: int = 99
-) -> MagicMock:
+def _make_occasion(id: int = 5, family_id: int = 1, created_by_id: int = 99) -> MagicMock:
     """`created_by_id` defaults to somebody other than `_make_user()`, so the
     creator arm of the archive gate has to be asked for explicitly."""
     occasion = MagicMock(spec=Occasion)
@@ -54,9 +52,7 @@ def _make_occasion(
 @pytest.mark.parametrize(
     "call",
     [
-        lambda db, actor: service.list_occasions(
-            db, family_id=1, actor=actor, archived=False
-        ),
+        lambda db, actor: service.list_occasions(db, family_id=1, actor=actor, archived=False),
         lambda db, actor: service.create_occasion(
             db, family_id=1, actor=actor, name="Christmas 2026"
         ),
@@ -73,9 +69,7 @@ def test_unknown_family_raises_not_found(call):
 @pytest.mark.parametrize(
     "call",
     [
-        lambda db, actor: service.list_occasions(
-            db, family_id=1, actor=actor, archived=False
-        ),
+        lambda db, actor: service.list_occasions(db, family_id=1, actor=actor, archived=False),
         lambda db, actor: service.create_occasion(
             db, family_id=1, actor=actor, name="Christmas 2026"
         ),
@@ -155,16 +149,12 @@ def test_has_other_active_is_read_before_the_new_row_exists():
     with patch(FAMILIES_REPO) as families_repo, patch(REPO) as repo:
         families_repo.get_family.return_value = _make_family()
         families_repo.get_family_member.return_value = _make_member("member")
-        repo.has_active_occasion.side_effect = lambda *a, **k: calls.append(
-            "check"
-        ) or False
-        repo.create_occasion.side_effect = lambda *a, **k: calls.append(
-            "create"
-        ) or _make_occasion()
-
-        service.create_occasion(
-            db, family_id=1, actor=_make_user(), name="Christmas 2026"
+        repo.has_active_occasion.side_effect = lambda *a, **k: calls.append("check") or False
+        repo.create_occasion.side_effect = lambda *a, **k: (
+            calls.append("create") or _make_occasion()
         )
+
+        service.create_occasion(db, family_id=1, actor=_make_user(), name="Christmas 2026")
 
     assert calls == ["check", "create"]
 
@@ -228,9 +218,7 @@ def _update(db, occasion, role, update_data, actor=None, family_member=True):
     with patch(FAMILIES_REPO) as families_repo, patch(REPO) as repo:
         repo.get_occasion.return_value = occasion
         families_repo.get_family.return_value = _make_family()
-        families_repo.get_family_member.return_value = (
-            _make_member(role) if family_member else None
-        )
+        families_repo.get_family_member.return_value = _make_member(role) if family_member else None
         repo.update_occasion.return_value = occasion
         try:
             return (
@@ -242,7 +230,7 @@ def _update(db, occasion, role, update_data, actor=None, family_member=True):
                 ),
                 repo,
             )
-        except (ForbiddenError, NotFoundError):
+        except ForbiddenError, NotFoundError:
             repo.update_occasion.assert_not_called()
             raise
 
@@ -280,9 +268,7 @@ def test_the_creator_may_archive_an_occasion_they_do_not_organize():
     actor = _make_user()
     occasion = _make_occasion(created_by_id=actor.id)
 
-    result, repo = _update(
-        db, occasion, "member", {"is_archived": True}, actor=actor
-    )
+    result, repo = _update(db, occasion, "member", {"is_archived": True}, actor=actor)
 
     assert result is occasion
     repo.update_occasion.assert_called_once_with(db, occasion, {"is_archived": True})
@@ -388,9 +374,7 @@ def test_set_budget_is_the_callers_own_and_needs_only_membership(budgets_service
         families_repo.get_family.return_value = _make_family()
         families_repo.get_family_member.return_value = _make_member("member")
 
-        result = service.set_budget(
-            db, occasion_id=5, actor=actor, amount=Decimal("200.00")
-        )
+        result = service.set_budget(db, occasion_id=5, actor=actor, amount=Decimal("200.00"))
 
     budgets_service.set_budget.assert_called_once_with(
         db, user_id=10, occasion_id=5, amount=Decimal("200.00")
@@ -407,9 +391,7 @@ def test_set_budget_refuses_a_non_member(budgets_service):
         families_repo.get_family_member.return_value = None
 
         with pytest.raises(ForbiddenError):
-            service.set_budget(
-                db, occasion_id=5, actor=_make_user(), amount=Decimal("200.00")
-            )
+            service.set_budget(db, occasion_id=5, actor=_make_user(), amount=Decimal("200.00"))
 
     budgets_service.set_budget.assert_not_called()
 
@@ -454,13 +436,9 @@ def test_list_all_occasions_passes_the_callers_own_id_and_nothing_else():
     half — the only user id reaching the repository is the caller's."""
     db = MagicMock()
     with patch(REPO) as repo:
-        result = service.list_all_occasions(
-            db, actor=_make_user(id=10), archived=False
-        )
+        result = service.list_all_occasions(db, actor=_make_user(id=10), archived=False)
 
-    repo.get_occasion_summaries.assert_called_once_with(
-        db, user_id=10, archived=False
-    )
+    repo.get_occasion_summaries.assert_called_once_with(db, user_id=10, archived=False)
     assert result is repo.get_occasion_summaries.return_value
 
 
@@ -503,15 +481,11 @@ def _dismiss(db, occasion, role, actor=None, family_member=True):
     with patch(FAMILIES_REPO) as families_repo, patch(REPO) as repo:
         repo.get_occasion.return_value = occasion
         families_repo.get_family.return_value = _make_family()
-        families_repo.get_family_member.return_value = (
-            _make_member(role) if family_member else None
-        )
+        families_repo.get_family_member.return_value = _make_member(role) if family_member else None
         try:
-            service.dismiss_archive_prompt(
-                db, occasion_id=5, actor=actor or _make_user()
-            )
+            service.dismiss_archive_prompt(db, occasion_id=5, actor=actor or _make_user())
             return repo
-        except (ForbiddenError, NotFoundError):
+        except ForbiddenError, NotFoundError:
             repo.upsert_dismissal.assert_not_called()
             raise
 
@@ -519,7 +493,7 @@ def _dismiss(db, occasion, role, actor=None, family_member=True):
 def test_an_organizer_may_dismiss_and_the_snooze_is_the_servers_rule():
     db = MagicMock()
     occasion = _make_occasion()
-    before = datetime.now(timezone.utc)
+    before = datetime.now(UTC)
 
     repo = _dismiss(db, occasion, "organizer")
 
@@ -532,8 +506,7 @@ def test_an_organizer_may_dismiss_and_the_snooze_is_the_servers_rule():
     assert (
         before + timedelta(days=service.ARCHIVE_PROMPT_SNOOZE_DAYS)
         <= kwargs["dismissed_until"]
-        <= datetime.now(timezone.utc)
-        + timedelta(days=service.ARCHIVE_PROMPT_SNOOZE_DAYS)
+        <= datetime.now(UTC) + timedelta(days=service.ARCHIVE_PROMPT_SNOOZE_DAYS)
     )
 
 
@@ -542,9 +515,7 @@ def test_the_creator_may_dismiss_without_organizing():
     asked the question can answer "not yet"."""
     actor = _make_user()
 
-    repo = _dismiss(
-        MagicMock(), _make_occasion(created_by_id=actor.id), "member", actor=actor
-    )
+    repo = _dismiss(MagicMock(), _make_occasion(created_by_id=actor.id), "member", actor=actor)
 
     repo.upsert_dismissal.assert_called_once()
 

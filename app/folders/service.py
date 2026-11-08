@@ -13,9 +13,7 @@ from app.models.user import User
 from app.services.exceptions import ConflictError, ForbiddenError, NotFoundError
 
 
-def create_folder(
-    db: Session, name: str, description: str | None, owner_id: int
-) -> Folder:
+def create_folder(db: Session, name: str, description: str | None, owner_id: int) -> Folder:
     return repo.create_folder(db, name, description, owner_id)
 
 
@@ -60,9 +58,7 @@ def get_folder_detail(db: Session, folder: Folder, viewer: User) -> dict:
     }
 
 
-def update_folder(
-    db: Session, folder: Folder, update_data: dict
-) -> Folder:
+def update_folder(db: Session, folder: Folder, update_data: dict) -> Folder:
     return repo.update_folder(db, folder, update_data)
 
 
@@ -118,9 +114,7 @@ def get_shopping(db: Session, folder_id: int, user: User) -> dict:
 
 def set_budget(db: Session, folder_id: int, user_id: int, amount: Decimal) -> dict:
     """Set the caller's own budget for this folder, and return the rollup."""
-    return budgets_service.set_budget(
-        db, user_id=user_id, folder_id=folder_id, amount=amount
-    )
+    return budgets_service.set_budget(db, user_id=user_id, folder_id=folder_id, amount=amount)
 
 
 def clear_budget(db: Session, folder_id: int, user_id: int) -> dict:
@@ -137,9 +131,7 @@ def set_giftee_budget(
     )
 
 
-def clear_giftee_budget(
-    db: Session, folder_id: int, user: User, giftee_key: str
-) -> dict:
+def clear_giftee_budget(db: Session, folder_id: int, user: User, giftee_key: str) -> dict:
     return budgets_service.clear_giftee_budget(
         db, actor=user, giftee_key=giftee_key, folder_id=folder_id
     )

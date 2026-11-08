@@ -66,9 +66,7 @@ def get_account(db: Session, user: User) -> dict:
     return _state(db, user)
 
 
-def replace_account(
-    db: Session, user: User, desired: AccountUpdate, confirm: bool = False
-) -> dict:
+def replace_account(db: Session, user: User, desired: AccountUpdate, confirm: bool = False) -> dict:
     """Apply the whole desired state of the account's people (§3.2).
 
     An entry with an id renames in place, one without creates, an existing
@@ -92,9 +90,12 @@ def replace_account(
     # changed. Asking for a shared account with *nobody* on it is not that
     # case — it is a contradiction, and answering 200 would silently do
     # something other than what was asked.
-    if desired.is_shared_account and len(desired.people) < 2:
-        if not user.is_shared_account or not desired.people:
-            raise BadRequestError(TOO_FEW_PEOPLE_MESSAGE)
+    if (
+        desired.is_shared_account
+        and len(desired.people) < 2
+        and (not user.is_shared_account or not desired.people)
+    ):
+        raise BadRequestError(TOO_FEW_PEOPLE_MESSAGE)
 
     entries = desired.people
     if len(entries) < 2:
@@ -113,18 +114,14 @@ def replace_account(
     if clears_every_label:
         affected_lists = repo.count_lists_labelled(db, user.id)
     else:
-        affected_lists = repo.count_lists_for_people(
-            db, user.id, [person.id for person in removed]
-        )
+        affected_lists = repo.count_lists_for_people(db, user.id, [person.id for person in removed])
     if affected_lists and not confirm:
         raise LabelsWouldBeStripped(affected_lists)
 
     # Order matters throughout: the FK on lists.account_person_id is enforced,
     # so labels are nulled before the people they point at are deleted, and the
     # deletes are flushed before any create that might reuse a freed name.
-    repo.clear_labels(
-        db, user.id, None if clears_every_label else [p.id for p in removed]
-    )
+    repo.clear_labels(db, user.id, None if clears_every_label else [p.id for p in removed])
     # Every giftee budget keyed on a person being removed — any user's, in any
     # scope — goes with the person, or the FK refuses (NEU-1326 decision 7).
     budgets_repo.delete_giftee_budgets_for_people(db, [p.id for p in removed])

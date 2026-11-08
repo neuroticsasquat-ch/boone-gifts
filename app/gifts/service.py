@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
@@ -45,9 +45,7 @@ def update_gift(db: Session, gift_id: int, list_id: int, updates: dict) -> Gift:
 def delete_gift(db: Session, gift_id: int, list_id: int) -> None:
     gift = _get_gift_for_list(db, gift_id, list_id)
     if claims_repo.get_claim_for_gift(db, gift_id) is not None:
-        raise ConflictError(
-            "This gift has been claimed by someone and cannot be deleted."
-        )
+        raise ConflictError("This gift has been claimed by someone and cannot be deleted.")
     repo.delete_gift(db, gift)
 
 
@@ -81,9 +79,7 @@ def claim_gift(
     if claims_repo.get_claim_for_gift(db, gift_id) is not None:
         raise ConflictError("Gift already claimed.")
 
-    filed_under = claim_service.resolve_filing(
-        db, gift_list, user, occasion_id, occasion_provided
-    )
+    filed_under = claim_service.resolve_filing(db, gift_list, user, occasion_id, occasion_provided)
     claim = claims_repo.create_claim(db, gift_id, user.id, filed_under)
     if claim is None:
         # The pre-check above is for precedence, not for correctness: the unique
@@ -106,9 +102,7 @@ def unclaim_gift(db: Session, gift_id: int, list_id: int, user_id: int) -> Gift:
     return gift
 
 
-def purchase_gift(
-    db: Session, gift_id: int, list_id: int, user_id: int, updates: dict
-) -> Gift:
+def purchase_gift(db: Session, gift_id: int, list_id: int, user_id: int, updates: dict) -> Gift:
     """Mark a claim purchased, optionally recording what it cost.
 
     `updates` is `model_dump(exclude_unset=True)`: an absent `amount_paid` keeps
@@ -119,7 +113,7 @@ def purchase_gift(
     gift = _get_gift_for_list(db, gift_id, list_id)
     claim = _get_own_claim(db, gift, user_id, "mark as purchased")
     updates = dict(updates)
-    updates["purchased_at"] = datetime.now(timezone.utc)
+    updates["purchased_at"] = datetime.now(UTC)
     claims_repo.update_claim(db, claim, updates)
     db.refresh(gift)
     return gift

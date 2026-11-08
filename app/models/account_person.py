@@ -15,9 +15,7 @@ class AccountPerson(Base):
     `docs/adr/0001-shared-accounts-are-one-identity.md`."""
 
     __tablename__ = "account_people"
-    __table_args__ = (
-        UniqueConstraint("user_id", "name", name="uq_account_people_user_name"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "name", name="uq_account_people_user_name"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)

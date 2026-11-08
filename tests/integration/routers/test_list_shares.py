@@ -34,9 +34,7 @@ def test_share_list_with_self(client, member_user, member_headers, sample_list):
     assert response.status_code == 400
 
 
-def test_share_list_duplicate(
-    client, member_headers, shared_list, admin_user
-):
+def test_share_list_duplicate(client, member_headers, shared_list, admin_user):
     response = client.post(
         f"/lists/{shared_list.id}/shares",
         headers=member_headers,
@@ -103,9 +101,7 @@ def test_share_list_not_connected(client, member_headers, sample_list, db):
     assert response.status_code == 403
 
 
-def test_share_list_connected(
-    client, member_headers, sample_list, admin_user, connection
-):
+def test_share_list_connected(client, member_headers, sample_list, admin_user, connection):
     response = client.post(
         f"/lists/{sample_list.id}/shares",
         headers=member_headers,
@@ -158,9 +154,7 @@ def test_shared_users_not_shared(client, admin_user, admin_headers, sample_list)
     assert response.status_code == 403
 
 
-def test_unshare_removes_folder_items(
-    client, member_headers, shared_list, admin_user, db
-):
+def test_unshare_removes_folder_items(client, member_headers, shared_list, admin_user, db):
     from app.models.folder import Folder
     from app.models.folder_item import FolderItem
 
@@ -168,9 +162,7 @@ def test_unshare_removes_folder_items(
     db.add(admin_folder)
     db.flush()
 
-    item = FolderItem(
-        folder_id=admin_folder.id, list_id=shared_list.id
-    )
+    item = FolderItem(folder_id=admin_folder.id, list_id=shared_list.id)
     db.add(item)
     db.flush()
 

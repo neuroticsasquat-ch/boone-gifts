@@ -1,18 +1,18 @@
 import hashlib
 import logging
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import jwt
 from sqlalchemy.orm import Session
 
 from app.auth import repository as repo
-from app.families import repository as families_repo
-from app.family_invites import repository as family_invites_repo
 from app.config import settings
 from app.dependencies import create_access_token, create_refresh_token
 from app.email import send_email
 from app.email.password_reset import render_password_reset_email
+from app.families import repository as families_repo
+from app.family_invites import repository as family_invites_repo
 from app.services.exceptions import BadRequestError, UnauthorizedError
 
 logger = logging.getLogger(__name__)
@@ -51,7 +51,7 @@ def _family_invite_registerable(invite) -> bool:
     """True if a family invite can still be used to register (pending, un-expired)."""
     if invite.accepted_at is not None or invite.declined_at is not None:
         return False
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expires = invite.expires_at
     if expires.tzinfo is None:
         now = now.replace(tzinfo=None)
@@ -68,14 +68,13 @@ def get_invite_info(db: Session, token: str) -> dict:
     family_invite = family_invites_repo.get_invite_by_token(db, token)
     if family_invite is not None and _family_invite_registerable(family_invite):
         family = families_repo.get_family(db, family_invite.family_id)
+        assert family is not None  # the invite's family_id is a foreign key
         return {"email": family_invite.email, "family_name": family.name}
 
     raise BadRequestError("Invalid or expired invite.")
 
 
-def register(
-    db: Session, token: str, name: str, password: str, email: str | None = None
-) -> dict:
+def register(db: Session, token: str, name: str, password: str, email: str | None = None) -> dict:
     """Register a new user from an admin invite or a family invite.
 
     Raises:
@@ -118,7 +117,7 @@ def register(
             user_id=user.id,
             role=family_invite.role,
         )
-        family_invite.accepted_at = datetime.now(timezone.utc)
+        family_invite.accepted_at = datetime.now(UTC)
         db.flush()
         return _issue_tokens(user)
 
@@ -141,7 +140,7 @@ def refresh(db: Session, refresh_token: str) -> dict:
             options={"verify_iat": False},
         )
     except jwt.InvalidTokenError:
-        raise UnauthorizedError()
+        raise UnauthorizedError() from None
 
     if payload.get("type") != "refresh":
         raise UnauthorizedError()
@@ -171,7 +170,7 @@ def forgot_password(db: Session, email: str) -> None:
 
     raw_token = secrets.token_urlsafe(32)
     token_hash = _hash_reset_token(raw_token)
-    expires_at = datetime.now(timezone.utc) + PASSWORD_RESET_TOKEN_TTL
+    expires_at = datetime.now(UTC) + PASSWORD_RESET_TOKEN_TTL
     repo.create_password_reset_token(db, user.id, token_hash, expires_at)
 
     subject, html, text = render_password_reset_email(
@@ -185,9 +184,7 @@ def forgot_password(db: Session, email: str) -> None:
         logger.exception("Failed to send password reset email to %s", user.email)
 
 
-def change_password(
-    db: Session, user, current_password: str, new_password: str
-) -> dict:
+def change_password(db: Session, user, current_password: str, new_password: str) -> dict:
     """Change a logged-in user's password and issue fresh tokens.
 
     Raises:
@@ -236,8 +233,8 @@ def reset_password(db: Session, raw_token: str, new_password: str) -> None:
 
     expires_at = token.expires_at
     if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
-    if expires_at < datetime.now(timezone.utc):
+        expires_at = expires_at.replace(tzinfo=UTC)
+    if expires_at < datetime.now(UTC):
         raise BadRequestError("Invalid or expired reset token.")
 
     user = repo.find_user_by_id(db, token.user_id)
@@ -261,5 +258,5 @@ def _token_invalidated_by_password_change(
     if iat is None:
         return True
     if password_changed_at.tzinfo is None:
-        password_changed_at = password_changed_at.replace(tzinfo=timezone.utc)
+        password_changed_at = password_changed_at.replace(tzinfo=UTC)
     return int(password_changed_at.timestamp()) > int(iat)

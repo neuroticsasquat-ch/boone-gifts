@@ -31,18 +31,18 @@ decided; do not "fix" it here.
 # app/models/user.py
 is_shared_account: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
+
 # app/models/account_person.py  (new)
 class AccountPerson(Base):
     __tablename__ = "account_people"
-    __table_args__ = (
-        UniqueConstraint("user_id", "name", name="uq_account_people_user_name"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "name", name="uq_account_people_user_name"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     name: Mapped[str] = mapped_column(String(255))
-    position: Mapped[int] = mapped_column()          # display order, 0-based
+    position: Mapped[int] = mapped_column()  # display order, 0-based
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
 
 # app/models/gift_list.py
 account_person_id: Mapped[int | None] = mapped_column(

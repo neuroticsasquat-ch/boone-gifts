@@ -16,7 +16,7 @@ def _people(db, user, *names):
 
 
 def test_account_person_defaults(db, member_user):
-    gran, = _people(db, member_user, "Gran")
+    (gran,) = _people(db, member_user, "Gran")
     assert gran.id is not None
     assert gran.position == 0
     assert gran.created_at is not None
@@ -48,10 +48,8 @@ def test_list_label_is_nullable(db, member_user):
 
 
 def test_list_exposes_the_person_name(db, member_user):
-    gran, = _people(db, member_user, "Gran")
-    gift_list = GiftList(
-        name="Gran's List", owner_id=member_user.id, account_person_id=gran.id
-    )
+    (gran,) = _people(db, member_user, "Gran")
+    gift_list = GiftList(name="Gran's List", owner_id=member_user.id, account_person_id=gran.id)
     db.add(gift_list)
     db.flush()
     assert gift_list.account_person_name == "Gran"
@@ -60,9 +58,8 @@ def test_list_exposes_the_person_name(db, member_user):
 def test_deleting_a_referenced_person_is_refused_by_the_database(db, member_user):
     # PRAGMA foreign_keys=ON is live on every connection, so the label has to be
     # nulled before the person goes (§4.4). This is what enforces that order.
-    gran, = _people(db, member_user, "Gran")
-    db.add(GiftList(name="Gran's List", owner_id=member_user.id,
-                    account_person_id=gran.id))
+    (gran,) = _people(db, member_user, "Gran")
+    db.add(GiftList(name="Gran's List", owner_id=member_user.id, account_person_id=gran.id))
     db.flush()
 
     db.delete(gran)

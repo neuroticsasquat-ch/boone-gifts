@@ -6,16 +6,17 @@ from app.models.folder_item import FolderItem
 from app.models.gift_list import GiftList
 from app.models.list_share import ListShare
 from app.models.user import User
-from app.shares import service
 from app.services.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError
-
+from app.shares import service
 
 REPO = "app.shares.service.repo"
 CONN_REPO = "app.shares.service.find_accepted_connection_between"
 SEND_EMAIL = "app.shares.service.send_email"
 
 
-def _make_user(id: int, name: str = "Test", email: str = "test@test.com", is_active: bool = True) -> MagicMock:
+def _make_user(
+    id: int, name: str = "Test", email: str = "test@test.com", is_active: bool = True
+) -> MagicMock:
     user = MagicMock(spec=User)
     user.id = id
     user.name = name
@@ -24,9 +25,7 @@ def _make_user(id: int, name: str = "Test", email: str = "test@test.com", is_act
     return user
 
 
-def _make_gift_list(
-    id: int, name: str = "My List", recipient_name: str | None = None
-) -> MagicMock:
+def _make_gift_list(id: int, name: str = "My List", recipient_name: str | None = None) -> MagicMock:
     gl = MagicMock(spec=GiftList)
     gl.id = id
     gl.name = name
@@ -210,9 +209,7 @@ def _share_world(gift_list):
 @patch(f"{REPO}.create_share")
 @patch(f"{REPO}.find_share", return_value=None)
 @patch(CONN_REPO)
-def test_share_email_uses_recipient_possessive(
-    mock_conn, mock_find, mock_create, mock_send
-):
+def test_share_email_uses_recipient_possessive(mock_conn, mock_find, mock_create, mock_send):
     mock_conn.return_value = MagicMock()
     mock_create.return_value = MagicMock(spec=ListShare)
     db = _share_world(_make_gift_list(1, "Christmas Ideas", recipient_name="Beth"))
@@ -220,7 +217,7 @@ def test_share_email_uses_recipient_possessive(
     service.create_share(db, list_id=1, user_id=2, current_user_id=10)
 
     body = mock_send.call_args.kwargs["text"]
-    assert "Tom shared Beth's list \"Christmas Ideas\"" in body
+    assert 'Tom shared Beth\'s list "Christmas Ideas"' in body
     assert "their list" not in body
 
 
@@ -228,9 +225,7 @@ def test_share_email_uses_recipient_possessive(
 @patch(f"{REPO}.create_share")
 @patch(f"{REPO}.find_share", return_value=None)
 @patch(CONN_REPO)
-def test_share_email_falls_back_to_their_list(
-    mock_conn, mock_find, mock_create, mock_send
-):
+def test_share_email_falls_back_to_their_list(mock_conn, mock_find, mock_create, mock_send):
     mock_conn.return_value = MagicMock()
     mock_create.return_value = MagicMock(spec=ListShare)
     db = _share_world(_make_gift_list(1, "Christmas Ideas"))
@@ -238,6 +233,6 @@ def test_share_email_falls_back_to_their_list(
     service.create_share(db, list_id=1, user_id=2, current_user_id=10)
 
     kwargs = mock_send.call_args.kwargs
-    assert "Tom shared their list \"Christmas Ideas\"" in kwargs["text"]
+    assert 'Tom shared their list "Christmas Ideas"' in kwargs["text"]
     # The subject is about who did the sharing either way.
     assert kwargs["subject"] == "Tom shared a list with you on Boone Gifts"

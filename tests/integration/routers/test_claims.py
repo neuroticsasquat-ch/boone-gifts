@@ -6,7 +6,8 @@ wide enough that a misfiling stays fixable, `suggested` narrow enough that the
 prompt stays rare — so most of what is asserted here is the difference between
 them.
 """
-from datetime import datetime, timezone
+
+from datetime import UTC, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 
@@ -71,12 +72,7 @@ def _mklist(db, owner, name="Wishlist", *occasions):
     gift_list = GiftList(name=name, owner_id=owner.id)
     db.add(gift_list)
     db.flush()
-    db.add_all(
-        [
-            ListOccasionShare(list_id=gift_list.id, occasion_id=o.id)
-            for o in occasions
-        ]
-    )
+    db.add_all([ListOccasionShare(list_id=gift_list.id, occasion_id=o.id) for o in occasions])
     db.flush()
     return gift_list
 
@@ -93,7 +89,7 @@ def _mkclaim(db, gift, claimer, occasion=None):
         gift_id=gift.id,
         user_id=claimer.id,
         occasion_id=occasion.id if occasion else None,
-        claimed_at=datetime.now(timezone.utc),
+        claimed_at=datetime.now(UTC),
     )
     db.add(claim)
     db.flush()
@@ -144,9 +140,7 @@ def test_no_suggestions_files_under_nothing(client, db, world):
     db.flush()
     gift = _mkgift(db, private, "Mug")
 
-    resp = client.post(
-        f"/lists/{private.id}/gifts/{gift.id}/claim", headers=_auth(world.claimer)
-    )
+    resp = client.post(f"/lists/{private.id}/gifts/{gift.id}/claim", headers=_auth(world.claimer))
     assert resp.status_code == 201
     assert resp.json()["occasion_id"] is None
 
@@ -235,9 +229,7 @@ def test_the_year_three_case_files_silently(client, db, world):
     active, every claim would prompt forever with the right answer obvious every
     time — and it is invisible in a fresh test database."""
     world.xmas.is_archived = True
-    xmas_2027 = _mkoccasion(
-        db, world.boones, "Christmas 2027", world.owner, is_archived=True
-    )
+    xmas_2027 = _mkoccasion(db, world.boones, "Christmas 2027", world.owner, is_archived=True)
     xmas_2028 = _mkoccasion(db, world.boones, "Christmas 2028", world.owner)
     for occasion in (xmas_2027, xmas_2028):
         db.add(ListOccasionShare(list_id=world.list.id, occasion_id=occasion.id))
@@ -292,9 +284,7 @@ def test_two_archived_occasions_and_no_active_one_prompts(client, db, world):
     assert resp.status_code == 400
 
 
-def test_an_occasion_on_a_family_the_claimer_is_not_in_is_not_suggested(
-    client, db, world
-):
+def test_an_occasion_on_a_family_the_claimer_is_not_in_is_not_suggested(client, db, world):
     """`allowed` is bounded by the claimer's own memberships, not the owner's."""
     smiths = _mkfamily(db, "The Smiths", world.owner)
     smiths_xmas = _mkoccasion(db, smiths, "Christmas 2026", world.owner)
@@ -354,20 +344,12 @@ def test_the_archived_matrix(
     db.flush()
     gift = _mkgift(db, gift_list, "Thing")
 
-    detail = client.get(
-        f"/lists/{gift_list.id}", headers=_auth(world.claimer)
-    ).json()
+    detail = client.get(f"/lists/{gift_list.id}", headers=_auth(world.claimer)).json()
     by_id = {o.id: ("X" if o.is_archived else "A") for o in occasions}
-    assert sorted(by_id[o["id"]] for o in detail["claim_options"]) == sorted(
-        expected_allowed
-    )
-    assert sorted(by_id[c["id"]] for c in detail["claim_candidates"]) == sorted(
-        expected_suggested
-    )
+    assert sorted(by_id[o["id"]] for o in detail["claim_options"]) == sorted(expected_allowed)
+    assert sorted(by_id[c["id"]] for c in detail["claim_candidates"]) == sorted(expected_suggested)
 
-    resp = client.post(
-        f"/lists/{gift_list.id}/gifts/{gift.id}/claim", headers=_auth(world.claimer)
-    )
+    resp = client.post(f"/lists/{gift_list.id}/gifts/{gift.id}/claim", headers=_auth(world.claimer))
     if len(expected_suggested) >= 2:
         assert resp.status_code == 400
         assert resp.json()["detail"] == "ambiguous_occasion"
@@ -478,9 +460,7 @@ def test_the_list_owner_cannot_patch_a_claim_and_learns_nothing(client, db, worl
 
 def test_a_claim_that_does_not_exist_answers_403_not_404(client, world):
     """Same answer as somebody else's claim, so probing ids reveals nothing."""
-    resp = client.patch(
-        "/claims/999999", headers=_auth(world.owner), json={"occasion_id": None}
-    )
+    resp = client.patch("/claims/999999", headers=_auth(world.owner), json={"occasion_id": None})
     assert resp.status_code == 403
 
 
@@ -501,9 +481,7 @@ def test_revoking_the_share_leaves_the_filing_untouched(client, db, world):
     assert claim.occasion_id == world.xmas.id
 
 
-def test_revoking_the_share_leaves_the_filing_untouched_when_access_remains(
-    client, db, world
-):
+def test_revoking_the_share_leaves_the_filing_untouched_when_access_remains(client, db, world):
     """The same rule on the revoke path that needs no `claims` disposition: the
     claimer keeps access by another route, so nothing is unclaimed and the
     filing has to survive on its own terms."""
@@ -545,7 +523,7 @@ def test_leaving_the_family_leaves_a_surviving_filing_untouched(client, db, worl
         )
     )
     db.flush()
-    claim = _mkclaim(db, world.gift, world.claimer, world.xmas)
+    _mkclaim(db, world.gift, world.claimer, world.xmas)
 
     resp = client.delete(
         f"/families/{world.boones.id}/members/{world.claimer.id}",
@@ -567,9 +545,7 @@ def test_the_viewer_detail_carries_both_sets(client, db, world):
     db.add(ListOccasionShare(list_id=world.list.id, occasion_id=grans.id))
     db.flush()
 
-    data = client.get(
-        f"/lists/{world.list.id}", headers=_auth(world.claimer)
-    ).json()
+    data = client.get(f"/lists/{world.list.id}", headers=_auth(world.claimer)).json()
 
     assert [c["id"] for c in data["claim_candidates"]] == [grans.id]
     assert {o["id"] for o in data["claim_options"]} == {world.xmas.id, grans.id}

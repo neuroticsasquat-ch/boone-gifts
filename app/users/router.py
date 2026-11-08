@@ -27,22 +27,22 @@ def get_user(user_id: int, admin: AdminUser, db: DbSession):
     try:
         return user_service.get_user(db, user_id)
     except NotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from None
 
 
 @router.put("/{user_id}", response_model=UserRead)
 def update_user(user_id: int, updates: UserUpdate, admin: AdminUser, db: DbSession):
     try:
         return user_service.update_user(
-            db, user_id, updates.model_dump(exclude_unset=True),
+            db,
+            user_id,
+            updates.model_dump(exclude_unset=True),
             current_user_id=admin.id,
         )
     except NotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from None
     except BadRequestError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -53,12 +53,8 @@ def delete_user(
     purge: bool = Query(default=False),
 ):
     try:
-        user_service.delete_user(
-            db, user_id, current_user_id=admin.id, purge=purge
-        )
+        user_service.delete_user(db, user_id, current_user_id=admin.id, purge=purge)
     except NotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from None
     except BadRequestError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e

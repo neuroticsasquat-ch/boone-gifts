@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 from app.invites import service
@@ -11,7 +11,7 @@ def _make_invite(token: str = "abc-123", email: str = "invitee@test.com") -> Mag
     invite.email = email
     invite.role = "member"
     invite.token = token
-    invite.expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+    invite.expires_at = datetime.now(UTC) + timedelta(days=7)
     invite.invited_by_id = 1
     invite.used_at = None
     return invite

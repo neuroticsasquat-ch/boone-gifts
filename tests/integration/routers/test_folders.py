@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from app.models.claim import Claim
@@ -22,7 +22,7 @@ def _claimed_gift(
     claim = Claim(
         gift_id=gift.id,
         user_id=claimer.id,
-        claimed_at=datetime.now(timezone.utc),
+        claimed_at=datetime.now(UTC),
         purchased_at=purchased_at,
         amount_paid=amount_paid,
     )
@@ -68,12 +68,8 @@ def test_list_folders_only_own(client, admin_headers, folder):
     assert len(response.json()) == 0
 
 
-def test_get_folder_detail(
-    client, member_headers, folder, folder_item, sample_list
-):
-    response = client.get(
-        f"/folders/{folder.id}", headers=member_headers
-    )
+def test_get_folder_detail(client, member_headers, folder, folder_item, sample_list):
+    response = client.get(f"/folders/{folder.id}", headers=member_headers)
     assert response.status_code == 200
     data = response.json()
     assert data["name"] == "Christmas 2026"
@@ -83,9 +79,7 @@ def test_get_folder_detail(
 
 
 def test_get_folder_not_owner(client, admin_headers, folder):
-    response = client.get(
-        f"/folders/{folder.id}", headers=admin_headers
-    )
+    response = client.get(f"/folders/{folder.id}", headers=admin_headers)
     assert response.status_code == 403
 
 
@@ -114,16 +108,12 @@ def test_update_folder_not_owner(client, admin_headers, folder):
 
 
 def test_delete_folder(client, member_headers, folder):
-    response = client.delete(
-        f"/folders/{folder.id}", headers=member_headers
-    )
+    response = client.delete(f"/folders/{folder.id}", headers=member_headers)
     assert response.status_code == 204
 
 
 def test_delete_folder_not_owner(client, admin_headers, folder):
-    response = client.delete(
-        f"/folders/{folder.id}", headers=admin_headers
-    )
+    response = client.delete(f"/folders/{folder.id}", headers=admin_headers)
     assert response.status_code == 403
 
 
@@ -136,9 +126,7 @@ def test_add_owned_list(client, member_headers, folder, sample_list):
     assert response.status_code == 201
 
 
-def test_add_shared_list(
-    client, member_headers, folder, admin_user, connection, db
-):
+def test_add_shared_list(client, member_headers, folder, admin_user, connection, db):
     from app.models.gift_list import GiftList
     from app.models.list_share import ListShare
 
@@ -158,9 +146,7 @@ def test_add_shared_list(
     assert response.status_code == 201
 
 
-def test_add_inaccessible_list(
-    client, member_headers, folder, admin_user, db
-):
+def test_add_inaccessible_list(client, member_headers, folder, admin_user, db):
     from app.models.gift_list import GiftList
 
     admin_list = GiftList(name="Private List", owner_id=admin_user.id)
@@ -251,6 +237,7 @@ def test_folders_for_list_empty(client, member_headers, sample_list):
 
 # Shopping tab tests — GET /folders/{id}/shopping
 
+
 def test_shopping_returns_claimed_gifts(
     client, member_user, member_headers, folder, folder_item, shared_list, db
 ):
@@ -278,7 +265,7 @@ def test_shopping_carries_the_claimers_own_spend(
         shared_list,
         "Cast iron skillet",
         member_user,
-        purchased_at=datetime(2026, 5, 24, 12, 0, tzinfo=timezone.utc),
+        purchased_at=datetime(2026, 5, 24, 12, 0, tzinfo=UTC),
         amount_paid=Decimal("31.50"),
         price=Decimal("39.00"),
     )
@@ -294,9 +281,7 @@ def test_shopping_carries_the_claimers_own_spend(
     assert row["list_id"] == shared_list.id
 
 
-def test_shopping_excludes_unclaimed(
-    client, member_headers, folder, folder_item, shared_list, db
-):
+def test_shopping_excludes_unclaimed(client, member_headers, folder, folder_item, shared_list, db):
     gift = Gift(list_id=shared_list.id, name="Unclaimed Gift")
     db.add(gift)
     db.flush()
@@ -351,7 +336,7 @@ def test_shopping_shows_purchased_at(
         shared_list,
         "Bought Gift",
         member_user,
-        purchased_at=datetime(2026, 5, 24, 12, 0, 0, tzinfo=timezone.utc),
+        purchased_at=datetime(2026, 5, 24, 12, 0, 0, tzinfo=UTC),
     )
 
     response = client.get(
@@ -372,9 +357,7 @@ def test_shopping_not_owner_403(client, admin_headers, folder):
     assert response.status_code == 403
 
 
-def test_add_occasion_visible_list(
-    client, member_user, member_headers, admin_user, folder, db
-):
+def test_add_occasion_visible_list(client, member_user, member_headers, admin_user, folder, db):
     from app.models.family import Family
     from app.models.family_member import FamilyMember
     from app.models.gift_list import GiftList
@@ -395,9 +378,7 @@ def test_add_occasion_visible_list(
     )
     db.flush()
 
-    occasion = Occasion(
-        family_id=family.id, name="Christmas 2026", created_by_id=admin_user.id
-    )
+    occasion = Occasion(family_id=family.id, name="Christmas 2026", created_by_id=admin_user.id)
     db.add(occasion)
     db.flush()
 

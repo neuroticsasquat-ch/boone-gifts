@@ -7,9 +7,7 @@ from app.models.gift_list import GiftList
 from app.models.list_share import ListShare
 
 
-def create_folder(
-    db: Session, name: str, description: str | None, owner_id: int
-) -> Folder:
+def create_folder(db: Session, name: str, description: str | None, owner_id: int) -> Folder:
     folder = Folder(name=name, description=description, owner_id=owner_id)
     db.add(folder)
     db.flush()
@@ -49,9 +47,7 @@ def get_lists_for_folder(db: Session, folder: Folder) -> list[GiftList]:
     )
 
 
-def update_folder(
-    db: Session, folder: Folder, update_data: dict
-) -> Folder:
+def update_folder(db: Session, folder: Folder, update_data: dict) -> Folder:
     for key, value in update_data.items():
         setattr(folder, key, value)
     db.flush()
@@ -76,9 +72,7 @@ def find_share(db: Session, list_id: int, user_id: int) -> ListShare | None:
     ).scalar_one_or_none()
 
 
-def find_folder_item(
-    db: Session, folder_id: int, list_id: int
-) -> FolderItem | None:
+def find_folder_item(db: Session, folder_id: int, list_id: int) -> FolderItem | None:
     return db.execute(
         select(FolderItem).where(
             FolderItem.folder_id == folder_id,
@@ -87,9 +81,7 @@ def find_folder_item(
     ).scalar_one_or_none()
 
 
-def create_folder_item(
-    db: Session, folder_id: int, list_id: int
-) -> FolderItem:
+def create_folder_item(db: Session, folder_id: int, list_id: int) -> FolderItem:
     item = FolderItem(folder_id=folder_id, list_id=list_id)
     db.add(item)
     db.flush()
@@ -102,12 +94,16 @@ def delete_folder_item(db: Session, item: FolderItem) -> None:
 
 
 def get_folder_ids_for_list(db: Session, list_id: int, owner_id: int) -> list[int]:
-    result = db.execute(
-        select(FolderItem.folder_id)
-        .join(Folder, FolderItem.folder_id == Folder.id)
-        .where(
-            FolderItem.list_id == list_id,
-            Folder.owner_id == owner_id,
+    result = (
+        db.execute(
+            select(FolderItem.folder_id)
+            .join(Folder, FolderItem.folder_id == Folder.id)
+            .where(
+                FolderItem.list_id == list_id,
+                Folder.owner_id == owner_id,
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return list(result)

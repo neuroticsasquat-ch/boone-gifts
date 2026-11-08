@@ -1,7 +1,8 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-import sqlalchemy
 import pytest
+import sqlalchemy
+import sqlalchemy.exc
 
 from app.models.family import Family
 from app.models.family_invite import FamilyInvite
@@ -117,7 +118,7 @@ def test_family_invite_declined_at_nullable(db):
     db.flush()
     assert invite.declined_at is None
 
-    invite.declined_at = datetime(2026, 6, 23, tzinfo=timezone.utc)
+    invite.declined_at = datetime(2026, 6, 23, tzinfo=UTC)
     db.flush()
     db.refresh(invite)
     assert invite.declined_at is not None

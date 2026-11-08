@@ -35,9 +35,7 @@ def delete_share(db: Session, share: ListOccasionShare) -> None:
 def shared_occasion_ids(db: Session, list_id: int) -> set[int]:
     return set(
         db.execute(
-            select(ListOccasionShare.occasion_id).where(
-                ListOccasionShare.list_id == list_id
-            )
+            select(ListOccasionShare.occasion_id).where(ListOccasionShare.list_id == list_id)
         ).scalars()
     )
 
@@ -61,9 +59,7 @@ def list_shared_to_any_occasion_of(db: Session, list_id: int, user_id: int) -> b
 
 
 def get_lists_shared_to_occasion(db: Session, occasion_id: int) -> list[GiftList]:
-    list_ids = select(ListOccasionShare.list_id).where(
-        ListOccasionShare.occasion_id == occasion_id
-    )
+    list_ids = select(ListOccasionShare.list_id).where(ListOccasionShare.occasion_id == occasion_id)
     return list(
         db.execute(
             select(GiftList)
@@ -78,17 +74,13 @@ def get_lists_shared_to_occasion(db: Session, occasion_id: int) -> list[GiftList
 def get_families_for_user(db: Session, user_id: int) -> list[Family]:
     family_ids = select(FamilyMember.family_id).where(FamilyMember.user_id == user_id)
     return list(
-        db.execute(
-            select(Family).where(Family.id.in_(family_ids)).order_by(Family.name)
-        )
+        db.execute(select(Family).where(Family.id.in_(family_ids)).order_by(Family.name))
         .scalars()
         .all()
     )
 
 
-def get_occasions_for_families(
-    db: Session, family_ids: list[int]
-) -> list[Occasion]:
+def get_occasions_for_families(db: Session, family_ids: list[int]) -> list[Occasion]:
     if not family_ids:
         return []
     return list(
@@ -102,9 +94,7 @@ def get_occasions_for_families(
     )
 
 
-def get_member_ids_for_families(
-    db: Session, family_ids: list[int]
-) -> dict[int, list[int]]:
+def get_member_ids_for_families(db: Session, family_ids: list[int]) -> dict[int, list[int]]:
     """Every family's members, in one query rather than one per family. Each
     requested family gets a key, so the caller never has to guess whether a
     missing one means "no members" or "not asked about"."""
@@ -123,16 +113,10 @@ def get_member_ids_for_families(
 
 def delete_shares_for_family(db: Session, family_id: int) -> None:
     occasion_ids = select(Occasion.id).where(Occasion.family_id == family_id)
-    db.execute(
-        delete(ListOccasionShare).where(
-            ListOccasionShare.occasion_id.in_(occasion_ids)
-        )
-    )
+    db.execute(delete(ListOccasionShare).where(ListOccasionShare.occasion_id.in_(occasion_ids)))
 
 
-def delete_shares_for_owner_in_family(
-    db: Session, owner_id: int, family_id: int
-) -> None:
+def delete_shares_for_owner_in_family(db: Session, owner_id: int, family_id: int) -> None:
     """Drop the departing member's shares on one family's occasions, preserving
     the invariant that a share implies the owner is still a member of the
     occasion's family."""
@@ -146,9 +130,7 @@ def delete_shares_for_owner_in_family(
     )
 
 
-def families_still_sharing(
-    db: Session, list_id: int, excluding_occasion_id: int
-) -> set[int]:
+def families_still_sharing(db: Session, list_id: int, excluding_occasion_id: int) -> set[int]:
     """The families reached by the list's *other* occasion shares. The occasion
     being revoked may well have a sibling on the same family, in which case that
     family stays here and nobody in it loses access."""
@@ -172,15 +154,11 @@ def get_member_ids_losing_access(
     ListShare, and no other still-sharing family they belong to."""
     member_ids = list(
         db.execute(
-            select(FamilyMember.user_id).where(
-                FamilyMember.family_id == occasion.family_id
-            )
+            select(FamilyMember.user_id).where(FamilyMember.family_id == occasion.family_id)
         ).scalars()
     )
     shared_user_ids = set(
-        db.execute(
-            select(ListShare.user_id).where(ListShare.list_id == list_id)
-        ).scalars()
+        db.execute(select(ListShare.user_id).where(ListShare.list_id == list_id)).scalars()
     )
     other_family_ids = families_still_sharing(db, list_id, occasion.id)
 
@@ -207,9 +185,7 @@ def _in_any_family(db: Session, user_id: int, family_ids: set[int]) -> bool:
     )
 
 
-def delete_folder_items_for_users(
-    db: Session, list_id: int, user_ids: list[int]
-) -> None:
+def delete_folder_items_for_users(db: Session, list_id: int, user_ids: list[int]) -> None:
     if not user_ids:
         return
     folder_ids = select(Folder.id).where(Folder.owner_id.in_(user_ids))
@@ -242,10 +218,11 @@ def get_shared_occasions_for_member(
             .join(Family, Family.id == Occasion.family_id)
             .join(
                 FamilyMember,
-                (FamilyMember.family_id == Occasion.family_id)
-                & (FamilyMember.user_id == user_id),
+                (FamilyMember.family_id == Occasion.family_id) & (FamilyMember.user_id == user_id),
             )
             .where(ListOccasionShare.list_id == list_id)
             .order_by(Family.name, Occasion.name, Occasion.id)
-        ).all()
+        )
+        .tuples()
+        .all()
     )

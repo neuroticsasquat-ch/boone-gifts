@@ -5,6 +5,7 @@ The set arithmetic itself is exercised against real rows in
 decision `resolve_filing` makes once the sets are known, because that is where
 the 400, the silent auto-pick and the stale-id forgiveness all diverge.
 """
+
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 

@@ -5,17 +5,18 @@ Revises: c4f2a91d7e30
 Create Date: 2026-09-05 22:50:00.000000
 
 """
-from typing import Sequence, Union
 
-from alembic import op
+from collections.abc import Sequence
+
 import sqlalchemy as sa
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = 'd8a3f1c05b64'
-down_revision: Union[str, Sequence[str], None] = 'c4f2a91d7e30'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+revision: str = "d8a3f1c05b64"
+down_revision: str | Sequence[str] | None = "c4f2a91d7e30"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -25,12 +26,12 @@ def upgrade() -> None:
     # No server_default and no backfill: existing rows come out NULL, which is
     # exactly today's behaviour (no recipient).
     op.add_column(
-        'lists',
-        sa.Column('recipient_name', sa.String(length=255), nullable=True),
+        "lists",
+        sa.Column("recipient_name", sa.String(length=255), nullable=True),
     )
     op.add_column(
-        'lists',
-        sa.Column('recipient_has_account', sa.Boolean(), nullable=True),
+        "lists",
+        sa.Column("recipient_has_account", sa.Boolean(), nullable=True),
     )
 
 
@@ -41,5 +42,5 @@ def downgrade() -> None:
     # list_family_shares and collection_items, so batch mode's drop/recreate
     # trips PRAGMA foreign_keys=ON. SQLite has supported DROP COLUMN natively
     # since 3.35.
-    op.drop_column('lists', 'recipient_has_account')
-    op.drop_column('lists', 'recipient_name')
+    op.drop_column("lists", "recipient_has_account")
+    op.drop_column("lists", "recipient_name")

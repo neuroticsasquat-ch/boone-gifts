@@ -1,11 +1,11 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from app.connections import service
 from app.models.connection import Connection
 from app.models.user import User
-from app.connections import service
 from app.services.exceptions import (
     BadRequestError,
     ConflictError,
@@ -40,7 +40,7 @@ def _make_connection(
     conn.requester_id = requester_id
     conn.addressee_id = addressee_id
     conn.status = status
-    conn.created_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    conn.created_at = datetime(2026, 1, 1, tzinfo=UTC)
     conn.accepted_at = accepted_at
     return conn
 
@@ -81,7 +81,9 @@ def test_create_connection_by_user_id(mock_find_user, mock_find_conn, mock_creat
 @patch(f"{REPO}.find_connection_between", return_value=None)
 @patch(f"{REPO}.find_user_by_email")
 @patch(f"{REPO}.find_user_by_id")
-def test_create_connection_by_email(mock_find_id, mock_find_email, mock_find_conn, mock_create, mock_send):
+def test_create_connection_by_email(
+    mock_find_id, mock_find_email, mock_find_conn, mock_create, mock_send
+):
     db = MagicMock()
     target = _make_user(3, "Bob", "bob@test.com")
     requester = _make_user(1, "Requester", "req@test.com")
@@ -102,7 +104,9 @@ def test_create_connection_by_email(mock_find_id, mock_find_email, mock_find_con
 @patch(f"{REPO}.create_connection")
 @patch(f"{REPO}.find_connection_between", return_value=None)
 @patch(f"{REPO}.find_user_by_id")
-def test_create_connection_no_email_when_inactive(mock_find_user, mock_find_conn, mock_create, mock_send):
+def test_create_connection_no_email_when_inactive(
+    mock_find_user, mock_find_conn, mock_create, mock_send
+):
     db = MagicMock()
     target = _make_user(2, "Alice", "alice@test.com", is_active=False)
     requester = _make_user(1, "Requester", "req@test.com")

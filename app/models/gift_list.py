@@ -8,8 +8,8 @@ from app.database import Base
 
 if TYPE_CHECKING:
     from app.models.account_person import AccountPerson
-    from app.models.user import User
     from app.models.gift import Gift
+    from app.models.user import User
 
 
 class GiftList(Base):
@@ -25,19 +25,13 @@ class GiftList(Base):
     )
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(
-        server_default=func.now(), onupdate=func.now()
-    )
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
 
-    owner: Mapped["User"] = relationship("User", lazy="selectin", overlaps="lists")
+    owner: Mapped[User] = relationship("User", lazy="selectin", overlaps="lists")
 
-    account_person: Mapped["AccountPerson | None"] = relationship(
-        "AccountPerson", lazy="selectin"
-    )
+    account_person: Mapped[AccountPerson | None] = relationship("AccountPerson", lazy="selectin")
 
-    gifts: Mapped[list["Gift"]] = relationship(
-        "Gift", lazy="selectin", cascade="all, delete-orphan"
-    )
+    gifts: Mapped[list[Gift]] = relationship("Gift", lazy="selectin", cascade="all, delete-orphan")
 
     @property
     def owner_name(self) -> str:

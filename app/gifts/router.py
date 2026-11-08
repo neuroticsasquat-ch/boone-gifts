@@ -29,7 +29,7 @@ def update_gift(gift_id: int, updates: GiftUpdate, gift_list: OwnedList, db: DbS
             db, gift_id, gift_list.id, updates.model_dump(exclude_unset=True)
         )
     except NotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from None
 
 
 @router.delete("/{gift_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -37,9 +37,9 @@ def delete_gift(gift_id: int, gift_list: OwnedList, db: DbSession):
     try:
         gift_service.delete_gift(db, gift_id, gift_list.id)
     except NotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from None
     except ConflictError as e:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
 
 
 @router.post(
@@ -70,27 +70,25 @@ def claim_gift(
             occasion_provided=occasion_provided,
         )
     except BadRequestError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except ForbiddenError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN) from None
     except NotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from None
     except ConflictError:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT)
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT) from None
 
 
 @router.delete("/{gift_id}/claim", response_model=GiftRead)
-def unclaim_gift(
-    gift_id: int, gift_list: ViewableList, user: CurrentUser, db: DbSession
-):
+def unclaim_gift(gift_id: int, gift_list: ViewableList, user: CurrentUser, db: DbSession):
     try:
         return gift_service.unclaim_gift(db, gift_id, gift_list.id, user.id)
     except BadRequestError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except NotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from None
     except ForbiddenError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN) from None
 
 
 @router.post("/{gift_id}/purchase", response_model=GiftRead)
@@ -107,18 +105,16 @@ def purchase_gift(
     try:
         return gift_service.purchase_gift(db, gift_id, gift_list.id, user.id, updates)
     except NotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from None
     except ForbiddenError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN) from None
 
 
 @router.delete("/{gift_id}/purchase", response_model=GiftRead)
-def unpurchase_gift(
-    gift_id: int, gift_list: ViewableList, user: CurrentUser, db: DbSession
-):
+def unpurchase_gift(gift_id: int, gift_list: ViewableList, user: CurrentUser, db: DbSession):
     try:
         return gift_service.unpurchase_gift(db, gift_id, gift_list.id, user.id)
     except NotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from None
     except ForbiddenError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN) from None

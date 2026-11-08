@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from app.models.invite import Invite
 
@@ -80,8 +80,8 @@ def test_delete_invite_as_member(client, admin_user, member_user, admin_headers,
 def test_list_invites_shows_used_status(client, db, admin_user, admin_headers):
     invite = Invite(
         email="used@test.com",
-        expires_at=datetime.now(timezone.utc) + timedelta(days=7),
-        used_at=datetime.now(timezone.utc),
+        expires_at=datetime.now(UTC) + timedelta(days=7),
+        used_at=datetime.now(UTC),
         invited_by_id=admin_user.id,
     )
     db.add(invite)
@@ -96,7 +96,7 @@ def test_list_invites_shows_used_status(client, db, admin_user, admin_headers):
 def test_list_invites_shows_expired_status(client, db, admin_user, admin_headers):
     invite = Invite(
         email="expired@test.com",
-        expires_at=datetime.now(timezone.utc) - timedelta(days=1),
+        expires_at=datetime.now(UTC) - timedelta(days=1),
         invited_by_id=admin_user.id,
     )
     db.add(invite)
@@ -111,7 +111,7 @@ def test_list_invites_shows_expired_status(client, db, admin_user, admin_headers
 def test_list_invites_shows_pending_status(client, db, admin_user, admin_headers):
     invite = Invite(
         email="pending@test.com",
-        expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+        expires_at=datetime.now(UTC) + timedelta(days=7),
         invited_by_id=admin_user.id,
     )
     db.add(invite)

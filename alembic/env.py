@@ -2,13 +2,11 @@ from logging.config import fileConfig
 
 from sqlalchemy import create_engine, event
 
+# Registers every model on Base.metadata, which autogenerate and `alembic check` compare against.
+import app.models  # noqa: F401
 from alembic import context
-
 from app.config import settings
 from app.database import Base
-from app.models import (
-    User, Invite, GiftList, Gift, ListShare, Connection, Folder, FolderItem
-)
 
 config = context.config
 

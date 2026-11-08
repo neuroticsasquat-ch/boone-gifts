@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy import Row
@@ -19,9 +19,7 @@ from app.schemas.gift_list import GiftListRead, GiftListViewerRead
 from app.services.exceptions import ForbiddenError, NotFoundError
 
 ORGANIZER_ONLY = "Only organizers can rename an occasion."
-ORGANIZER_OR_CREATOR = (
-    "Only organizers or the occasion's creator can archive an occasion."
-)
+ORGANIZER_OR_CREATOR = "Only organizers or the occasion's creator can archive an occasion."
 
 # Product rules from the project spec §8, not deployment knobs — mirroring
 # `INVITE_EXPIRY_DAYS` in `app/family_invites/service.py`. A per-environment
@@ -30,9 +28,7 @@ ARCHIVE_PROMPT_IDLE_DAYS = 60
 ARCHIVE_PROMPT_SNOOZE_DAYS = 30
 
 
-def _require_member(
-    db: Session, family_id: int, actor: User
-) -> tuple[Family, FamilyMember]:
+def _require_member(db: Session, family_id: int, actor: User) -> tuple[Family, FamilyMember]:
     """Any member of the family may read and create its occasions (ADR 0002).
 
     Returns the family as well as the membership because the existence check
@@ -44,17 +40,13 @@ def _require_member(
     family = families_repo.get_family(db, family_id)
     if family is None:
         raise NotFoundError("Family not found.")
-    membership = families_repo.get_family_member(
-        db, family_id=family_id, user_id=actor.id
-    )
+    membership = families_repo.get_family_member(db, family_id=family_id, user_id=actor.id)
     if membership is None:
         raise ForbiddenError("Not a member of this family.")
     return family, membership
 
 
-def _load_for_member(
-    db: Session, occasion_id: int, actor: User
-) -> tuple[Occasion, Family]:
+def _load_for_member(db: Session, occasion_id: int, actor: User) -> tuple[Occasion, Family]:
     occasion = repo.get_occasion(db, occasion_id)
     if occasion is None:
         raise NotFoundError("Occasion not found.")
@@ -74,16 +66,12 @@ def _may_archive(membership: FamilyMember, occasion: Occasion, actor: User) -> b
     return membership.role == "organizer" or occasion.created_by_id == actor.id
 
 
-def list_occasions(
-    db: Session, family_id: int, actor: User, archived: bool
-) -> list[Occasion]:
+def list_occasions(db: Session, family_id: int, actor: User, archived: bool) -> list[Occasion]:
     _require_member(db, family_id, actor)
     return repo.get_occasions_for_family(db, family_id, archived=archived)
 
 
-def create_occasion(
-    db: Session, family_id: int, actor: User, name: str
-) -> tuple[Occasion, bool]:
+def create_occasion(db: Session, family_id: int, actor: User, name: str) -> tuple[Occasion, bool]:
     """Create an occasion for the family. Any member may.
 
     A second active occasion is allowed — the caller is warned, not blocked, so
@@ -92,15 +80,11 @@ def create_occasion(
     """
     _require_member(db, family_id, actor)
     has_other_active = repo.has_active_occasion(db, family_id)
-    occasion = repo.create_occasion(
-        db, family_id=family_id, name=name, created_by_id=actor.id
-    )
+    occasion = repo.create_occasion(db, family_id=family_id, name=name, created_by_id=actor.id)
     return occasion, has_other_active
 
 
-def get_occasion(
-    db: Session, occasion_id: int, actor: User
-) -> tuple[Occasion, Family]:
+def get_occasion(db: Session, occasion_id: int, actor: User) -> tuple[Occasion, Family]:
     """The occasion and the family that owns it.
 
     The family rides along because the page's heading names it and the row is
@@ -109,9 +93,7 @@ def get_occasion(
     return _load_for_member(db, occasion_id, actor)
 
 
-def update_occasion(
-    db: Session, occasion_id: int, actor: User, update_data: dict
-) -> Occasion:
+def update_occasion(db: Session, occasion_id: int, actor: User, update_data: dict) -> Occasion:
     """Rename or (un)archive an occasion. **Gated per field, not per endpoint.**
 
     | Field | Who |
@@ -143,9 +125,7 @@ def update_occasion(
     _, membership = _require_member(db, occasion.family_id, actor)
     if "name" in update_data and membership.role != "organizer":
         raise ForbiddenError(ORGANIZER_ONLY)
-    if "is_archived" in update_data and not _may_archive(
-        membership, occasion, actor
-    ):
+    if "is_archived" in update_data and not _may_archive(membership, occasion, actor):
         raise ForbiddenError(ORGANIZER_OR_CREATOR)
     return repo.update_occasion(db, occasion, update_data)
 
@@ -166,9 +146,7 @@ def list_lists(
         db,
         [
             gift_list
-            for gift_list in list_occasions_repo.get_lists_shared_to_occasion(
-                db, occasion_id
-            )
+            for gift_list in list_occasions_repo.get_lists_shared_to_occasion(db, occasion_id)
             if can_view_list(db, actor, gift_list)
         ],
         actor.id,
@@ -206,16 +184,12 @@ def set_budget(db: Session, occasion_id: int, actor: User, amount: Decimal) -> d
     never see any (project spec §7).
     """
     _load_for_member(db, occasion_id, actor)
-    return budgets_service.set_budget(
-        db, user_id=actor.id, occasion_id=occasion_id, amount=amount
-    )
+    return budgets_service.set_budget(db, user_id=actor.id, occasion_id=occasion_id, amount=amount)
 
 
 def clear_budget(db: Session, occasion_id: int, actor: User) -> dict:
     _load_for_member(db, occasion_id, actor)
-    return budgets_service.clear_budget(
-        db, user_id=actor.id, occasion_id=occasion_id
-    )
+    return budgets_service.clear_budget(db, user_id=actor.id, occasion_id=occasion_id)
 
 
 def set_giftee_budget(
@@ -234,9 +208,7 @@ def set_giftee_budget(
     )
 
 
-def clear_giftee_budget(
-    db: Session, occasion_id: int, actor: User, giftee_key: str
-) -> dict:
+def clear_giftee_budget(db: Session, occasion_id: int, actor: User, giftee_key: str) -> dict:
     _load_for_member(db, occasion_id, actor)
     return budgets_service.clear_giftee_budget(
         db, actor=actor, giftee_key=giftee_key, occasion_id=occasion_id
@@ -273,9 +245,7 @@ def list_archive_prompts(db: Session, actor: User) -> list[Row]:
     out, it is a row it never produces. A caller with nothing to answer gets an
     empty list, never a 404.
     """
-    return repo.get_archive_prompts(
-        db, user_id=actor.id, idle_days=ARCHIVE_PROMPT_IDLE_DAYS
-    )
+    return repo.get_archive_prompts(db, user_id=actor.id, idle_days=ARCHIVE_PROMPT_IDLE_DAYS)
 
 
 def dismiss_archive_prompt(db: Session, occasion_id: int, actor: User) -> None:
@@ -302,6 +272,5 @@ def dismiss_archive_prompt(db: Session, occasion_id: int, actor: User) -> None:
         db,
         user_id=actor.id,
         occasion_id=occasion_id,
-        dismissed_until=datetime.now(timezone.utc)
-        + timedelta(days=ARCHIVE_PROMPT_SNOOZE_DAYS),
+        dismissed_until=datetime.now(UTC) + timedelta(days=ARCHIVE_PROMPT_SNOOZE_DAYS),
     )

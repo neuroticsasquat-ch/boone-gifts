@@ -17,6 +17,7 @@ Three shapes, one per way a list can be "for" someone:
 name with a space, a slash or a dot is still one URL path segment and the key
 needs no escaping on the wire.
 """
+
 import base64
 import binascii
 from dataclasses import dataclass
@@ -71,9 +72,7 @@ def _decode_name(encoded: str) -> str:
     return name
 
 
-def key_for_triple(
-    owner_id: int, account_person_id: int | None, recipient_name: str | None
-) -> str:
+def key_for_triple(owner_id: int, account_person_id: int | None, recipient_name: str | None) -> str:
     """The key for a list's three columns. Total: the columns are mutually
     exclusive already (invariant 7), so exactly one branch applies."""
     if account_person_id is not None:
@@ -85,9 +84,7 @@ def key_for_triple(
 
 def key_for(gift_list) -> str:
     """The key for a `GiftList` — or anything carrying its three columns."""
-    return key_for_triple(
-        gift_list.owner_id, gift_list.account_person_id, gift_list.recipient_name
-    )
+    return key_for_triple(gift_list.owner_id, gift_list.account_person_id, gift_list.recipient_name)
 
 
 def kind_of(key: str) -> Kind:

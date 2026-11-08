@@ -45,9 +45,7 @@ def test_duplicate_names_are_rejected():
 
 def test_repeated_id_is_rejected():
     with pytest.raises(BadRequestError, match="cannot appear twice"):
-        service.replace_account(
-            MagicMock(), _user(), _desired(True, (7, "Gran"), (7, "Grandpa"))
-        )
+        service.replace_account(MagicMock(), _user(), _desired(True, (7, "Gran"), (7, "Grandpa")))
 
 
 @patch(f"{REPO}.get_people", return_value=[])
@@ -99,7 +97,8 @@ def test_deleting_a_labelled_person_needs_confirmation(mock_people, mock_count):
 
     with pytest.raises(service.LabelsWouldBeStripped) as excinfo:
         service.replace_account(
-            db, _user(is_shared_account=True),
+            db,
+            _user(is_shared_account=True),
             _desired(True, (1, "Gran"), (None, "Dot")),
         )
 
@@ -115,7 +114,8 @@ def test_unmarking_shared_needs_confirmation(mock_people, mock_count):
 
     with pytest.raises(service.LabelsWouldBeStripped) as excinfo:
         service.replace_account(
-            MagicMock(), _user(is_shared_account=True),
+            MagicMock(),
+            _user(is_shared_account=True),
             _desired(False, (1, "Gran"), (2, "Grandpa")),
         )
 
@@ -127,7 +127,9 @@ def test_unmarking_shared_needs_confirmation(mock_people, mock_count):
 @patch(f"{REPO}.get_people")
 def test_deleting_an_unlabelled_person_needs_no_confirmation(mock_people, mock_count):
     mock_people.return_value = [
-        _person(1, "Gran", 0), _person(2, "Grandpa", 1), _person(3, "Dot", 2)
+        _person(1, "Gran", 0),
+        _person(2, "Grandpa", 1),
+        _person(3, "Dot", 2),
     ]
     user = _user(is_shared_account=True)
 

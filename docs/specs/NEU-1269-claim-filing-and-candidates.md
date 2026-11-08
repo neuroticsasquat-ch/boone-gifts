@@ -40,7 +40,8 @@ them produces either permanent nagging or unfixable misfilings.
 def occasion_sets(db, gift_list, user) -> tuple[list[Occasion], list[Occasion]]:
     """Returns (allowed, suggested)."""
     allowed = [
-        o for o in occasions_the_list_is_shared_to(db, gift_list)
+        o
+        for o in occasions_the_list_is_shared_to(db, gift_list)
         if user_is_member_of(db, user, o.family_id)
     ]
     active = [o for o in allowed if not o.is_archived]

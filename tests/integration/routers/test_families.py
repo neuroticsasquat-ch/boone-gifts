@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from fastapi import status
@@ -6,15 +6,14 @@ from sqlalchemy import select
 
 from app.dependencies import create_access_token
 from app.models.claim import Claim
-from app.models.folder import Folder
-from app.models.folder_item import FolderItem
 from app.models.family import Family
 from app.models.family_member import FamilyMember
+from app.models.folder import Folder
+from app.models.folder_item import FolderItem
 from app.models.gift import Gift
 from app.models.gift_list import GiftList
 from app.models.list_share import ListShare
 from app.models.user import User
-
 
 # ---------------------------------------------------------------------------
 # Local fixtures
@@ -92,10 +91,12 @@ def _seed_cross_artifacts(db, user_a, user_b):
     gift_b = Gift(list_id=list_b.id, name="On B's list")
     db.add_all([gift_a, gift_b])
     db.flush()
-    db.add_all([
-        Claim(gift_id=gift_a.id, user_id=user_b.id, claimed_at=datetime.now(timezone.utc)),
-        Claim(gift_id=gift_b.id, user_id=user_a.id, claimed_at=datetime.now(timezone.utc)),
-    ])
+    db.add_all(
+        [
+            Claim(gift_id=gift_a.id, user_id=user_b.id, claimed_at=datetime.now(UTC)),
+            Claim(gift_id=gift_b.id, user_id=user_a.id, claimed_at=datetime.now(UTC)),
+        ]
+    )
     db.flush()
 
     coll_a = Folder(name=f"{user_a.id}'s Folder", owner_id=user_a.id)
@@ -112,16 +113,15 @@ def _seed_cross_artifacts(db, user_a, user_b):
 
 
 def _is_claimed(db, gift):
-    row = db.execute(
-        select(Claim.id).where(Claim.gift_id == gift.id)
-    ).scalar_one_or_none()
+    row = db.execute(select(Claim.id).where(Claim.gift_id == gift.id)).scalar_one_or_none()
     return row is not None
 
 
 def _item_exists(db, item_id):
-    return db.execute(
-        select(FolderItem).where(FolderItem.id == item_id)
-    ).scalar_one_or_none() is not None
+    return (
+        db.execute(select(FolderItem).where(FolderItem.id == item_id)).scalar_one_or_none()
+        is not None
+    )
 
 
 def _accept_connection(db, user_a, user_b):
@@ -189,9 +189,7 @@ def test_list_families_requires_auth(client):
 # ---------------------------------------------------------------------------
 
 
-def test_get_family_detail_for_member(
-    client, second_headers, family_with_second_member
-):
+def test_get_family_detail_for_member(client, second_headers, family_with_second_member):
     fam = family_with_second_member
     response = client.get(f"/families/{fam.id}", headers=second_headers)
     assert response.status_code == status.HTTP_200_OK
@@ -201,9 +199,7 @@ def test_get_family_detail_for_member(
     assert len(data["members"]) == 2
 
 
-def test_get_family_detail_403_for_non_member(
-    client, second_headers, family
-):
+def test_get_family_detail_403_for_non_member(client, second_headers, family):
     # second_user is NOT a member of `family`
     response = client.get(f"/families/{family.id}", headers=second_headers)
     assert response.status_code == status.HTTP_403_FORBIDDEN
@@ -236,9 +232,7 @@ def test_rename_family_as_organizer(client, member_headers, family):
     assert data["id"] == family.id
 
 
-def test_rename_family_403_for_non_organizer(
-    client, second_headers, family_with_second_member
-):
+def test_rename_family_403_for_non_organizer(client, second_headers, family_with_second_member):
     # second_user is a plain member, not an organizer
     fam = family_with_second_member
     response = client.put(
@@ -277,9 +271,7 @@ def test_delete_family_as_organizer(client, member_headers, family):
     assert get_response.status_code == status.HTTP_404_NOT_FOUND
 
 
-def test_delete_family_403_for_non_organizer(
-    client, second_headers, family_with_second_member
-):
+def test_delete_family_403_for_non_organizer(client, second_headers, family_with_second_member):
     fam = family_with_second_member
     response = client.delete(f"/families/{fam.id}", headers=second_headers)
     assert response.status_code == status.HTTP_403_FORBIDDEN
@@ -300,13 +292,9 @@ def test_delete_family_requires_auth(client, family):
 # ---------------------------------------------------------------------------
 
 
-def test_remove_member_self_leave(
-    client, second_headers, second_user, family_with_second_member
-):
+def test_remove_member_self_leave(client, second_headers, second_user, family_with_second_member):
     fam = family_with_second_member
-    response = client.delete(
-        f"/families/{fam.id}/members/{second_user.id}", headers=second_headers
-    )
+    response = client.delete(f"/families/{fam.id}/members/{second_user.id}", headers=second_headers)
     assert response.status_code == status.HTTP_204_NO_CONTENT
     get_resp = client.get(f"/families/{fam.id}", headers=second_headers)
     assert get_resp.status_code == status.HTTP_403_FORBIDDEN
@@ -316,9 +304,7 @@ def test_remove_member_organizer_removes_member(
     client, member_headers, second_user, family_with_second_member
 ):
     fam = family_with_second_member
-    response = client.delete(
-        f"/families/{fam.id}/members/{second_user.id}", headers=member_headers
-    )
+    response = client.delete(f"/families/{fam.id}/members/{second_user.id}", headers=member_headers)
     assert response.status_code == status.HTTP_204_NO_CONTENT
     detail = client.get(f"/families/{fam.id}", headers=member_headers).json()
     assert len(detail["members"]) == 1
@@ -328,9 +314,7 @@ def test_remove_member_organizer_removes_co_organizer(
     client, member_headers, second_user, family_with_second_organizer
 ):
     fam = family_with_second_organizer
-    response = client.delete(
-        f"/families/{fam.id}/members/{second_user.id}", headers=member_headers
-    )
+    response = client.delete(f"/families/{fam.id}/members/{second_user.id}", headers=member_headers)
     assert response.status_code == status.HTTP_204_NO_CONTENT
 
 
@@ -338,9 +322,7 @@ def test_remove_member_organizer_self_leave_with_co_organizer(
     client, member_headers, member_user, family_with_second_organizer
 ):
     fam = family_with_second_organizer
-    response = client.delete(
-        f"/families/{fam.id}/members/{member_user.id}", headers=member_headers
-    )
+    response = client.delete(f"/families/{fam.id}/members/{member_user.id}", headers=member_headers)
     assert response.status_code == status.HTTP_204_NO_CONTENT
     # second_user is still an organizer, so family still accessible
     get_resp = client.get(f"/families/{fam.id}", headers=member_headers)
@@ -351,15 +333,11 @@ def test_remove_member_403_member_removes_other(
     client, second_headers, member_user, family_with_second_member
 ):
     fam = family_with_second_member
-    response = client.delete(
-        f"/families/{fam.id}/members/{member_user.id}", headers=second_headers
-    )
+    response = client.delete(f"/families/{fam.id}/members/{member_user.id}", headers=second_headers)
     assert response.status_code == status.HTTP_403_FORBIDDEN
 
 
-def test_remove_member_403_actor_not_a_member(
-    client, second_headers, member_user, family
-):
+def test_remove_member_403_actor_not_a_member(client, second_headers, member_user, family):
     response = client.delete(
         f"/families/{family.id}/members/{member_user.id}", headers=second_headers
     )
@@ -367,15 +345,11 @@ def test_remove_member_403_actor_not_a_member(
 
 
 def test_remove_member_404_family_missing(client, member_headers, member_user):
-    response = client.delete(
-        f"/families/99999/members/{member_user.id}", headers=member_headers
-    )
+    response = client.delete(f"/families/99999/members/{member_user.id}", headers=member_headers)
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
-def test_remove_member_404_target_not_a_member(
-    client, member_headers, second_user, family
-):
+def test_remove_member_404_target_not_a_member(client, member_headers, second_user, family):
     response = client.delete(
         f"/families/{family.id}/members/{second_user.id}", headers=member_headers
     )
@@ -388,9 +362,7 @@ def test_remove_member_409_last_organizer(
     # Sole organizer cannot self-leave while other (non-organizer) members remain —
     # that would leave the family without leadership.
     fam = family_with_second_member
-    response = client.delete(
-        f"/families/{fam.id}/members/{member_user.id}", headers=member_headers
-    )
+    response = client.delete(f"/families/{fam.id}/members/{member_user.id}", headers=member_headers)
     assert response.status_code == status.HTTP_409_CONFLICT
 
 
@@ -468,9 +440,7 @@ def test_update_role_403_member_updates_own_role(
     assert response.status_code == status.HTTP_403_FORBIDDEN
 
 
-def test_update_role_403_actor_not_a_member(
-    client, second_headers, member_user, family
-):
+def test_update_role_403_actor_not_a_member(client, second_headers, member_user, family):
     response = client.put(
         f"/families/{family.id}/members/{member_user.id}/role",
         json={"role": "member"},
@@ -488,9 +458,7 @@ def test_update_role_404_family_missing(client, member_headers, member_user):
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
-def test_update_role_404_target_not_a_member(
-    client, member_headers, second_user, family
-):
+def test_update_role_404_target_not_a_member(client, member_headers, second_user, family):
     response = client.put(
         f"/families/{family.id}/members/{second_user.id}/role",
         json={"role": "organizer"},
@@ -499,9 +467,7 @@ def test_update_role_404_target_not_a_member(
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
-def test_update_role_409_demote_last_organizer(
-    client, member_headers, member_user, family
-):
+def test_update_role_409_demote_last_organizer(client, member_headers, member_user, family):
     response = client.put(
         f"/families/{family.id}/members/{member_user.id}/role",
         json={"role": "member"},
@@ -549,9 +515,7 @@ def test_leave_cleans_claims_and_folder_items_both_ways(
     fam = family_with_second_member  # member_user (organizer) + second_user (member), no other tie
     gift_a, gift_b, item_a, item_b = _seed_cross_artifacts(db, member_user, second_user)
 
-    resp = client.delete(
-        f"/families/{fam.id}/members/{second_user.id}", headers=second_headers
-    )
+    resp = client.delete(f"/families/{fam.id}/members/{second_user.id}", headers=second_headers)
     assert resp.status_code == status.HTTP_204_NO_CONTENT
 
     assert not _is_claimed(db, gift_a)
@@ -566,9 +530,7 @@ def test_organizer_removal_cleans_like_self_leave(
     fam = family_with_second_member
     gift_a, gift_b, item_a, item_b = _seed_cross_artifacts(db, member_user, second_user)
 
-    resp = client.delete(
-        f"/families/{fam.id}/members/{second_user.id}", headers=member_headers
-    )
+    resp = client.delete(f"/families/{fam.id}/members/{second_user.id}", headers=member_headers)
     assert resp.status_code == status.HTTP_204_NO_CONTENT
 
     assert not _is_claimed(db, gift_a)
@@ -584,9 +546,7 @@ def test_leave_keeps_artifacts_when_connection_remains(
     _accept_connection(db, member_user, second_user)  # independent access path
     gift_a, gift_b, item_a, item_b = _seed_cross_artifacts(db, member_user, second_user)
 
-    resp = client.delete(
-        f"/families/{fam.id}/members/{second_user.id}", headers=second_headers
-    )
+    resp = client.delete(f"/families/{fam.id}/members/{second_user.id}", headers=second_headers)
     assert resp.status_code == status.HTTP_204_NO_CONTENT
 
     assert _is_claimed(db, gift_a)
@@ -603,16 +563,16 @@ def test_leave_keeps_artifacts_when_second_family_remains(
     fam2 = Family(name="Second Family", created_by_id=member_user.id)
     db.add(fam2)
     db.flush()
-    db.add_all([
-        FamilyMember(family_id=fam2.id, user_id=member_user.id, role="organizer"),
-        FamilyMember(family_id=fam2.id, user_id=second_user.id, role="member"),
-    ])
+    db.add_all(
+        [
+            FamilyMember(family_id=fam2.id, user_id=member_user.id, role="organizer"),
+            FamilyMember(family_id=fam2.id, user_id=second_user.id, role="member"),
+        ]
+    )
     db.flush()
     gift_a, gift_b, item_a, item_b = _seed_cross_artifacts(db, member_user, second_user)
 
-    resp = client.delete(
-        f"/families/{fam.id}/members/{second_user.id}", headers=second_headers
-    )
+    resp = client.delete(f"/families/{fam.id}/members/{second_user.id}", headers=second_headers)
     assert resp.status_code == status.HTTP_204_NO_CONTENT
 
     assert _is_claimed(db, gift_a)
@@ -632,15 +592,11 @@ def test_leave_does_not_touch_list_shares(
     db.add(share)
     db.flush()
 
-    resp = client.delete(
-        f"/families/{fam.id}/members/{second_user.id}", headers=second_headers
-    )
+    resp = client.delete(f"/families/{fam.id}/members/{second_user.id}", headers=second_headers)
     assert resp.status_code == status.HTTP_204_NO_CONTENT
 
     remaining = db.execute(
-        select(ListShare).where(
-            ListShare.list_id == shared.id, ListShare.user_id == second_user.id
-        )
+        select(ListShare).where(ListShare.list_id == shared.id, ListShare.user_id == second_user.id)
     ).scalar_one_or_none()
     assert remaining is not None  # cleanup must never delete shares
 
@@ -654,10 +610,12 @@ def test_delete_family_cleans_only_non_overlapping_pairs(
     db, client, member_user, member_headers, second_user, third_user, family
 ):
     # One family of three; member_user is organizer.
-    db.add_all([
-        FamilyMember(family_id=family.id, user_id=second_user.id, role="member"),
-        FamilyMember(family_id=family.id, user_id=third_user.id, role="member"),
-    ])
+    db.add_all(
+        [
+            FamilyMember(family_id=family.id, user_id=second_user.id, role="member"),
+            FamilyMember(family_id=family.id, user_id=third_user.id, role="member"),
+        ]
+    )
     db.flush()
     # member_user <-> third_user also have an accepted connection (access persists).
     _accept_connection(db, member_user, third_user)
@@ -714,15 +672,17 @@ def test_three_family_chain_selective_cleanup_on_delete(
     db.add_all([f1, f2, f3])
     db.flush()
 
-    db.add_all([
-        FamilyMember(family_id=f1.id, user_id=member_user.id, role="organizer"),
-        FamilyMember(family_id=f1.id, user_id=second_user.id, role="member"),
-        FamilyMember(family_id=f2.id, user_id=member_user.id, role="organizer"),
-        FamilyMember(family_id=f2.id, user_id=second_user.id, role="member"),
-        FamilyMember(family_id=f2.id, user_id=third_user.id, role="member"),
-        FamilyMember(family_id=f3.id, user_id=member_user.id, role="organizer"),
-        FamilyMember(family_id=f3.id, user_id=third_user.id, role="member"),
-    ])
+    db.add_all(
+        [
+            FamilyMember(family_id=f1.id, user_id=member_user.id, role="organizer"),
+            FamilyMember(family_id=f1.id, user_id=second_user.id, role="member"),
+            FamilyMember(family_id=f2.id, user_id=member_user.id, role="organizer"),
+            FamilyMember(family_id=f2.id, user_id=second_user.id, role="member"),
+            FamilyMember(family_id=f2.id, user_id=third_user.id, role="member"),
+            FamilyMember(family_id=f3.id, user_id=member_user.id, role="organizer"),
+            FamilyMember(family_id=f3.id, user_id=third_user.id, role="member"),
+        ]
+    )
     db.flush()
 
     gift_ab, gift_ba, item_ab, item_ba = _seed_cross_artifacts(db, member_user, second_user)
@@ -757,12 +717,14 @@ def test_four_member_family_delete_all_pairs_cleaned(
     fam = Family(name="Big Family", created_by_id=member_user.id)
     db.add(fam)
     db.flush()
-    db.add_all([
-        FamilyMember(family_id=fam.id, user_id=member_user.id, role="organizer"),
-        FamilyMember(family_id=fam.id, user_id=second_user.id, role="member"),
-        FamilyMember(family_id=fam.id, user_id=third_user.id, role="member"),
-        FamilyMember(family_id=fam.id, user_id=fourth_user.id, role="member"),
-    ])
+    db.add_all(
+        [
+            FamilyMember(family_id=fam.id, user_id=member_user.id, role="organizer"),
+            FamilyMember(family_id=fam.id, user_id=second_user.id, role="member"),
+            FamilyMember(family_id=fam.id, user_id=third_user.id, role="member"),
+            FamilyMember(family_id=fam.id, user_id=fourth_user.id, role="member"),
+        ]
+    )
     db.flush()
 
     users = [member_user, second_user, third_user, fourth_user]
@@ -798,9 +760,7 @@ def test_bidirectional_cleanup_depth_explicit(
     # gift_a is on A's list, claimed by B; gift_b is on B's list, claimed by A
     # item_a is in A's folder pointing at B's list; item_b is in B's folder pointing at A's list
 
-    resp = client.delete(
-        f"/families/{fam.id}/members/{second_user.id}", headers=second_headers
-    )
+    resp = client.delete(f"/families/{fam.id}/members/{second_user.id}", headers=second_headers)
     assert resp.status_code == status.HTTP_204_NO_CONTENT
 
     # Direction 1: A's gift claimed by B → unclaimed
@@ -830,20 +790,24 @@ def test_third_party_not_affected_when_still_has_access(
     f_ab = Family(name="AB Family", created_by_id=member_user.id)
     db.add(f_ab)
     db.flush()
-    db.add_all([
-        FamilyMember(family_id=f_ab.id, user_id=member_user.id, role="organizer"),
-        FamilyMember(family_id=f_ab.id, user_id=second_user.id, role="member"),
-    ])
+    db.add_all(
+        [
+            FamilyMember(family_id=f_ab.id, user_id=member_user.id, role="organizer"),
+            FamilyMember(family_id=f_ab.id, user_id=second_user.id, role="member"),
+        ]
+    )
     db.flush()
 
     # F_ad: A+D share (D retains access to A's lists)
     f_ad = Family(name="AD Family", created_by_id=member_user.id)
     db.add(f_ad)
     db.flush()
-    db.add_all([
-        FamilyMember(family_id=f_ad.id, user_id=member_user.id, role="organizer"),
-        FamilyMember(family_id=f_ad.id, user_id=third_user.id, role="member"),
-    ])
+    db.add_all(
+        [
+            FamilyMember(family_id=f_ad.id, user_id=member_user.id, role="organizer"),
+            FamilyMember(family_id=f_ad.id, user_id=third_user.id, role="member"),
+        ]
+    )
     db.flush()
 
     # Seed cross-artifacts between A and B (will be cleaned)
@@ -860,7 +824,7 @@ def test_third_party_not_affected_when_still_has_access(
         Claim(
             gift_id=gift_a_for_d.id,
             user_id=third_user.id,
-            claimed_at=datetime.now(timezone.utc),
+            claimed_at=datetime.now(UTC),
         )
     )
     db.flush()
@@ -872,9 +836,7 @@ def test_third_party_not_affected_when_still_has_access(
     db.flush()
 
     # B leaves A's family
-    resp = client.delete(
-        f"/families/{f_ab.id}/members/{second_user.id}", headers=member_headers
-    )
+    resp = client.delete(f"/families/{f_ab.id}/members/{second_user.id}", headers=member_headers)
     assert resp.status_code == status.HTTP_204_NO_CONTENT
 
     # A↔B artifacts: cleaned (no remaining shared access)
@@ -896,11 +858,13 @@ def test_delete_family_overlap_with_connection_preserves_connected_pair(
     fam = Family(name="Connection Family", created_by_id=member_user.id)
     db.add(fam)
     db.flush()
-    db.add_all([
-        FamilyMember(family_id=fam.id, user_id=member_user.id, role="organizer"),
-        FamilyMember(family_id=fam.id, user_id=second_user.id, role="member"),
-        FamilyMember(family_id=fam.id, user_id=third_user.id, role="member"),
-    ])
+    db.add_all(
+        [
+            FamilyMember(family_id=fam.id, user_id=member_user.id, role="organizer"),
+            FamilyMember(family_id=fam.id, user_id=second_user.id, role="member"),
+            FamilyMember(family_id=fam.id, user_id=third_user.id, role="member"),
+        ]
+    )
     db.flush()
 
     # A↔B have an accepted connection (independent access path)
@@ -932,9 +896,7 @@ def test_delete_family_overlap_with_connection_preserves_connected_pair(
     assert not _item_exists(db, item_cb.id), "item_cb should be deleted (B-C: no other tie)"
 
 
-def test_empty_family_edges_succeed_without_error(
-    db, client, member_user, member_headers, family
-):
+def test_empty_family_edges_succeed_without_error(db, client, member_user, member_headers, family):
     """Scenario 6 — Organizer self-leaves as the sole remaining member.
 
     When the organizer is the *only* person left in a family they may self-leave
@@ -945,13 +907,12 @@ def test_empty_family_edges_succeed_without_error(
     fam = family  # member_user is the sole organizer AND sole member
 
     # Action 1: organizer self-leaves as the sole remaining member → allowed (204)
-    resp1 = client.delete(
-        f"/families/{fam.id}/members/{member_user.id}", headers=member_headers
-    )
+    resp1 = client.delete(f"/families/{fam.id}/members/{member_user.id}", headers=member_headers)
     assert resp1.status_code == status.HTTP_204_NO_CONTENT
 
     # Family row must still exist with 0 members (verify via DB — no access path remains)
     from app.models.family import Family as FamilyModel
+
     family_row = db.get(FamilyModel, fam.id)
     assert family_row is not None, "Family should persist after the last member leaves"
 
@@ -965,8 +926,13 @@ def test_empty_family_edges_succeed_without_error(
 
 
 def test_last_organizer_guard_integration(
-    db, client, member_user, member_headers, second_user, second_headers,
-    family_with_second_organizer
+    db,
+    client,
+    member_user,
+    member_headers,
+    second_user,
+    second_headers,
+    family_with_second_organizer,
 ):
     """Scenario 7 — Last-organizer guard at the router level.
 
@@ -980,10 +946,12 @@ def test_last_organizer_guard_integration(
     solo_fam = Family(name="Solo Family", created_by_id=member_user.id)
     db.add(solo_fam)
     db.flush()
-    db.add_all([
-        FamilyMember(family_id=solo_fam.id, user_id=member_user.id, role="organizer"),
-        FamilyMember(family_id=solo_fam.id, user_id=second_user.id, role="member"),
-    ])
+    db.add_all(
+        [
+            FamilyMember(family_id=solo_fam.id, user_id=member_user.id, role="organizer"),
+            FamilyMember(family_id=solo_fam.id, user_id=second_user.id, role="member"),
+        ]
+    )
     db.flush()
 
     # remove the last organizer while a plain member still exists → 409

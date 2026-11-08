@@ -8,7 +8,7 @@ class ConnectionCreate(BaseModel):
     email: str | None = None
 
     @model_validator(mode="after")
-    def require_user_id_or_email(self) -> "ConnectionCreate":
+    def require_user_id_or_email(self) -> ConnectionCreate:
         if self.user_id is None and self.email is None:
             raise ValueError("Either user_id or email is required.")
         return self

@@ -5,17 +5,18 @@ Revises: b7e2d4f16c93
 Create Date: 2026-09-09 10:00:00.000000
 
 """
-from typing import Sequence, Union
 
-from alembic import op
+from collections.abc import Sequence
+
 import sqlalchemy as sa
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = 'd4c8a1f92b60'
-down_revision: Union[str, Sequence[str], None] = 'b7e2d4f16c93'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+revision: str = "d4c8a1f92b60"
+down_revision: str | Sequence[str] | None = "b7e2d4f16c93"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -46,31 +47,38 @@ def upgrade() -> None:
         """
     )
 
-    with op.batch_alter_table('gifts', schema=None) as batch_op:
-        batch_op.drop_column('purchased_at')
-        batch_op.drop_column('claimed_at')
-        batch_op.drop_column('claimed_by_id')
+    with op.batch_alter_table("gifts", schema=None) as batch_op:
+        batch_op.drop_column("purchased_at")
+        batch_op.drop_column("claimed_at")
+        batch_op.drop_column("claimed_by_id")
 
     op.create_table(
-        'claims',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('gift_id', sa.Integer(), nullable=False),
-        sa.Column('user_id', sa.Integer(), nullable=False),
-        sa.Column('occasion_id', sa.Integer(), nullable=True),
-        sa.Column('claimed_at', sa.DateTime(), nullable=False),
-        sa.Column('purchased_at', sa.DateTime(), nullable=True),
-        sa.Column('amount_paid', sa.Numeric(precision=10, scale=2), nullable=True),
-        sa.ForeignKeyConstraint(['gift_id'], ['gifts.id'], ),
-        sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-        sa.ForeignKeyConstraint(['occasion_id'], ['occasions.id'], ),
-        sa.PrimaryKeyConstraint('id'),
-        sa.UniqueConstraint('gift_id', name='uq_claims_gift'),
+        "claims",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("gift_id", sa.Integer(), nullable=False),
+        sa.Column("user_id", sa.Integer(), nullable=False),
+        sa.Column("occasion_id", sa.Integer(), nullable=True),
+        sa.Column("claimed_at", sa.DateTime(), nullable=False),
+        sa.Column("purchased_at", sa.DateTime(), nullable=True),
+        sa.Column("amount_paid", sa.Numeric(precision=10, scale=2), nullable=True),
+        sa.ForeignKeyConstraint(
+            ["gift_id"],
+            ["gifts.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["user_id"],
+            ["users.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["occasion_id"],
+            ["occasions.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("gift_id", name="uq_claims_gift"),
     )
-    with op.batch_alter_table('claims', schema=None) as batch_op:
-        batch_op.create_index(batch_op.f('ix_claims_user_id'), ['user_id'], unique=False)
-        batch_op.create_index(
-            batch_op.f('ix_claims_occasion_id'), ['occasion_id'], unique=False
-        )
+    with op.batch_alter_table("claims", schema=None) as batch_op:
+        batch_op.create_index(batch_op.f("ix_claims_user_id"), ["user_id"], unique=False)
+        batch_op.create_index(batch_op.f("ix_claims_occasion_id"), ["occasion_id"], unique=False)
 
     # `gifts.claimed_at` was nullable and `claims.claimed_at` is not. Every row
     # the app wrote set the two together, so the fallback should never fire —
@@ -97,10 +105,10 @@ def downgrade() -> None:
     # Columns first, foreign key last: adding a column is a plain ALTER, but
     # adding the FK recreates `gifts`, which SQLite refuses while `claims`
     # still points at it.
-    with op.batch_alter_table('gifts', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('claimed_by_id', sa.Integer(), nullable=True))
-        batch_op.add_column(sa.Column('claimed_at', sa.DateTime(), nullable=True))
-        batch_op.add_column(sa.Column('purchased_at', sa.DateTime(), nullable=True))
+    with op.batch_alter_table("gifts", schema=None) as batch_op:
+        batch_op.add_column(sa.Column("claimed_by_id", sa.Integer(), nullable=True))
+        batch_op.add_column(sa.Column("claimed_at", sa.DateTime(), nullable=True))
+        batch_op.add_column(sa.Column("purchased_at", sa.DateTime(), nullable=True))
 
     op.execute(
         """
@@ -112,12 +120,12 @@ def downgrade() -> None:
         """
     )
 
-    with op.batch_alter_table('claims', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_claims_occasion_id'))
-        batch_op.drop_index(batch_op.f('ix_claims_user_id'))
-    op.drop_table('claims')
+    with op.batch_alter_table("claims", schema=None) as batch_op:
+        batch_op.drop_index(batch_op.f("ix_claims_occasion_id"))
+        batch_op.drop_index(batch_op.f("ix_claims_user_id"))
+    op.drop_table("claims")
 
-    with op.batch_alter_table('gifts', schema=None) as batch_op:
+    with op.batch_alter_table("gifts", schema=None) as batch_op:
         batch_op.create_foreign_key(
-            'fk_gifts_claimed_by_id_users', 'users', ['claimed_by_id'], ['id']
+            "fk_gifts_claimed_by_id_users", "users", ["claimed_by_id"], ["id"]
         )

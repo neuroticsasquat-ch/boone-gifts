@@ -16,26 +16,20 @@ def list_share_targets(gift_list: OwnedList, db: DbSession):
     return list_occasion_service.list_share_targets(db, gift_list)
 
 
-@router.put(
-    "/lists/{list_id}/occasions/{occasion_id}", status_code=status.HTTP_204_NO_CONTENT
-)
-def share_with_occasion(
-    occasion_id: int, gift_list: OwnedList, user: CurrentUser, db: DbSession
-):
+@router.put("/lists/{list_id}/occasions/{occasion_id}", status_code=status.HTTP_204_NO_CONTENT)
+def share_with_occasion(occasion_id: int, gift_list: OwnedList, user: CurrentUser, db: DbSession):
     try:
         list_occasion_service.create_share(db, gift_list, occasion_id, user)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
     except ForbiddenError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
     except ConflictError as e:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.delete(
-    "/lists/{list_id}/occasions/{occasion_id}", status_code=status.HTTP_204_NO_CONTENT
-)
+@router.delete("/lists/{list_id}/occasions/{occasion_id}", status_code=status.HTTP_204_NO_CONTENT)
 def unshare_from_occasion(
     occasion_id: int,
     gift_list: OwnedList,
@@ -44,13 +38,11 @@ def unshare_from_occasion(
     claims: str | None = Query(default=None, pattern="^(release|keep)$"),
 ):
     try:
-        list_occasion_service.revoke_share(
-            db, gift_list, occasion_id, user, claims=claims
-        )
+        list_occasion_service.revoke_share(db, gift_list, occasion_id, user, claims=claims)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
     except ForbiddenError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
     except ConflictError as e:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -3,9 +3,9 @@ from sqlalchemy.orm import Session
 
 from app.budgets import repository as budgets_repo
 from app.claims import repository as claims_repo
+from app.models.connection import Connection
 from app.models.folder import Folder
 from app.models.folder_item import FolderItem
-from app.models.connection import Connection
 from app.models.gift import Gift
 from app.models.gift_list import GiftList
 from app.models.invite import Invite
@@ -18,9 +18,7 @@ def get_all_users(db: Session) -> list[User]:
     return list(db.execute(select(User)).scalars().all())
 
 
-def search_users(
-    db: Session, query: str, exclude_user_id: int, limit: int = 10
-) -> list[User]:
+def search_users(db: Session, query: str, exclude_user_id: int, limit: int = 10) -> list[User]:
     pattern = f"%{query}%"
     return list(
         db.execute(
@@ -81,53 +79,33 @@ def cascade_delete_user(db: Session, user: User) -> None:
 
     # Remove shares granted TO this user (and folder items referencing those shares)
     shared_list_ids = list(
-        db.execute(
-            select(ListShare.list_id).where(ListShare.user_id == uid)
-        ).scalars().all()
+        db.execute(select(ListShare.list_id).where(ListShare.user_id == uid)).scalars().all()
     )
     if shared_list_ids:
-        db.execute(
-            delete(FolderItem).where(
-                FolderItem.list_id.in_(shared_list_ids)
-            )
-        )
+        db.execute(delete(FolderItem).where(FolderItem.list_id.in_(shared_list_ids)))
     db.execute(delete(ListShare).where(ListShare.user_id == uid))
 
     # Remove shares granted BY this user (on lists they own)
     owned_list_ids = list(
-        db.execute(
-            select(GiftList.id).where(GiftList.owner_id == uid)
-        ).scalars().all()
+        db.execute(select(GiftList.id).where(GiftList.owner_id == uid)).scalars().all()
     )
     if owned_list_ids:
         # Other people's claims on this user's gifts. Claims hold a foreign key
         # into `gifts`, so they go before the gifts do.
         claims_repo.delete_claims_on_lists(db, owned_list_ids)
-        db.execute(
-            delete(ListShare).where(ListShare.list_id.in_(owned_list_ids))
-        )
+        db.execute(delete(ListShare).where(ListShare.list_id.in_(owned_list_ids)))
         # Remove folder items referencing this user's lists
-        db.execute(
-            delete(FolderItem).where(
-                FolderItem.list_id.in_(owned_list_ids)
-            )
-        )
+        db.execute(delete(FolderItem).where(FolderItem.list_id.in_(owned_list_ids)))
         # Delete gifts then lists
         db.execute(delete(Gift).where(Gift.list_id.in_(owned_list_ids)))
         db.execute(delete(GiftList).where(GiftList.owner_id == uid))
 
     # Delete folders (items cascade via relationship)
     owned_folder_ids = list(
-        db.execute(
-            select(Folder.id).where(Folder.owner_id == uid)
-        ).scalars().all()
+        db.execute(select(Folder.id).where(Folder.owner_id == uid)).scalars().all()
     )
     if owned_folder_ids:
-        db.execute(
-            delete(FolderItem).where(
-                FolderItem.folder_id.in_(owned_folder_ids)
-            )
-        )
+        db.execute(delete(FolderItem).where(FolderItem.folder_id.in_(owned_folder_ids)))
         db.execute(delete(Folder).where(Folder.owner_id == uid))
 
     # Delete connections (both directions)
@@ -138,11 +116,7 @@ def cascade_delete_user(db: Session, user: User) -> None:
     )
 
     # Delete invites created by this user and the invite they used to register
-    db.execute(
-        delete(Invite).where(
-            or_(Invite.invited_by_id == uid, Invite.email == user.email)
-        )
-    )
+    db.execute(delete(Invite).where(or_(Invite.invited_by_id == uid, Invite.email == user.email)))
 
     # Delete the user (password_reset_tokens cascade via DB)
     db.delete(user)

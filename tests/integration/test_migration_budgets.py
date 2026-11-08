@@ -15,6 +15,7 @@ import shutil
 
 import pytest
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import IntegrityError
 
 from tests.integration.migration_support import alembic as _alembic
 from tests.integration.migration_support import build_template
@@ -32,10 +33,7 @@ def _seed(conn):
         )
     )
     conn.execute(
-        text(
-            "INSERT INTO families (id, name, created_by_id) "
-            "VALUES (1, 'Boone Family', 1)"
-        )
+        text("INSERT INTO families (id, name, created_by_id) VALUES (1, 'Boone Family', 1)")
     )
     conn.execute(
         text(
@@ -44,10 +42,7 @@ def _seed(conn):
         )
     )
     conn.execute(
-        text(
-            "INSERT INTO folders (id, owner_id, name, is_archived) "
-            "VALUES (1, 1, 'Gran', 0)"
-        )
+        text("INSERT INTO folders (id, owner_id, name, is_archived) VALUES (1, 1, 'Gran', 0)")
     )
 
 
@@ -73,9 +68,7 @@ def _insert_budget(engine, **columns) -> None:
     names = ", ".join(columns)
     values = ", ".join(f":{name}" for name in columns)
     with engine.begin() as conn:
-        conn.execute(
-            text(f"INSERT INTO budgets ({names}) VALUES ({values})"), columns
-        )
+        conn.execute(text(f"INSERT INTO budgets ({names}) VALUES ({values})"), columns)
 
 
 def test_upgrade_creates_the_table(seeded):
@@ -83,9 +76,7 @@ def test_upgrade_creates_the_table(seeded):
     _alembic("upgrade", REVISION, db_path)
 
     with engine.connect() as conn:
-        columns = {
-            row[1] for row in conn.execute(text("PRAGMA table_info(budgets)"))
-        }
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(budgets)"))}
     assert columns == {"id", "user_id", "occasion_id", "folder_id", "amount"}
 
 
@@ -94,7 +85,7 @@ def test_one_budget_per_user_and_occasion(seeded):
     _alembic("upgrade", REVISION, db_path)
     _insert_budget(engine, user_id=1, occasion_id=1, amount=200)
 
-    with pytest.raises(Exception):
+    with pytest.raises(IntegrityError):
         _insert_budget(engine, user_id=1, occasion_id=1, amount=250)
 
 
@@ -103,7 +94,7 @@ def test_one_budget_per_user_and_folder(seeded):
     _alembic("upgrade", REVISION, db_path)
     _insert_budget(engine, user_id=1, folder_id=1, amount=50)
 
-    with pytest.raises(Exception):
+    with pytest.raises(IntegrityError):
         _insert_budget(engine, user_id=1, folder_id=1, amount=60)
 
 
@@ -130,13 +121,12 @@ def test_the_unused_scope_is_null_and_never_collides(seeded):
         conn.execute(
             text(
                 "INSERT INTO occasions (id, family_id, name, is_archived, "
-                "created_by_id) VALUES (2, 1, \"Gran's 80th\", 0, 1)"
+                'created_by_id) VALUES (2, 1, "Gran\'s 80th", 0, 1)'
             )
         )
         conn.execute(
             text(
-                "INSERT INTO folders (id, owner_id, name, is_archived) "
-                "VALUES (2, 1, 'Cousins', 0)"
+                "INSERT INTO folders (id, owner_id, name, is_archived) VALUES (2, 1, 'Cousins', 0)"
             )
         )
 
@@ -159,8 +149,6 @@ def test_downgrade_drops_the_table(seeded):
     with engine.connect() as conn:
         tables = {
             row[0]
-            for row in conn.execute(
-                text("SELECT name FROM sqlite_master WHERE type='table'")
-            )
+            for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))
         }
     assert "budgets" not in tables

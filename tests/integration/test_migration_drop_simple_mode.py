@@ -7,6 +7,7 @@ drop leaves every row's remaining data intact and that this revision touches no
 existing grant. (A later revision drops the grants wholesale when shares move to
 occasions — project spec §12 — but retiring the mode must not pre-empt it.)
 """
+
 import shutil
 from pathlib import Path
 
@@ -41,11 +42,7 @@ def _seed(conn):
             "(2, 'full@t.com', 'Full', 'x', 'member', 1, 0)"
         )
     )
-    conn.execute(
-        text(
-            "INSERT INTO families (id, name, created_by_id) VALUES (1, 'Boones', 2)"
-        )
-    )
+    conn.execute(text("INSERT INTO families (id, name, created_by_id) VALUES (1, 'Boones', 2)"))
     conn.execute(
         text(
             "INSERT INTO family_invites (id, family_id, email, role, simple_mode, "
@@ -55,16 +52,9 @@ def _seed(conn):
         )
     )
     conn.execute(
-        text(
-            "INSERT INTO lists (id, name, owner_id, is_archived) "
-            "VALUES (1, 'Simple List', 1, 0)"
-        )
+        text("INSERT INTO lists (id, name, owner_id, is_archived) VALUES (1, 'Simple List', 1, 0)")
     )
-    conn.execute(
-        text(
-            "INSERT INTO list_family_shares (list_id, family_id) VALUES (1, 1)"
-        )
-    )
+    conn.execute(text("INSERT INTO list_family_shares (list_id, family_id) VALUES (1, 1)"))
 
 
 @pytest.fixture(scope="module")
@@ -103,9 +93,7 @@ def test_upgrade_drops_both_columns(db_path):
 def test_upgrade_keeps_every_row_and_its_remaining_data(db_path):
     _alembic("upgrade", REVISION, db_path)
     with _engine(db_path).connect() as conn:
-        users = conn.execute(
-            text("SELECT id, email, role, is_active FROM users ORDER BY id")
-        ).all()
+        users = conn.execute(text("SELECT id, email, role, is_active FROM users ORDER BY id")).all()
         invites = conn.execute(
             text("SELECT id, email, role, token FROM family_invites ORDER BY id")
         ).all()
@@ -123,9 +111,7 @@ def test_upgrade_keeps_every_row_and_its_remaining_data(db_path):
 def test_upgrade_touches_no_existing_grant(db_path):
     _alembic("upgrade", REVISION, db_path)
     with _engine(db_path).connect() as conn:
-        rows = conn.execute(
-            text("SELECT list_id, family_id FROM list_family_shares")
-        ).all()
+        rows = conn.execute(text("SELECT list_id, family_id FROM list_family_shares")).all()
 
     # The simple-mode owner keeps the grant the auto-grant gave them: dropping
     # the column retires the behaviour, it does not un-share anything.
@@ -136,12 +122,8 @@ def test_downgrade_restores_empty_columns(db_path):
     _alembic("upgrade", REVISION, db_path)
     _alembic("downgrade", PREVIOUS_HEAD, db_path)
     with _engine(db_path).connect() as conn:
-        users = conn.execute(
-            text("SELECT id, simple_mode FROM users ORDER BY id")
-        ).all()
-        invites = conn.execute(
-            text("SELECT id, simple_mode FROM family_invites ORDER BY id")
-        ).all()
+        users = conn.execute(text("SELECT id, simple_mode FROM users ORDER BY id")).all()
+        invites = conn.execute(text("SELECT id, simple_mode FROM family_invites ORDER BY id")).all()
 
     # Every row comes back False — no backfill in either direction, so a
     # downgraded database automatically grants nothing.

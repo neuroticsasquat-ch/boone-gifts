@@ -26,9 +26,7 @@ def get_family_member(db: Session, family_id: int, user_id: int) -> FamilyMember
     ).scalar_one_or_none()
 
 
-def get_family_members_with_users(
-    db: Session, family_id: int
-) -> list[tuple[FamilyMember, User]]:
+def get_family_members_with_users(db: Session, family_id: int) -> list[tuple[FamilyMember, User]]:
     rows = db.execute(
         select(FamilyMember, User)
         .join(User, FamilyMember.user_id == User.id)
@@ -39,26 +37,18 @@ def get_family_members_with_users(
 
 def get_user_memberships(db: Session, user_id: int) -> list[FamilyMember]:
     return list(
-        db.execute(
-            select(FamilyMember).where(FamilyMember.user_id == user_id)
-        )
-        .scalars()
-        .all()
+        db.execute(select(FamilyMember).where(FamilyMember.user_id == user_id)).scalars().all()
     )
 
 
 def get_member_count(db: Session, family_id: int) -> int:
     result = db.execute(
-        select(func.count(FamilyMember.id)).where(
-            FamilyMember.family_id == family_id
-        )
+        select(func.count(FamilyMember.id)).where(FamilyMember.family_id == family_id)
     ).scalar_one()
     return result
 
 
-def create_family_member(
-    db: Session, family_id: int, user_id: int, role: str
-) -> FamilyMember:
+def create_family_member(db: Session, family_id: int, user_id: int, role: str) -> FamilyMember:
     member = FamilyMember(family_id=family_id, user_id=user_id, role=role)
     db.add(member)
     db.flush()
@@ -72,9 +62,7 @@ def update_family_name(db: Session, family: Family, name: str) -> Family:
 
 
 def delete_all_members(db: Session, family_id: int) -> None:
-    db.execute(
-        delete(FamilyMember).where(FamilyMember.family_id == family_id)
-    )
+    db.execute(delete(FamilyMember).where(FamilyMember.family_id == family_id))
 
 
 def delete_family(db: Session, family: Family) -> None:
@@ -103,9 +91,11 @@ def update_member_role(db: Session, member: FamilyMember, role: str) -> FamilyMe
 
 
 def family_ids_for_user(db: Session, user_id: int) -> set[int]:
-    rows = db.execute(
-        select(FamilyMember.family_id).where(FamilyMember.user_id == user_id)
-    ).scalars().all()
+    rows = (
+        db.execute(select(FamilyMember.family_id).where(FamilyMember.user_id == user_id))
+        .scalars()
+        .all()
+    )
     return set(rows)
 
 

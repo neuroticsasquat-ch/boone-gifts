@@ -39,8 +39,7 @@ def test_recipient_name_none_stays_none(schema):
 
 @pytest.mark.parametrize(
     "schema",
-    [GiftListCreate, GiftListUpdate, GiftListRead, GiftListDetailOwner,
-     GiftListDetailViewer],
+    [GiftListCreate, GiftListUpdate, GiftListRead, GiftListDetailOwner, GiftListDetailViewer],
 )
 def test_recipient_has_account_is_not_a_field(schema):
     assert "recipient_has_account" not in schema.model_fields
@@ -104,9 +103,7 @@ def _gift(user_id=None, purchased=False):
     return SimpleNamespace(claim=claim)
 
 
-@pytest.mark.parametrize(
-    "schema", [GiftListRead, GiftListDetailOwner, GiftListDetailViewer]
-)
+@pytest.mark.parametrize("schema", [GiftListRead, GiftListDetailOwner, GiftListDetailViewer])
 def test_only_the_viewer_row_carries_the_unpurchased_count(schema):
     """It is a fact about one caller's own claims, so it belongs on exactly the
     schema handed a list that caller does not own."""
@@ -117,10 +114,10 @@ def test_only_the_viewer_row_carries_the_unpurchased_count(schema):
 def test_it_counts_only_the_viewers_own_unbought_claims():
     row = _row(
         [
-            _gift(user_id=7),                    # mine, still to buy
-            _gift(user_id=7, purchased=True),    # mine, already bought
-            _gift(user_id=8),                    # someone else's
-            _gift(),                             # unclaimed
+            _gift(user_id=7),  # mine, still to buy
+            _gift(user_id=7, purchased=True),  # mine, already bought
+            _gift(user_id=8),  # someone else's
+            _gift(),  # unclaimed
         ]
     )
     read = GiftListViewerRead.model_validate(row, context={"viewer_id": 7})
@@ -145,9 +142,7 @@ def test_validating_without_a_viewer_is_refused():
 def test_revalidating_a_built_row_needs_no_viewer():
     """A folder's `lists` are already-built viewer rows revalidated as part of
     `FolderDetail`; the counts ride along rather than being recomputed."""
-    built = GiftListViewerRead.model_validate(
-        _row([_gift(user_id=7)]), context={"viewer_id": 7}
-    )
+    built = GiftListViewerRead.model_validate(_row([_gift(user_id=7)]), context={"viewer_id": 7})
     again = GiftListViewerRead.model_validate(built)
     assert again.my_unpurchased_claim_count == 1
     assert again.claimed_count == 1

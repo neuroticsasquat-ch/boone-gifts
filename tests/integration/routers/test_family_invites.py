@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
@@ -63,8 +63,16 @@ def outsider_headers(outsider):
 
 
 def _seed_invite(
-    db, *, family_id, invited_by_id, email, token,
-    accepted_at=None, declined_at=None, role="member", expires_in_days=7,
+    db,
+    *,
+    family_id,
+    invited_by_id,
+    email,
+    token,
+    accepted_at=None,
+    declined_at=None,
+    role="member",
+    expires_in_days=7,
 ):
     invite = FamilyInvite(
         family_id=family_id,
@@ -72,7 +80,7 @@ def _seed_invite(
         role=role,
         token=token,
         invited_by_id=invited_by_id,
-        expires_at=datetime.now(timezone.utc) + timedelta(days=expires_in_days),
+        expires_at=datetime.now(UTC) + timedelta(days=expires_in_days),
         accepted_at=accepted_at,
         declined_at=declined_at,
     )
@@ -134,7 +142,9 @@ def test_create_invite_invalid_role(client, member_headers, family):
     assert response.status_code == 422
 
 
-def test_create_invite_already_member(client, member_headers, family_with_plain_member, plain_member):
+def test_create_invite_already_member(
+    client, member_headers, family_with_plain_member, plain_member
+):
     response = client.post(
         f"/families/{family_with_plain_member.id}/invites",
         headers=member_headers,
@@ -159,7 +169,9 @@ def test_create_invite_duplicate_pending(client, member_headers, family):
     assert second.status_code == 409
 
 
-def test_create_invite_non_organizer_forbidden(client, plain_member_headers, family_with_plain_member):
+def test_create_invite_non_organizer_forbidden(
+    client, plain_member_headers, family_with_plain_member
+):
     response = client.post(
         f"/families/{family_with_plain_member.id}/invites",
         headers=plain_member_headers,
@@ -192,13 +204,23 @@ def test_create_invite_family_not_found(client, member_headers):
 
 
 def test_list_invites_pending_only(client, member_headers, family, member_user, db):
-    _seed_invite(db, family_id=family.id, invited_by_id=member_user.id, email="pending@test.com", token="p1")
     _seed_invite(
-        db, family_id=family.id, invited_by_id=member_user.id, email="gone@test.com", token="a1",
-        accepted_at=datetime.now(timezone.utc),
+        db, family_id=family.id, invited_by_id=member_user.id, email="pending@test.com", token="p1"
     )
     _seed_invite(
-        db, family_id=family.id, invited_by_id=member_user.id, email="old@test.com", token="e1",
+        db,
+        family_id=family.id,
+        invited_by_id=member_user.id,
+        email="gone@test.com",
+        token="a1",
+        accepted_at=datetime.now(UTC),
+    )
+    _seed_invite(
+        db,
+        family_id=family.id,
+        invited_by_id=member_user.id,
+        email="old@test.com",
+        token="e1",
         expires_in_days=-1,
     )
 
@@ -211,7 +233,9 @@ def test_list_invites_pending_only(client, member_headers, family, member_user, 
     assert emails["old@test.com"] == "expired"
 
 
-def test_list_invites_non_organizer_forbidden(client, plain_member_headers, family_with_plain_member):
+def test_list_invites_non_organizer_forbidden(
+    client, plain_member_headers, family_with_plain_member
+):
     response = client.get(
         f"/families/{family_with_plain_member.id}/invites", headers=plain_member_headers
     )
@@ -236,8 +260,12 @@ def test_revoke_invite(client, member_headers, family, member_user, db):
 
 def test_revoke_accepted_invite(client, member_headers, family, member_user, db):
     invite = _seed_invite(
-        db, family_id=family.id, invited_by_id=member_user.id, email="acc@test.com", token="acc1",
-        accepted_at=datetime.now(timezone.utc),
+        db,
+        family_id=family.id,
+        invited_by_id=member_user.id,
+        email="acc@test.com",
+        token="acc1",
+        accepted_at=datetime.now(UTC),
     )
     response = client.delete(f"/families/{family.id}/invites/{invite.id}", headers=member_headers)
     assert response.status_code == 409
@@ -252,8 +280,11 @@ def test_revoke_invite_non_organizer_forbidden(
     client, plain_member_headers, family_with_plain_member, member_user, db
 ):
     invite = _seed_invite(
-        db, family_id=family_with_plain_member.id, invited_by_id=member_user.id,
-        email="x@test.com", token="x1",
+        db,
+        family_id=family_with_plain_member.id,
+        invited_by_id=member_user.id,
+        email="x@test.com",
+        token="x1",
     )
     response = client.delete(
         f"/families/{family_with_plain_member.id}/invites/{invite.id}",
@@ -269,12 +300,13 @@ def test_list_invites_non_member_forbidden(client, outsider_headers, family):
 
 def test_revoke_invite_non_member_forbidden(client, outsider_headers, family, member_user, db):
     invite = _seed_invite(
-        db, family_id=family.id, invited_by_id=member_user.id,
-        email="x2@test.com", token="x2",
+        db,
+        family_id=family.id,
+        invited_by_id=member_user.id,
+        email="x2@test.com",
+        token="x2",
     )
-    response = client.delete(
-        f"/families/{family.id}/invites/{invite.id}", headers=outsider_headers
-    )
+    response = client.delete(f"/families/{family.id}/invites/{invite.id}", headers=outsider_headers)
     assert response.status_code == 403
 
 
@@ -285,8 +317,11 @@ def test_revoke_invite_non_member_forbidden(client, outsider_headers, family, me
 
 def test_decline_invite_success(client, outsider_headers, family, member_user, db, outsider):
     _seed_invite(
-        db, family_id=family.id, invited_by_id=member_user.id,
-        email=outsider.email, token="dec-1",
+        db,
+        family_id=family.id,
+        invited_by_id=member_user.id,
+        email=outsider.email,
+        token="dec-1",
     )
     response = client.post("/families/invites/dec-1/decline", headers=outsider_headers)
     assert response.status_code == 204
@@ -297,26 +332,41 @@ def test_decline_invite_success(client, outsider_headers, family, member_user, d
 
 def test_decline_invite_wrong_recipient(client, outsider_headers, family, member_user, db):
     _seed_invite(
-        db, family_id=family.id, invited_by_id=member_user.id,
-        email="not-outsider@test.com", token="dec-2",
+        db,
+        family_id=family.id,
+        invited_by_id=member_user.id,
+        email="not-outsider@test.com",
+        token="dec-2",
     )
     response = client.post("/families/invites/dec-2/decline", headers=outsider_headers)
     assert response.status_code == 403
 
 
-def test_decline_invite_already_accepted(client, outsider_headers, family, member_user, db, outsider):
+def test_decline_invite_already_accepted(
+    client, outsider_headers, family, member_user, db, outsider
+):
     _seed_invite(
-        db, family_id=family.id, invited_by_id=member_user.id,
-        email=outsider.email, token="dec-3", accepted_at=datetime.now(timezone.utc),
+        db,
+        family_id=family.id,
+        invited_by_id=member_user.id,
+        email=outsider.email,
+        token="dec-3",
+        accepted_at=datetime.now(UTC),
     )
     response = client.post("/families/invites/dec-3/decline", headers=outsider_headers)
     assert response.status_code == 409
 
 
-def test_decline_invite_already_declined(client, outsider_headers, family, member_user, db, outsider):
+def test_decline_invite_already_declined(
+    client, outsider_headers, family, member_user, db, outsider
+):
     _seed_invite(
-        db, family_id=family.id, invited_by_id=member_user.id,
-        email=outsider.email, token="dec-4", declined_at=datetime.now(timezone.utc),
+        db,
+        family_id=family.id,
+        invited_by_id=member_user.id,
+        email=outsider.email,
+        token="dec-4",
+        declined_at=datetime.now(UTC),
     )
     response = client.post("/families/invites/dec-4/decline", headers=outsider_headers)
     assert response.status_code == 409
@@ -332,10 +382,16 @@ def test_decline_invite_not_found(client, outsider_headers):
 # ---------------------------------------------------------------------------
 
 
-def test_accept_invite_creates_membership(client, outsider_headers, family, member_user, db, outsider):
+def test_accept_invite_creates_membership(
+    client, outsider_headers, family, member_user, db, outsider
+):
     _seed_invite(
-        db, family_id=family.id, invited_by_id=member_user.id,
-        email=outsider.email, token="acc-1", role="member",
+        db,
+        family_id=family.id,
+        invited_by_id=member_user.id,
+        email=outsider.email,
+        token="acc-1",
+        role="member",
     )
     response = client.post("/families/invites/acc-1/accept", headers=outsider_headers)
     assert response.status_code == 200
@@ -343,11 +399,7 @@ def test_accept_invite_creates_membership(client, outsider_headers, family, memb
     assert body["family"]["id"] == family.id
     assert body["role"] == "member"
 
-    member = (
-        db.query(FamilyMember)
-        .filter_by(family_id=family.id, user_id=outsider.id)
-        .one()
-    )
+    member = db.query(FamilyMember).filter_by(family_id=family.id, user_id=outsider.id).one()
     assert member.role == "member"
 
     invite = db.query(FamilyInvite).filter_by(token="acc-1").one()
@@ -356,17 +408,25 @@ def test_accept_invite_creates_membership(client, outsider_headers, family, memb
 
 def test_accept_invite_wrong_recipient(client, outsider_headers, family, member_user, db):
     _seed_invite(
-        db, family_id=family.id, invited_by_id=member_user.id,
-        email="not-outsider@test.com", token="acc-2",
+        db,
+        family_id=family.id,
+        invited_by_id=member_user.id,
+        email="not-outsider@test.com",
+        token="acc-2",
     )
     response = client.post("/families/invites/acc-2/accept", headers=outsider_headers)
     assert response.status_code == 403
 
 
-def test_accept_invite_already_member(client, plain_member_headers, family_with_plain_member, member_user, db, plain_member):
+def test_accept_invite_already_member(
+    client, plain_member_headers, family_with_plain_member, member_user, db, plain_member
+):
     _seed_invite(
-        db, family_id=family_with_plain_member.id, invited_by_id=member_user.id,
-        email=plain_member.email, token="acc-3",
+        db,
+        family_id=family_with_plain_member.id,
+        invited_by_id=member_user.id,
+        email=plain_member.email,
+        token="acc-3",
     )
     response = client.post("/families/invites/acc-3/accept", headers=plain_member_headers)
     assert response.status_code == 409
@@ -374,8 +434,12 @@ def test_accept_invite_already_member(client, plain_member_headers, family_with_
 
 def test_accept_invite_expired(client, outsider_headers, family, member_user, db, outsider):
     _seed_invite(
-        db, family_id=family.id, invited_by_id=member_user.id,
-        email=outsider.email, token="acc-4", expires_in_days=-1,
+        db,
+        family_id=family.id,
+        invited_by_id=member_user.id,
+        email=outsider.email,
+        token="acc-4",
+        expires_in_days=-1,
     )
     response = client.post("/families/invites/acc-4/accept", headers=outsider_headers)
     assert response.status_code == 409
@@ -391,27 +455,47 @@ def test_accept_invite_not_found(client, outsider_headers):
 # ---------------------------------------------------------------------------
 
 
-def test_list_incoming_invites_actionable_only(client, outsider_headers, family, member_user, db, outsider):
+def test_list_incoming_invites_actionable_only(
+    client, outsider_headers, family, member_user, db, outsider
+):
     _seed_invite(
-        db, family_id=family.id, invited_by_id=member_user.id,
-        email=outsider.email, token="in-pending",
+        db,
+        family_id=family.id,
+        invited_by_id=member_user.id,
+        email=outsider.email,
+        token="in-pending",
     )
     _seed_invite(
-        db, family_id=family.id, invited_by_id=member_user.id,
-        email=outsider.email, token="in-accepted", accepted_at=datetime.now(timezone.utc),
+        db,
+        family_id=family.id,
+        invited_by_id=member_user.id,
+        email=outsider.email,
+        token="in-accepted",
+        accepted_at=datetime.now(UTC),
     )
     _seed_invite(
-        db, family_id=family.id, invited_by_id=member_user.id,
-        email=outsider.email, token="in-declined", declined_at=datetime.now(timezone.utc),
+        db,
+        family_id=family.id,
+        invited_by_id=member_user.id,
+        email=outsider.email,
+        token="in-declined",
+        declined_at=datetime.now(UTC),
     )
     _seed_invite(
-        db, family_id=family.id, invited_by_id=member_user.id,
-        email=outsider.email, token="in-expired", expires_in_days=-1,
+        db,
+        family_id=family.id,
+        invited_by_id=member_user.id,
+        email=outsider.email,
+        token="in-expired",
+        expires_in_days=-1,
     )
     # addressed to someone else — must not appear
     _seed_invite(
-        db, family_id=family.id, invited_by_id=member_user.id,
-        email="other@test.com", token="in-other",
+        db,
+        family_id=family.id,
+        invited_by_id=member_user.id,
+        email="other@test.com",
+        token="in-other",
     )
 
     response = client.get("/families/invites", headers=outsider_headers)
@@ -436,19 +520,28 @@ def test_list_incoming_invites_empty(client, outsider_headers):
 # ---------------------------------------------------------------------------
 
 
-def test_declined_invite_excluded_from_organizer_list(client, member_headers, outsider_headers, family, member_user, db, outsider):
+def test_declined_invite_excluded_from_organizer_list(
+    client, member_headers, outsider_headers, family, member_user, db, outsider
+):
     _seed_invite(
-        db, family_id=family.id, invited_by_id=member_user.id,
-        email=outsider.email, token="reg-1",
+        db,
+        family_id=family.id,
+        invited_by_id=member_user.id,
+        email=outsider.email,
+        token="reg-1",
     )
     # invitee declines
-    assert client.post("/families/invites/reg-1/decline", headers=outsider_headers).status_code == 204
+    assert (
+        client.post("/families/invites/reg-1/decline", headers=outsider_headers).status_code == 204
+    )
 
     rows = client.get(f"/families/{family.id}/invites", headers=member_headers).json()
     assert all(r["token"] != "reg-1" for r in rows)
 
 
-def test_can_reinvite_after_decline(client, member_headers, outsider_headers, family, member_user, db, outsider):
+def test_can_reinvite_after_decline(
+    client, member_headers, outsider_headers, family, member_user, db, outsider
+):
     with patch(SEND_EMAIL):
         first = client.post(
             f"/families/{family.id}/invites",
@@ -458,7 +551,10 @@ def test_can_reinvite_after_decline(client, member_headers, outsider_headers, fa
         assert first.status_code == 201
         token = first.json()["token"]
         # invitee declines
-        assert client.post(f"/families/invites/{token}/decline", headers=outsider_headers).status_code == 204
+        assert (
+            client.post(f"/families/invites/{token}/decline", headers=outsider_headers).status_code
+            == 204
+        )
         # organizer can invite the same email again
         second = client.post(
             f"/families/{family.id}/invites",

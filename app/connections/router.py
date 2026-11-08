@@ -14,9 +14,7 @@ router = APIRouter(prefix="/connections", tags=["connections"])
 
 
 @router.post("", response_model=ConnectionRead, status_code=status.HTTP_201_CREATED)
-def create_connection(
-    request: ConnectionCreate, user: CurrentUser, db: DbSession
-) -> dict:
+def create_connection(request: ConnectionCreate, user: CurrentUser, db: DbSession) -> dict:
     try:
         return connection_service.create_connection(
             db,
@@ -25,11 +23,11 @@ def create_connection(
             target_email=request.email,
         )
     except BadRequestError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except NotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from None
     except ConflictError:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT)
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT) from None
 
 
 @router.get("", response_model=list[ConnectionRead])
@@ -47,11 +45,11 @@ def accept_connection(connection_id: int, user: CurrentUser, db: DbSession) -> d
     try:
         return connection_service.accept_connection(db, connection_id, user.id)
     except NotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from None
     except ForbiddenError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN) from None
     except ConflictError:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT)
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT) from None
 
 
 @router.delete("/{connection_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -59,6 +57,6 @@ def delete_connection(connection_id: int, user: CurrentUser, db: DbSession) -> N
     try:
         connection_service.delete_connection(db, connection_id, user.id)
     except NotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from None
     except ForbiddenError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN) from None

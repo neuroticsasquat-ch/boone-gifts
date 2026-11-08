@@ -17,9 +17,7 @@ class ListOccasionShare(Base):
 
     __tablename__ = "list_occasion_shares"
     __table_args__ = (
-        UniqueConstraint(
-            "list_id", "occasion_id", name="uq_list_occasion_shares_list_occasion"
-        ),
+        UniqueConstraint("list_id", "occasion_id", name="uq_list_occasion_shares_list_occasion"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)

@@ -34,10 +34,6 @@ class Budget(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
-    occasion_id: Mapped[int | None] = mapped_column(
-        ForeignKey("occasions.id"), default=None
-    )
-    folder_id: Mapped[int | None] = mapped_column(
-        ForeignKey("folders.id"), default=None
-    )
+    occasion_id: Mapped[int | None] = mapped_column(ForeignKey("occasions.id"), default=None)
+    folder_id: Mapped[int | None] = mapped_column(ForeignKey("folders.id"), default=None)
     amount: Mapped[Decimal] = mapped_column(Numeric(10, 2))

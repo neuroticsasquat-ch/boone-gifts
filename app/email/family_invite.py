@@ -20,16 +20,12 @@ def render_family_invite_email(
     if is_new_user:
         link = f"{base}/register?family_invite={token}"
         action_html = (
-            f'<p><a href="{link}">Create your account and join '
-            f"the {family_name} family.</a></p>"
+            f'<p><a href="{link}">Create your account and join the {family_name} family.</a></p>'
         )
         action_text = f"Create your account and join the {family_name} family:\n{link}\n"
     else:
         link = f"{base}/family-invites/{token}"
-        action_html = (
-            f'<p><a href="{link}">Accept your invite to '
-            f"the {family_name} family.</a></p>"
-        )
+        action_html = f'<p><a href="{link}">Accept your invite to the {family_name} family.</a></p>'
         action_text = f"Accept your invite to the {family_name} family:\n{link}\n"
 
     body_html = (

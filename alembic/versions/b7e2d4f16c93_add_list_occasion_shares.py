@@ -5,17 +5,18 @@ Revises: a3f8c1e70b52
 Create Date: 2026-09-08 22:00:00.000000
 
 """
-from typing import Sequence, Union
 
-from alembic import op
+from collections.abc import Sequence
+
 import sqlalchemy as sa
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = 'b7e2d4f16c93'
-down_revision: Union[str, Sequence[str], None] = 'a3f8c1e70b52'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+revision: str = "b7e2d4f16c93"
+down_revision: str | Sequence[str] | None = "a3f8c1e70b52"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -32,37 +33,41 @@ def upgrade() -> None:
     a dropped claim silently invites two people to buy the same present.
     """
     op.create_table(
-        'list_occasion_shares',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('list_id', sa.Integer(), nullable=False),
-        sa.Column('occasion_id', sa.Integer(), nullable=False),
+        "list_occasion_shares",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("list_id", sa.Integer(), nullable=False),
+        sa.Column("occasion_id", sa.Integer(), nullable=False),
         sa.Column(
-            'created_at',
+            "created_at",
             sa.DateTime(),
-            server_default=sa.text('(CURRENT_TIMESTAMP)'),
+            server_default=sa.text("(CURRENT_TIMESTAMP)"),
             nullable=False,
         ),
-        sa.ForeignKeyConstraint(['list_id'], ['lists.id'], ),
-        sa.ForeignKeyConstraint(['occasion_id'], ['occasions.id'], ),
-        sa.PrimaryKeyConstraint('id'),
-        sa.UniqueConstraint(
-            'list_id', 'occasion_id', name='uq_list_occasion_shares_list_occasion'
+        sa.ForeignKeyConstraint(
+            ["list_id"],
+            ["lists.id"],
         ),
+        sa.ForeignKeyConstraint(
+            ["occasion_id"],
+            ["occasions.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("list_id", "occasion_id", name="uq_list_occasion_shares_list_occasion"),
     )
-    with op.batch_alter_table('list_occasion_shares', schema=None) as batch_op:
+    with op.batch_alter_table("list_occasion_shares", schema=None) as batch_op:
         batch_op.create_index(
-            batch_op.f('ix_list_occasion_shares_list_id'), ['list_id'], unique=False
+            batch_op.f("ix_list_occasion_shares_list_id"), ["list_id"], unique=False
         )
         batch_op.create_index(
-            batch_op.f('ix_list_occasion_shares_occasion_id'),
-            ['occasion_id'],
+            batch_op.f("ix_list_occasion_shares_occasion_id"),
+            ["occasion_id"],
             unique=False,
         )
 
-    with op.batch_alter_table('list_family_shares', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_list_family_shares_family_id'))
-        batch_op.drop_index(batch_op.f('ix_list_family_shares_list_id'))
-    op.drop_table('list_family_shares')
+    with op.batch_alter_table("list_family_shares", schema=None) as batch_op:
+        batch_op.drop_index(batch_op.f("ix_list_family_shares_family_id"))
+        batch_op.drop_index(batch_op.f("ix_list_family_shares_list_id"))
+    op.drop_table("list_family_shares")
 
 
 def downgrade() -> None:
@@ -74,32 +79,36 @@ def downgrade() -> None:
     membership would invent grants nobody made.
     """
     op.create_table(
-        'list_family_shares',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('list_id', sa.Integer(), nullable=False),
-        sa.Column('family_id', sa.Integer(), nullable=False),
+        "list_family_shares",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("list_id", sa.Integer(), nullable=False),
+        sa.Column("family_id", sa.Integer(), nullable=False),
         sa.Column(
-            'created_at',
+            "created_at",
             sa.DateTime(),
-            server_default=sa.text('(CURRENT_TIMESTAMP)'),
+            server_default=sa.text("(CURRENT_TIMESTAMP)"),
             nullable=False,
         ),
-        sa.ForeignKeyConstraint(['list_id'], ['lists.id'], ),
-        sa.ForeignKeyConstraint(['family_id'], ['families.id'], ),
-        sa.PrimaryKeyConstraint('id'),
-        sa.UniqueConstraint(
-            'list_id', 'family_id', name='uq_list_family_shares_list_family'
+        sa.ForeignKeyConstraint(
+            ["list_id"],
+            ["lists.id"],
         ),
+        sa.ForeignKeyConstraint(
+            ["family_id"],
+            ["families.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("list_id", "family_id", name="uq_list_family_shares_list_family"),
     )
-    with op.batch_alter_table('list_family_shares', schema=None) as batch_op:
+    with op.batch_alter_table("list_family_shares", schema=None) as batch_op:
         batch_op.create_index(
-            batch_op.f('ix_list_family_shares_list_id'), ['list_id'], unique=False
+            batch_op.f("ix_list_family_shares_list_id"), ["list_id"], unique=False
         )
         batch_op.create_index(
-            batch_op.f('ix_list_family_shares_family_id'), ['family_id'], unique=False
+            batch_op.f("ix_list_family_shares_family_id"), ["family_id"], unique=False
         )
 
-    with op.batch_alter_table('list_occasion_shares', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_list_occasion_shares_occasion_id'))
-        batch_op.drop_index(batch_op.f('ix_list_occasion_shares_list_id'))
-    op.drop_table('list_occasion_shares')
+    with op.batch_alter_table("list_occasion_shares", schema=None) as batch_op:
+        batch_op.drop_index(batch_op.f("ix_list_occasion_shares_occasion_id"))
+        batch_op.drop_index(batch_op.f("ix_list_occasion_shares_list_id"))
+    op.drop_table("list_occasion_shares")

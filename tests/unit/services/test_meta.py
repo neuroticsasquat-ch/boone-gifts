@@ -176,9 +176,12 @@ GENERIC_AMAZON_HTML = """
 
 
 @patch("app.meta.service.settings")
-@patch(LINKPREVIEW, return_value=UrlMetaResponse(
-    title="Cool Product", description="A great product", image="https://img.com/x.jpg"
-))
+@patch(
+    LINKPREVIEW,
+    return_value=UrlMetaResponse(
+        title="Cool Product", description="A great product", image="https://img.com/x.jpg"
+    ),
+)
 @patch(RESOLVE)
 @patch(FETCH, return_value=_mock_html_response(GENERIC_AMAZON_HTML))
 def test_fallback_triggered_when_direct_fetch_returns_generic_title(
@@ -222,9 +225,12 @@ def test_fallback_not_triggered_when_no_api_key(
 
 
 @patch("app.meta.service.settings")
-@patch(LINKPREVIEW, return_value=UrlMetaResponse(
-    title="Etsy Product", description="Handmade item", image="https://img.com/y.jpg"
-))
+@patch(
+    LINKPREVIEW,
+    return_value=UrlMetaResponse(
+        title="Etsy Product", description="Handmade item", image="https://img.com/y.jpg"
+    ),
+)
 @patch(RESOLVE)
 @patch(FETCH, side_effect=Exception("Connection failed"))
 def test_fallback_triggered_on_fetch_failure_with_api_key(
@@ -239,14 +245,20 @@ def test_fallback_triggered_on_fetch_failure_with_api_key(
 
 
 @patch("app.meta.service.settings")
-@patch(LINKPREVIEW, return_value=UrlMetaResponse(
-    title="Product Name", description="Desc from linkpreview", image="https://img.com/z.jpg"
-))
+@patch(
+    LINKPREVIEW,
+    return_value=UrlMetaResponse(
+        title="Product Name", description="Desc from linkpreview", image="https://img.com/z.jpg"
+    ),
+)
 @patch(RESOLVE)
-@patch(FETCH, return_value=_mock_html_response(
-    '<html><head><meta property="product:price:amount" content="19.99" />'
-    "<title>Amazon.com</title></head></html>"
-))
+@patch(
+    FETCH,
+    return_value=_mock_html_response(
+        '<html><head><meta property="product:price:amount" content="19.99" />'
+        "<title>Amazon.com</title></head></html>"
+    ),
+)
 def test_fallback_preserves_price_from_direct_fetch(
     mock_fetch, mock_resolve, mock_linkpreview, mock_settings
 ):

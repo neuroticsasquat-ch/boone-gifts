@@ -1,5 +1,6 @@
-import sqlalchemy
 import pytest
+import sqlalchemy
+import sqlalchemy.exc
 
 from app.models.family import Family
 from app.models.family_member import FamilyMember
@@ -80,4 +81,3 @@ def test_family_member_role_values(db):
 
     assert organizer.role == "organizer"
     assert regular.role == "member"
-

@@ -1,8 +1,8 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import bcrypt
-from sqlalchemy import String, Boolean, func
+from sqlalchemy import Boolean, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -28,18 +28,14 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255))
     role: Mapped[str] = mapped_column(String(50), default="member")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    is_shared_account: Mapped[bool] = mapped_column(
-        Boolean, default=False, server_default="0"
-    )
+    is_shared_account: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(
-        server_default=func.now(), onupdate=func.now()
-    )
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
     password_changed_at: Mapped[datetime | None] = mapped_column(
-        default=lambda: datetime.now(timezone.utc), nullable=True
+        default=lambda: datetime.now(UTC), nullable=True
     )
 
-    lists: Mapped[list["GiftList"]] = relationship(
+    lists: Mapped[list[GiftList]] = relationship(
         "GiftList", lazy="selectin", foreign_keys="GiftList.owner_id"
     )
 

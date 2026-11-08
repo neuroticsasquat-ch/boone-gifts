@@ -8,7 +8,7 @@ from app.debug.router import TelemetryTestError
 def test_admin_trigger_raises_the_test_error(client, admin_headers):
     # TestClient re-raises server exceptions, so the 500 a real client sees surfaces here
     # as the exception Sentry's FastAPI integration captures.
-    with pytest.raises(TelemetryTestError, match="boone-gifts.debug.raise-test-error"):
+    with pytest.raises(TelemetryTestError, match=r"boone-gifts\.debug\.raise-test-error"):
         client.post("/debug/raise-test-error", headers=admin_headers)
 
 

@@ -3,7 +3,8 @@
 Account people are labels, not identities: nothing here touches visibility,
 claims or membership. See docs/adr/0001-shared-accounts-are-one-identity.md.
 """
-from datetime import datetime, timezone
+
+from datetime import UTC, datetime
 
 import pytest
 
@@ -93,18 +94,21 @@ def test_put_strips_whitespace_from_names(client, member_headers):
 def test_put_renames_in_place(client, member_headers, shared_account):
     gran, grandpa = shared_account["people"]
     body = _put(
-        client, member_headers,
+        client,
+        member_headers,
         [{"id": gran["id"], "name": "Nan"}, {"id": grandpa["id"], "name": "Grandpa"}],
     ).json()
     assert [(p["id"], p["name"]) for p in body["people"]] == [
-        (gran["id"], "Nan"), (grandpa["id"], "Grandpa")
+        (gran["id"], "Nan"),
+        (grandpa["id"], "Grandpa"),
     ]
 
 
 def test_put_accepts_a_no_op_rename(client, member_headers, shared_account):
     gran, grandpa = shared_account["people"]
     body = _put(
-        client, member_headers,
+        client,
+        member_headers,
         [{"id": gran["id"], "name": "Gran"}, {"id": grandpa["id"], "name": "Grandpa"}],
     ).json()
     assert body["people"] == shared_account["people"]
@@ -115,31 +119,35 @@ def test_put_swaps_two_names(client, member_headers, shared_account):
     # would trip the (user_id, name) unique constraint applied naively.
     gran, grandpa = shared_account["people"]
     response = _put(
-        client, member_headers,
+        client,
+        member_headers,
         [{"id": gran["id"], "name": "Grandpa"}, {"id": grandpa["id"], "name": "Gran"}],
     )
     assert response.status_code == 200
     assert [(p["id"], p["name"]) for p in response.json()["people"]] == [
-        (gran["id"], "Grandpa"), (grandpa["id"], "Gran")
+        (gran["id"], "Grandpa"),
+        (grandpa["id"], "Gran"),
     ]
 
 
 def test_put_reorders_by_array_order(client, member_headers, shared_account):
     gran, grandpa = shared_account["people"]
     body = _put(
-        client, member_headers,
+        client,
+        member_headers,
         [{"id": grandpa["id"], "name": "Grandpa"}, {"id": gran["id"], "name": "Gran"}],
     ).json()
     assert [p["name"] for p in body["people"]] == ["Grandpa", "Gran"]
     # And the new order sticks, rather than being an artefact of the response.
     assert [p["name"] for p in client.get("/account", headers=member_headers).json()["people"]] == [
-        "Grandpa", "Gran"
+        "Grandpa",
+        "Gran",
     ]
 
 
 def test_put_adds_a_third_person(client, member_headers, shared_account):
     people = [{"id": p["id"], "name": p["name"]} for p in shared_account["people"]]
-    body = _put(client, member_headers, people + [{"name": "Dot"}]).json()
+    body = _put(client, member_headers, [*people, {"name": "Dot"}]).json()
     assert [p["name"] for p in body["people"]] == ["Gran", "Grandpa", "Dot"]
 
 
@@ -151,7 +159,8 @@ def test_put_reuses_a_freed_name_in_one_request(
     # (user_id, name) unique constraint trips.
     gran = shared_account["people"][0]
     response = _put(
-        client, member_headers,
+        client,
+        member_headers,
         [{"id": gran["id"], "name": "Gran"}, {"name": "Grandpa"}],
     )
     assert response.status_code == 200
@@ -182,31 +191,23 @@ def test_whitespace_only_name_is_400(client, member_headers):
     assert response.status_code == 400
 
 
-def test_another_accounts_person_id_is_404(
-    client, member_headers, admin_headers, shared_account
-):
+def test_another_accounts_person_id_is_404(client, member_headers, admin_headers, shared_account):
     # Admin claims one of the member account's person ids. Not a 403: that would
     # confirm the id exists.
     stolen = shared_account["people"][0]["id"]
-    response = _put(
-        client, admin_headers, [{"id": stolen, "name": "Mine"}, {"name": "Other"}]
-    )
+    response = _put(client, admin_headers, [{"id": stolen, "name": "Mine"}, {"name": "Other"}])
     assert response.status_code == 404
 
 
 def test_unknown_person_id_is_404(client, member_headers, shared_account):
-    response = _put(
-        client, member_headers, [{"id": 99999, "name": "Ghost"}, {"name": "Grandpa"}]
-    )
+    response = _put(client, member_headers, [{"id": 99999, "name": "Ghost"}, {"name": "Grandpa"}])
     assert response.status_code == 404
 
 
 # --- PUT: deleting down to one auto-unmarks (§4.3) ---
 
 
-def test_deleting_down_to_one_person_unmarks_the_account(
-    client, member_headers, shared_account
-):
+def test_deleting_down_to_one_person_unmarks_the_account(client, member_headers, shared_account):
     gran = shared_account["people"][0]
     body = _put(client, member_headers, [{"id": gran["id"], "name": "Gran"}]).json()
     # The last person goes too: one person on an account labels nothing.
@@ -221,15 +222,14 @@ def test_deleting_every_person_unmarks_the_account(client, member_headers, share
 # --- PUT: the destructive-change 409 (§3.3) ---
 
 
-def test_deleting_a_labelled_person_is_409(
-    client, db, member_user, member_headers, shared_account
-):
+def test_deleting_a_labelled_person_is_409(client, db, member_user, member_headers, shared_account):
     gran, grandpa = shared_account["people"]
     _labelled_list(db, member_user, grandpa, name="Grandpa's List")
     _labelled_list(db, member_user, grandpa, name="Grandpa's Birthday")
 
     response = _put(
-        client, member_headers,
+        client,
+        member_headers,
         [{"id": gran["id"], "name": "Gran"}, {"name": "Dot"}],
     )
 
@@ -237,9 +237,7 @@ def test_deleting_a_labelled_person_is_409(
     assert response.json() == {"affected_lists": 2}
 
 
-def test_unconfirmed_409_changes_nothing(
-    client, db, member_user, member_headers, shared_account
-):
+def test_unconfirmed_409_changes_nothing(client, db, member_user, member_headers, shared_account):
     gran, grandpa = shared_account["people"]
     gift_list = _labelled_list(db, member_user, grandpa)
 
@@ -257,7 +255,8 @@ def test_confirmed_409_commits(client, db, member_user, member_headers, shared_a
     gift_list = _labelled_list(db, member_user, grandpa)
 
     response = _put(
-        client, member_headers,
+        client,
+        member_headers,
         [{"id": gran["id"], "name": "Gran"}, {"name": "Dot"}],
         confirm=True,
     )
@@ -307,7 +306,7 @@ def test_deleting_an_unlabelled_person_needs_no_confirmation(
     client, member_headers, shared_account
 ):
     people = [{"id": p["id"], "name": p["name"]} for p in shared_account["people"]]
-    _put(client, member_headers, people + [{"name": "Dot"}])
+    _put(client, member_headers, [*people, {"name": "Dot"}])
 
     response = _put(client, member_headers, people)
 
@@ -318,16 +317,14 @@ def test_deleting_an_unlabelled_person_needs_no_confirmation(
 def test_deleting_down_to_one_labelled_person_is_409_then_commits(
     client, db, member_user, member_headers, shared_account
 ):
-    gran, grandpa = shared_account["people"]
+    gran, _grandpa = shared_account["people"]
     gift_list = _labelled_list(db, member_user, gran)
 
     unconfirmed = _put(client, member_headers, [{"id": gran["id"], "name": "Gran"}])
     assert unconfirmed.status_code == 409
     assert unconfirmed.json() == {"affected_lists": 1}
 
-    confirmed = _put(
-        client, member_headers, [{"id": gran["id"], "name": "Gran"}], confirm=True
-    )
+    confirmed = _put(client, member_headers, [{"id": gran["id"], "name": "Gran"}], confirm=True)
     assert confirmed.json() == {"is_shared_account": False, "people": []}
     db.expire_all()
     assert db.get(GiftList, gift_list.id).account_person_id is None
@@ -346,15 +343,12 @@ def test_deleting_a_person_leaves_the_list_and_its_gifts_intact(
     share = ListShare(list_id=gift_list.id, user_id=admin_user.id)
     db.add_all([gift, share])
     db.flush()
-    db.add(
-        Claim(
-            gift_id=gift.id, user_id=admin_user.id, claimed_at=datetime.now(timezone.utc)
-        )
-    )
+    db.add(Claim(gift_id=gift.id, user_id=admin_user.id, claimed_at=datetime.now(UTC)))
     db.flush()
 
     _put(
-        client, member_headers,
+        client,
+        member_headers,
         [{"id": gran["id"], "name": "Gran"}, {"name": "Dot"}],
         confirm=True,
     )
@@ -377,9 +371,7 @@ def test_staying_shared_with_no_people_is_400(client, member_headers, shared_acc
     assert "two people" in response.json()["detail"]
 
 
-def test_staying_shared_with_one_person_still_auto_unmarks(
-    client, member_headers, shared_account
-):
+def test_staying_shared_with_one_person_still_auto_unmarks(client, member_headers, shared_account):
     # The neighbouring case, pinned so the stricter empty-array rule above
     # cannot creep into it: dropping to one is a delete, not a contradiction.
     gran = shared_account["people"][0]

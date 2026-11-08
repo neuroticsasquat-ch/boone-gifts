@@ -6,11 +6,13 @@ genuinely free at this point in the chain — `c9d4e7a2f180` renamed the user's
 curated set to `folders` precisely so this table could claim it — and that the
 foreign keys and the `is_archived` default hold under `PRAGMA foreign_keys=ON`.
 """
+
 import shutil
 from pathlib import Path
 
 import pytest
 import sqlalchemy
+import sqlalchemy.exc
 from sqlalchemy import create_engine, event, inspect, text
 
 from tests.integration.migration_support import alembic as _alembic
@@ -40,10 +42,7 @@ def _seed(conn):
         )
     )
     conn.execute(
-        text(
-            "INSERT INTO families (id, name, created_by_id) "
-            "VALUES (1, 'Boone Family', 1)"
-        )
+        text("INSERT INTO families (id, name, created_by_id) VALUES (1, 'Boone Family', 1)")
     )
 
 
@@ -86,9 +85,7 @@ def test_upgrade_creates_the_table_with_its_index(db_path):
         "created_at",
         "updated_at",
     }
-    indexed = {
-        tuple(index["column_names"]) for index in inspector.get_indexes("occasions")
-    }
+    indexed = {tuple(index["column_names"]) for index in inspector.get_indexes("occasions")}
     assert ("family_id",) in indexed
     engine.dispose()
 
@@ -113,31 +110,29 @@ def test_is_archived_defaults_to_false(db_path):
                 "VALUES (1, 1, 'Christmas 2026', 1)"
             )
         )
-        assert conn.execute(
-            text("SELECT is_archived FROM occasions WHERE id = 1")
-        ).scalar_one() == 0
+        assert (
+            conn.execute(text("SELECT is_archived FROM occasions WHERE id = 1")).scalar_one() == 0
+        )
     engine.dispose()
 
 
 def test_the_foreign_keys_are_enforced(db_path):
     _alembic("upgrade", REVISION, db_path)
     engine = _engine(db_path)
-    with engine.begin() as conn:
-        with pytest.raises(sqlalchemy.exc.IntegrityError):
-            conn.execute(
-                text(
-                    "INSERT INTO occasions (id, family_id, name, created_by_id) "
-                    "VALUES (1, 999, 'Orphan', 1)"
-                )
+    with engine.begin() as conn, pytest.raises(sqlalchemy.exc.IntegrityError):
+        conn.execute(
+            text(
+                "INSERT INTO occasions (id, family_id, name, created_by_id) "
+                "VALUES (1, 999, 'Orphan', 1)"
             )
-    with engine.begin() as conn:
-        with pytest.raises(sqlalchemy.exc.IntegrityError):
-            conn.execute(
-                text(
-                    "INSERT INTO occasions (id, family_id, name, created_by_id) "
-                    "VALUES (2, 1, 'Orphan', 999)"
-                )
+        )
+    with engine.begin() as conn, pytest.raises(sqlalchemy.exc.IntegrityError):
+        conn.execute(
+            text(
+                "INSERT INTO occasions (id, family_id, name, created_by_id) "
+                "VALUES (2, 1, 'Orphan', 999)"
             )
+        )
     engine.dispose()
 
 

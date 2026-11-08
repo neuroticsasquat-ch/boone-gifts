@@ -16,6 +16,7 @@ import shutil
 
 import pytest
 from sqlalchemy import create_engine, event, text
+from sqlalchemy.exc import IntegrityError
 
 from tests.integration.migration_support import alembic as _alembic
 from tests.integration.migration_support import build_template
@@ -49,10 +50,7 @@ def _seed(conn):
         )
     )
     conn.execute(
-        text(
-            "INSERT INTO families (id, name, created_by_id) "
-            "VALUES (1, 'Boone Family', 1)"
-        )
+        text("INSERT INTO families (id, name, created_by_id) VALUES (1, 'Boone Family', 1)")
     )
     conn.execute(
         text(
@@ -86,9 +84,7 @@ def _insert_prompt(engine, **columns) -> None:
     values = ", ".join(f":{name}" for name in columns)
     with engine.begin() as conn:
         conn.execute(
-            text(
-                f"INSERT INTO occasion_archive_prompts ({names}) VALUES ({values})"
-            ),
+            text(f"INSERT INTO occasion_archive_prompts ({names}) VALUES ({values})"),
             columns,
         )
 
@@ -99,10 +95,7 @@ def test_upgrade_creates_the_table(seeded):
 
     with engine.connect() as conn:
         columns = {
-            row[1]
-            for row in conn.execute(
-                text("PRAGMA table_info(occasion_archive_prompts)")
-            )
+            row[1] for row in conn.execute(text("PRAGMA table_info(occasion_archive_prompts)"))
         }
     assert columns == {"id", "user_id", "occasion_id", "dismissed_until"}
 
@@ -114,7 +107,7 @@ def test_one_prompt_per_user_and_occasion(seeded):
     _alembic("upgrade", REVISION, db_path)
     _insert_prompt(engine, user_id=1, occasion_id=1, dismissed_until=LIVE)
 
-    with pytest.raises(Exception):
+    with pytest.raises(IntegrityError):
         _insert_prompt(engine, user_id=1, occasion_id=1, dismissed_until=LIVE)
 
 
@@ -128,9 +121,7 @@ def test_each_user_dismisses_the_same_occasion_separately(seeded):
     _insert_prompt(engine, user_id=2, occasion_id=1, dismissed_until=LIVE)
 
     with engine.connect() as conn:
-        count = conn.execute(
-            text("SELECT COUNT(*) FROM occasion_archive_prompts")
-        ).scalar()
+        count = conn.execute(text("SELECT COUNT(*) FROM occasion_archive_prompts")).scalar()
     assert count == 2
 
 
@@ -142,9 +133,7 @@ def test_one_user_may_dismiss_several_occasions(seeded):
     _insert_prompt(engine, user_id=1, occasion_id=2, dismissed_until=LIVE)
 
     with engine.connect() as conn:
-        count = conn.execute(
-            text("SELECT COUNT(*) FROM occasion_archive_prompts")
-        ).scalar()
+        count = conn.execute(text("SELECT COUNT(*) FROM occasion_archive_prompts")).scalar()
     assert count == 2
 
 
@@ -152,7 +141,7 @@ def test_an_unknown_user_is_refused(seeded):
     engine, db_path = seeded
     _alembic("upgrade", REVISION, db_path)
 
-    with pytest.raises(Exception):
+    with pytest.raises(IntegrityError):
         _insert_prompt(engine, user_id=999, occasion_id=1, dismissed_until=LIVE)
 
 
@@ -160,7 +149,7 @@ def test_an_unknown_occasion_is_refused(seeded):
     engine, db_path = seeded
     _alembic("upgrade", REVISION, db_path)
 
-    with pytest.raises(Exception):
+    with pytest.raises(IntegrityError):
         _insert_prompt(engine, user_id=1, occasion_id=999, dismissed_until=LIVE)
 
 
@@ -171,9 +160,8 @@ def test_deleting_the_occasion_out_from_under_a_prompt_is_refused(seeded):
     _alembic("upgrade", REVISION, db_path)
     _insert_prompt(engine, user_id=1, occasion_id=1, dismissed_until=LIVE)
 
-    with pytest.raises(Exception):
-        with engine.begin() as conn:
-            conn.execute(text("DELETE FROM occasions WHERE id = 1"))
+    with pytest.raises(IntegrityError), engine.begin() as conn:
+        conn.execute(text("DELETE FROM occasions WHERE id = 1"))
 
 
 def test_deleting_the_user_out_from_under_a_prompt_is_refused(seeded):
@@ -182,9 +170,8 @@ def test_deleting_the_user_out_from_under_a_prompt_is_refused(seeded):
     _alembic("upgrade", REVISION, db_path)
     _insert_prompt(engine, user_id=1, occasion_id=1, dismissed_until=LIVE)
 
-    with pytest.raises(Exception):
-        with engine.begin() as conn:
-            conn.execute(text("DELETE FROM users WHERE id = 1"))
+    with pytest.raises(IntegrityError), engine.begin() as conn:
+        conn.execute(text("DELETE FROM users WHERE id = 1"))
 
 
 def test_dismissed_until_refuses_null(seeded):
@@ -194,7 +181,7 @@ def test_dismissed_until_refuses_null(seeded):
     engine, db_path = seeded
     _alembic("upgrade", REVISION, db_path)
 
-    with pytest.raises(Exception):
+    with pytest.raises(IntegrityError):
         _insert_prompt(engine, user_id=1, occasion_id=1, dismissed_until=None)
 
 
@@ -210,8 +197,6 @@ def test_downgrade_drops_the_table(seeded):
     with engine.connect() as conn:
         tables = {
             row[0]
-            for row in conn.execute(
-                text("SELECT name FROM sqlite_master WHERE type='table'")
-            )
+            for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))
         }
     assert "occasion_archive_prompts" not in tables

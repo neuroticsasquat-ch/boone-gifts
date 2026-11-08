@@ -4,7 +4,8 @@ Every budget is private to the user who set it. The tests that matter most here
 are the ones proving that: a second member of the same family, filing claims
 under the same occasion, changes nothing about what the caller reads.
 """
-from datetime import datetime, timezone
+
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
@@ -14,8 +15,6 @@ from app.dependencies import create_access_token
 from app.models.claim import Claim
 from app.models.family import Family
 from app.models.family_member import FamilyMember
-from app.models.folder import Folder
-from app.models.folder_item import FolderItem
 from app.models.gift import Gift
 from app.models.gift_list import GiftList
 from app.models.list_occasion_share import ListOccasionShare
@@ -35,9 +34,7 @@ def family(db, member_user):
 
 @pytest.fixture
 def occasion(db, family, member_user):
-    occ = Occasion(
-        family_id=family.id, name="Christmas 2026", created_by_id=member_user.id
-    )
+    occ = Occasion(family_id=family.id, name="Christmas 2026", created_by_id=member_user.id)
     db.add(occ)
     db.flush()
     return occ
@@ -67,9 +64,7 @@ def gift_list(db, other_member):
     return gl
 
 
-def _claim(
-    db, gift_list, claimer, name, occasion=None, purchased_at=None, amount_paid=None
-):
+def _claim(db, gift_list, claimer, name, occasion=None, purchased_at=None, amount_paid=None):
     gift = Gift(list_id=gift_list.id, name=name)
     db.add(gift)
     db.flush()
@@ -77,7 +72,7 @@ def _claim(
         gift_id=gift.id,
         user_id=claimer.id,
         occasion_id=occasion.id if occasion is not None else None,
-        claimed_at=datetime.now(timezone.utc),
+        claimed_at=datetime.now(UTC),
         purchased_at=purchased_at,
         amount_paid=amount_paid,
     )
@@ -86,7 +81,7 @@ def _claim(
     return claim
 
 
-BOUGHT = datetime(2026, 5, 24, 12, 0, tzinfo=timezone.utc)
+BOUGHT = datetime(2026, 5, 24, 12, 0, tzinfo=UTC)
 
 
 # ---------------------------------------------------------------------------
@@ -94,9 +89,7 @@ BOUGHT = datetime(2026, 5, 24, 12, 0, tzinfo=timezone.utc)
 # ---------------------------------------------------------------------------
 
 
-def test_put_sets_the_budget_and_returns_the_rollup(
-    client, member_headers, occasion
-):
+def test_put_sets_the_budget_and_returns_the_rollup(client, member_headers, occasion):
     response = client.put(
         f"/occasions/{occasion.id}/budget",
         json={"amount": "200.00"},
@@ -135,9 +128,9 @@ def test_put_replaces_the_existing_budget(client, member_headers, occasion):
 
     assert response.json()["amount"] == "250.00"
     assert (
-        client.get(
-            f"/occasions/{occasion.id}/shopping", headers=member_headers
-        ).json()["budget"]["amount"]
+        client.get(f"/occasions/{occasion.id}/shopping", headers=member_headers).json()["budget"][
+            "amount"
+        ]
         == "250.00"
     )
 
@@ -160,9 +153,7 @@ def test_delete_clears_the_target_and_keeps_the_counts(
         headers=member_headers,
     )
 
-    response = client.delete(
-        f"/occasions/{occasion.id}/budget", headers=member_headers
-    )
+    response = client.delete(f"/occasions/{occasion.id}/budget", headers=member_headers)
 
     assert response.status_code == 200
     # Clearing a target is not unclaiming anything: the spend survives it.
@@ -181,9 +172,7 @@ def test_delete_clears_the_target_and_keeps_the_counts(
 
 
 def test_delete_is_404_when_no_budget_is_set(client, member_headers, occasion):
-    response = client.delete(
-        f"/occasions/{occasion.id}/budget", headers=member_headers
-    )
+    response = client.delete(f"/occasions/{occasion.id}/budget", headers=member_headers)
 
     assert response.status_code == 404
 
@@ -198,9 +187,7 @@ def test_a_negative_budget_is_refused(client, member_headers, occasion):
     assert response.status_code == 422
 
 
-def test_budget_endpoints_require_membership(
-    client, admin_headers, occasion
-):
+def test_budget_endpoints_require_membership(client, admin_headers, occasion):
     """Same gate as the occasion's other reads: a non-member learns nothing,
     not even what the budget line would say."""
     assert (
@@ -212,10 +199,7 @@ def test_budget_endpoints_require_membership(
         == 403
     )
     assert (
-        client.delete(
-            f"/occasions/{occasion.id}/budget", headers=admin_headers
-        ).status_code
-        == 403
+        client.delete(f"/occasions/{occasion.id}/budget", headers=admin_headers).status_code == 403
     )
 
 
@@ -233,10 +217,7 @@ def test_budget_endpoints_404_for_an_unknown_occasion(client, member_headers):
 
 def test_budget_endpoints_require_authentication(client, occasion):
     assert (
-        client.put(
-            f"/occasions/{occasion.id}/budget", json={"amount": "10.00"}
-        ).status_code
-        == 401
+        client.put(f"/occasions/{occasion.id}/budget", json={"amount": "10.00"}).status_code == 401
     )
     assert client.delete(f"/occasions/{occasion.id}/budget").status_code == 401
 
@@ -252,19 +233,25 @@ def test_rollup_counts_bought_but_never_guesses_at_an_unrecorded_amount(
     """The one arithmetic rule the budget line rests on: a purchase with no
     amount recorded is bought, is reported as unpriced, and is never money."""
     _claim(
-        db, gift_list, member_user, "Shoes",
-        occasion=occasion, purchased_at=BOUGHT, amount_paid=Decimal("85.00"),
+        db,
+        gift_list,
+        member_user,
+        "Shoes",
+        occasion=occasion,
+        purchased_at=BOUGHT,
+        amount_paid=Decimal("85.00"),
     )
     _claim(
-        db, gift_list, member_user, "Puzzle",
-        occasion=occasion, purchased_at=BOUGHT, amount_paid=Decimal("18.00"),
+        db,
+        gift_list,
+        member_user,
+        "Puzzle",
+        occasion=occasion,
+        purchased_at=BOUGHT,
+        amount_paid=Decimal("18.00"),
     )
-    _claim(
-        db, gift_list, member_user, "Socks", occasion=occasion, purchased_at=BOUGHT
-    )
-    _claim(
-        db, gift_list, member_user, "Book", occasion=occasion, purchased_at=BOUGHT
-    )
+    _claim(db, gift_list, member_user, "Socks", occasion=occasion, purchased_at=BOUGHT)
+    _claim(db, gift_list, member_user, "Book", occasion=occasion, purchased_at=BOUGHT)
     _claim(db, gift_list, member_user, "Skillet", occasion=occasion)
     client.put(
         f"/occasions/{occasion.id}/budget",
@@ -272,9 +259,9 @@ def test_rollup_counts_bought_but_never_guesses_at_an_unrecorded_amount(
         headers=member_headers,
     )
 
-    budget = client.get(
-        f"/occasions/{occasion.id}/shopping", headers=member_headers
-    ).json()["budget"]
+    budget = client.get(f"/occasions/{occasion.id}/shopping", headers=member_headers).json()[
+        "budget"
+    ]
 
     assert budget["spent"] == "103.00"
     assert budget["remaining"] == "97.00"
@@ -295,8 +282,13 @@ def test_unticking_holds_the_amount_and_takes_it_out_of_the_spend(
     what seeds the prompt on re-tick.
     """
     claim = _claim(
-        db, sample_list, member_user, "Shoes",
-        occasion=occasion, purchased_at=BOUGHT, amount_paid=Decimal("85.00"),
+        db,
+        sample_list,
+        member_user,
+        "Shoes",
+        occasion=occasion,
+        purchased_at=BOUGHT,
+        amount_paid=Decimal("85.00"),
     )
 
     client.delete(
@@ -304,9 +296,7 @@ def test_unticking_holds_the_amount_and_takes_it_out_of_the_spend(
         headers=member_headers,
     )
 
-    payload = client.get(
-        f"/occasions/{occasion.id}/shopping", headers=member_headers
-    ).json()
+    payload = client.get(f"/occasions/{occasion.id}/shopping", headers=member_headers).json()
 
     assert payload["budget"]["spent"] == "0.00"
     assert payload["budget"]["bought_count"] == 0
@@ -324,8 +314,13 @@ def test_re_ticking_brings_the_held_amount_back_into_the_spend(
     counts it again without the claimer retyping it.
     """
     claim = _claim(
-        db, sample_list, member_user, "Shoes",
-        occasion=occasion, purchased_at=BOUGHT, amount_paid=Decimal("85.00"),
+        db,
+        sample_list,
+        member_user,
+        "Shoes",
+        occasion=occasion,
+        purchased_at=BOUGHT,
+        amount_paid=Decimal("85.00"),
     )
     client.delete(
         f"/lists/{sample_list.id}/gifts/{claim.gift_id}/purchase",
@@ -338,9 +333,9 @@ def test_re_ticking_brings_the_held_amount_back_into_the_spend(
     )
 
     assert response.status_code == 200
-    budget = client.get(
-        f"/occasions/{occasion.id}/shopping", headers=member_headers
-    ).json()["budget"]
+    budget = client.get(f"/occasions/{occasion.id}/shopping", headers=member_headers).json()[
+        "budget"
+    ]
     assert budget["spent"] == "85.00"
     assert budget["bought_count"] == 1
     assert budget["unpriced_count"] == 0
@@ -362,9 +357,9 @@ def test_an_amount_patched_onto_an_unticked_claim_is_not_spent(
     # The amount really was written — otherwise the rollup below would read
     # "0.00" for the wrong reason entirely.
     assert response.json()["amount_paid"] == "85.00"
-    budget = client.get(
-        f"/occasions/{occasion.id}/shopping", headers=member_headers
-    ).json()["budget"]
+    budget = client.get(f"/occasions/{occasion.id}/shopping", headers=member_headers).json()[
+        "budget"
+    ]
     assert budget["spent"] == "0.00"
     assert budget["bought_count"] == 0
     assert budget["unpriced_count"] == 0
@@ -377,15 +372,17 @@ def test_a_folder_rollup_also_stops_at_the_tick(
     """Both tabs read one select, so the folder scope cannot drift from the
     occasion scope — this pins the shared gate on the other side of it."""
     claim = _claim(
-        db, sample_list, member_user, "In the folder",
-        purchased_at=BOUGHT, amount_paid=Decimal("31.50"),
+        db,
+        sample_list,
+        member_user,
+        "In the folder",
+        purchased_at=BOUGHT,
+        amount_paid=Decimal("31.50"),
     )
     claim.purchased_at = None
     db.flush()
 
-    budget = client.get(
-        f"/folders/{folder.id}/shopping", headers=member_headers
-    ).json()["budget"]
+    budget = client.get(f"/folders/{folder.id}/shopping", headers=member_headers).json()["budget"]
 
     assert budget["spent"] == "0.00"
     assert budget["bought_count"] == 0
@@ -398,8 +395,13 @@ def test_rollup_reports_an_overspend_rather_than_hiding_it(
 ):
     """A budget is a target, not a limit."""
     _claim(
-        db, gift_list, member_user, "Shoes",
-        occasion=occasion, purchased_at=BOUGHT, amount_paid=Decimal("85.00"),
+        db,
+        gift_list,
+        member_user,
+        "Shoes",
+        occasion=occasion,
+        purchased_at=BOUGHT,
+        amount_paid=Decimal("85.00"),
     )
     client.put(
         f"/occasions/{occasion.id}/budget",
@@ -407,9 +409,9 @@ def test_rollup_reports_an_overspend_rather_than_hiding_it(
         headers=member_headers,
     )
 
-    budget = client.get(
-        f"/occasions/{occasion.id}/shopping", headers=member_headers
-    ).json()["budget"]
+    budget = client.get(f"/occasions/{occasion.id}/shopping", headers=member_headers).json()[
+        "budget"
+    ]
 
     assert budget["remaining"] == "-35.00"
 
@@ -419,9 +421,9 @@ def test_shopping_carries_a_null_target_when_no_budget_is_set(
 ):
     _claim(db, gift_list, member_user, "Skillet", occasion=occasion)
 
-    budget = client.get(
-        f"/occasions/{occasion.id}/shopping", headers=member_headers
-    ).json()["budget"]
+    budget = client.get(f"/occasions/{occasion.id}/shopping", headers=member_headers).json()[
+        "budget"
+    ]
 
     assert budget["amount"] is None
     assert budget["remaining"] is None
@@ -431,27 +433,39 @@ def test_shopping_carries_a_null_target_when_no_budget_is_set(
 def test_rollup_counts_only_claims_filed_under_this_occasion(
     client, db, member_user, member_headers, family, occasion, gift_list
 ):
-    other_occasion = Occasion(
-        family_id=family.id, name="Gran's 80th", created_by_id=member_user.id
-    )
+    other_occasion = Occasion(family_id=family.id, name="Gran's 80th", created_by_id=member_user.id)
     db.add(other_occasion)
     db.flush()
     _claim(
-        db, gift_list, member_user, "Filed here",
-        occasion=occasion, purchased_at=BOUGHT, amount_paid=Decimal("10.00"),
+        db,
+        gift_list,
+        member_user,
+        "Filed here",
+        occasion=occasion,
+        purchased_at=BOUGHT,
+        amount_paid=Decimal("10.00"),
     )
     _claim(
-        db, gift_list, member_user, "Filed elsewhere",
-        occasion=other_occasion, purchased_at=BOUGHT, amount_paid=Decimal("99.00"),
+        db,
+        gift_list,
+        member_user,
+        "Filed elsewhere",
+        occasion=other_occasion,
+        purchased_at=BOUGHT,
+        amount_paid=Decimal("99.00"),
     )
     _claim(
-        db, gift_list, member_user, "Filed nowhere",
-        purchased_at=BOUGHT, amount_paid=Decimal("99.00"),
+        db,
+        gift_list,
+        member_user,
+        "Filed nowhere",
+        purchased_at=BOUGHT,
+        amount_paid=Decimal("99.00"),
     )
 
-    budget = client.get(
-        f"/occasions/{occasion.id}/shopping", headers=member_headers
-    ).json()["budget"]
+    budget = client.get(f"/occasions/{occasion.id}/shopping", headers=member_headers).json()[
+        "budget"
+    ]
 
     assert budget["spent"] == "10.00"
     assert budget["total_count"] == 1
@@ -477,12 +491,22 @@ def test_no_endpoint_returns_another_users_budget_or_spend(
     parameter, admin path or aggregate anywhere that would let them.
     """
     _claim(
-        db, gift_list, member_user, "Mine",
-        occasion=occasion, purchased_at=BOUGHT, amount_paid=Decimal("18.00"),
+        db,
+        gift_list,
+        member_user,
+        "Mine",
+        occasion=occasion,
+        purchased_at=BOUGHT,
+        amount_paid=Decimal("18.00"),
     )
     _claim(
-        db, gift_list, other_member, "Theirs",
-        occasion=occasion, purchased_at=BOUGHT, amount_paid=Decimal("500.00"),
+        db,
+        gift_list,
+        other_member,
+        "Theirs",
+        occasion=occasion,
+        purchased_at=BOUGHT,
+        amount_paid=Decimal("500.00"),
     )
     client.put(
         f"/occasions/{occasion.id}/budget",
@@ -495,12 +519,8 @@ def test_no_endpoint_returns_another_users_budget_or_spend(
         headers=other_member_headers,
     )
 
-    mine = client.get(
-        f"/occasions/{occasion.id}/shopping", headers=member_headers
-    ).json()
-    theirs = client.get(
-        f"/occasions/{occasion.id}/shopping", headers=other_member_headers
-    ).json()
+    mine = client.get(f"/occasions/{occasion.id}/shopping", headers=member_headers).json()
+    theirs = client.get(f"/occasions/{occasion.id}/shopping", headers=other_member_headers).json()
 
     assert mine["budget"] == {
         "amount": "200.00",
@@ -536,9 +556,9 @@ def test_clearing_one_members_budget_leaves_the_others_standing(
     client.delete(f"/occasions/{occasion.id}/budget", headers=member_headers)
 
     assert (
-        client.get(
-            f"/occasions/{occasion.id}/shopping", headers=other_member_headers
-        ).json()["budget"]["amount"]
+        client.get(f"/occasions/{occasion.id}/shopping", headers=other_member_headers).json()[
+            "budget"
+        ]["amount"]
         == "1000.00"
     )
 
@@ -552,15 +572,23 @@ def test_folder_budget_counts_claims_on_the_folders_lists(
     client, db, member_user, member_headers, folder, folder_item, sample_list
 ):
     _claim(
-        db, sample_list, member_user, "In the folder",
-        purchased_at=BOUGHT, amount_paid=Decimal("31.50"),
+        db,
+        sample_list,
+        member_user,
+        "In the folder",
+        purchased_at=BOUGHT,
+        amount_paid=Decimal("31.50"),
     )
     elsewhere = GiftList(name="Not in the folder", owner_id=member_user.id)
     db.add(elsewhere)
     db.flush()
     _claim(
-        db, elsewhere, member_user, "Outside",
-        purchased_at=BOUGHT, amount_paid=Decimal("99.00"),
+        db,
+        elsewhere,
+        member_user,
+        "Outside",
+        purchased_at=BOUGHT,
+        amount_paid=Decimal("99.00"),
     )
 
     response = client.put(
@@ -583,18 +611,14 @@ def test_folder_budget_counts_claims_on_the_folders_lists(
     }
 
 
-def test_folder_budget_is_returned_with_the_shopping_payload(
-    client, member_headers, folder
-):
+def test_folder_budget_is_returned_with_the_shopping_payload(client, member_headers, folder):
     client.put(
         f"/folders/{folder.id}/budget",
         json={"amount": "50.00"},
         headers=member_headers,
     )
 
-    payload = client.get(
-        f"/folders/{folder.id}/shopping", headers=member_headers
-    ).json()
+    payload = client.get(f"/folders/{folder.id}/shopping", headers=member_headers).json()
 
     assert payload["budget"]["amount"] == "50.00"
     assert payload["items"] == []
@@ -609,23 +633,11 @@ def test_folder_budget_is_owner_only(client, admin_headers, folder):
         ).status_code
         == 403
     )
-    assert (
-        client.delete(
-            f"/folders/{folder.id}/budget", headers=admin_headers
-        ).status_code
-        == 403
-    )
+    assert client.delete(f"/folders/{folder.id}/budget", headers=admin_headers).status_code == 403
 
 
-def test_folder_delete_is_404_when_no_budget_is_set(
-    client, member_headers, folder
-):
-    assert (
-        client.delete(
-            f"/folders/{folder.id}/budget", headers=member_headers
-        ).status_code
-        == 404
-    )
+def test_folder_delete_is_404_when_no_budget_is_set(client, member_headers, folder):
+    assert client.delete(f"/folders/{folder.id}/budget", headers=member_headers).status_code == 404
 
 
 def test_a_folder_budget_and_an_occasion_budget_are_separate(
@@ -645,22 +657,20 @@ def test_a_folder_budget_and_an_occasion_budget_are_separate(
     )
 
     assert (
-        client.get(
-            f"/occasions/{occasion.id}/shopping", headers=member_headers
-        ).json()["budget"]["amount"]
+        client.get(f"/occasions/{occasion.id}/shopping", headers=member_headers).json()["budget"][
+            "amount"
+        ]
         == "200.00"
     )
     assert (
-        client.get(
-            f"/folders/{folder.id}/shopping", headers=member_headers
-        ).json()["budget"]["amount"]
+        client.get(f"/folders/{folder.id}/shopping", headers=member_headers).json()["budget"][
+            "amount"
+        ]
         == "50.00"
     )
 
 
-def test_deleting_a_folder_takes_its_budget_with_it(
-    client, member_headers, folder
-):
+def test_deleting_a_folder_takes_its_budget_with_it(client, member_headers, folder):
     """`budgets.folder_id` is a real foreign key under `PRAGMA foreign_keys=ON`,
     so a budget left behind would make the delete fail outright."""
     client.put(
@@ -669,10 +679,7 @@ def test_deleting_a_folder_takes_its_budget_with_it(
         headers=member_headers,
     )
 
-    assert (
-        client.delete(f"/folders/{folder.id}", headers=member_headers).status_code
-        == 204
-    )
+    assert client.delete(f"/folders/{folder.id}", headers=member_headers).status_code == 204
 
 
 # ---------------------------------------------------------------------------
@@ -699,10 +706,7 @@ def test_deleting_a_family_takes_every_budget_on_its_occasions(
         headers=other_member_headers,
     )
 
-    assert (
-        client.delete(f"/families/{family.id}", headers=member_headers).status_code
-        == 204
-    )
+    assert client.delete(f"/families/{family.id}", headers=member_headers).status_code == 204
 
 
 def test_purging_a_user_takes_their_folder_budget_with_them(
@@ -721,9 +725,7 @@ def test_purging_a_user_takes_their_folder_budget_with_them(
         headers=member_headers,
     )
 
-    response = client.delete(
-        f"/users/{member_user.id}?purge=true", headers=admin_headers
-    )
+    response = client.delete(f"/users/{member_user.id}?purge=true", headers=admin_headers)
 
     assert response.status_code == 204
 
@@ -746,9 +748,9 @@ def test_rollup_with_no_overall_and_no_giftee_budgets_has_no_target(
 ):
     _claim(db, gift_list, member_user, "Skillet", occasion=occasion)
 
-    budget = client.get(
-        f"/occasions/{occasion.id}/shopping", headers=member_headers
-    ).json()["budget"]
+    budget = client.get(f"/occasions/{occasion.id}/shopping", headers=member_headers).json()[
+        "budget"
+    ]
 
     assert budget["target"] is None
     assert budget["remaining"] is None
@@ -769,15 +771,27 @@ def test_an_unset_overall_reads_as_the_sum_of_the_giftee_budgets(
     db.add(ListOccasionShare(list_id=second.id, occasion_id=occasion.id))
     db.flush()
     _claim(
-        db, gift_list, member_user, "Shoes",
-        occasion=occasion, purchased_at=BOUGHT, amount_paid=Decimal("42.00"),
+        db,
+        gift_list,
+        member_user,
+        "Shoes",
+        occasion=occasion,
+        purchased_at=BOUGHT,
+        amount_paid=Decimal("42.00"),
     )
-    assert _giftee_put(client, member_headers, occasion, f"owner:{other_member.id}", "100.00").status_code == 200
-    assert _giftee_put(client, member_headers, occasion, key_for(second), "130.00").status_code == 200
+    assert (
+        _giftee_put(
+            client, member_headers, occasion, f"owner:{other_member.id}", "100.00"
+        ).status_code
+        == 200
+    )
+    assert (
+        _giftee_put(client, member_headers, occasion, key_for(second), "130.00").status_code == 200
+    )
 
-    budget = client.get(
-        f"/occasions/{occasion.id}/shopping", headers=member_headers
-    ).json()["budget"]
+    budget = client.get(f"/occasions/{occasion.id}/shopping", headers=member_headers).json()[
+        "budget"
+    ]
 
     assert budget["amount"] is None
     assert budget["target"] == "230.00"
@@ -796,24 +810,26 @@ def test_a_set_overall_reports_over_allocation_and_what_is_left(
     db.add(ListOccasionShare(list_id=gift_list.id, occasion_id=occasion.id))
     db.add(ListOccasionShare(list_id=second.id, occasion_id=occasion.id))
     db.flush()
-    client.put(f"/occasions/{occasion.id}/budget", json={"amount": "200.00"}, headers=member_headers)
+    client.put(
+        f"/occasions/{occasion.id}/budget", json={"amount": "200.00"}, headers=member_headers
+    )
     _giftee_put(client, member_headers, occasion, f"owner:{other_member.id}", "100.00")
     _giftee_put(client, member_headers, occasion, key_for(second), "130.00")
 
-    over = client.get(
-        f"/occasions/{occasion.id}/shopping", headers=member_headers
-    ).json()["budget"]
+    over = client.get(f"/occasions/{occasion.id}/shopping", headers=member_headers).json()["budget"]
     assert over["target"] == "200.00"
     assert over["allocated"] == "230.00"
     assert over["unallocated"] == "-30.00"
     assert over["allocation_count"] == 2
 
-    client.delete(f"/occasions/{occasion.id}/giftees/{key_for(second)}/budget", headers=member_headers)
+    client.delete(
+        f"/occasions/{occasion.id}/giftees/{key_for(second)}/budget", headers=member_headers
+    )
     _giftee_put(client, member_headers, occasion, f"owner:{other_member.id}", "150.00")
 
-    under = client.get(
-        f"/occasions/{occasion.id}/shopping", headers=member_headers
-    ).json()["budget"]
+    under = client.get(f"/occasions/{occasion.id}/shopping", headers=member_headers).json()[
+        "budget"
+    ]
     assert under["target"] == "200.00"
     assert under["allocated"] == "150.00"
     assert under["unallocated"] == "50.00"

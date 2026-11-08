@@ -5,7 +5,8 @@ simple-mode auto-grant that used to do it for them is gone (ADR 0004). Leaving,
 being removed, and family deletion all drop the affected shares, which is what
 lets the read queries assume a share row implies live membership.
 """
-from datetime import datetime, timedelta, timezone
+
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -34,16 +35,11 @@ def _mkuser(db, email, name):
 
 
 def _shared(db, list_id):
-    return {
-        row.occasion_id
-        for row in db.query(ListOccasionShare).filter_by(list_id=list_id).all()
-    }
+    return {row.occasion_id for row in db.query(ListOccasionShare).filter_by(list_id=list_id).all()}
 
 
 def _mkoccasion(db, family, name, created_by):
-    occasion = Occasion(
-        family_id=family.id, name=name, created_by_id=created_by.id
-    )
+    occasion = Occasion(family_id=family.id, name=name, created_by_id=created_by.id)
     db.add(occasion)
     db.flush()
     return occasion
@@ -67,7 +63,7 @@ def invite_world(db):
             role="member",
             token=str(uuid4()),
             invited_by_id=organizer.id,
-            expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+            expires_at=datetime.now(UTC) + timedelta(days=7),
         )
         db.add(invite)
         db.flush()
@@ -98,10 +94,8 @@ def test_joiner_shares_nothing_until_they_opt_in(client, db, invite_world):
     client.post(f"/families/invites/{invite.token}/accept", headers=_auth(joiner))
     assert _shared(db, existing.id) == set()
 
-    shared = client.get(
-        "/lists?filter=shared", headers=_auth(invite_world.organizer)
-    ).json()
-    assert "Kept Private" not in {l["name"] for l in shared}
+    shared = client.get("/lists?filter=shared", headers=_auth(invite_world.organizer)).json()
+    assert "Kept Private" not in {lst["name"] for lst in shared}
 
     # Opting in afterwards works.
     client.put(
@@ -127,7 +121,7 @@ def test_register_via_family_invite_does_not_error(client, db, invite_world):
         role="member",
         token=str(uuid4()),
         invited_by_id=invite_world.organizer.id,
-        expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+        expires_at=datetime.now(UTC) + timedelta(days=7),
     )
     db.add(invite)
     db.flush()
@@ -172,18 +166,14 @@ def shared_world(db):
     )
 
 
-def test_leaving_a_family_deletes_the_departing_members_shares(
-    client, db, shared_world
-):
+def test_leaving_a_family_deletes_the_departing_members_shares(client, db, shared_world):
     w = shared_world
-    resp = client.delete(
-        f"/families/{w.family.id}/members/{w.owner.id}", headers=_auth(w.owner)
-    )
+    resp = client.delete(f"/families/{w.family.id}/members/{w.owner.id}", headers=_auth(w.owner))
     assert resp.status_code == 204
     assert _shared(db, w.gift_list.id) == set()
 
     visible = client.get("/lists?filter=shared", headers=_auth(w.organizer)).json()
-    assert "Owner's List" not in {l["name"] for l in visible}
+    assert "Owner's List" not in {lst["name"] for lst in visible}
 
 
 def test_being_removed_deletes_the_departing_members_shares(client, db, shared_world):
@@ -201,9 +191,7 @@ def test_removal_leaves_a_co_members_shares_alone(client, db, shared_world):
     db.add(ListOccasionShare(list_id=organizer_list.id, occasion_id=w.occasion.id))
     db.flush()
 
-    client.delete(
-        f"/families/{w.family.id}/members/{w.owner.id}", headers=_auth(w.organizer)
-    )
+    client.delete(f"/families/{w.family.id}/members/{w.owner.id}", headers=_auth(w.organizer))
     assert _shared(db, organizer_list.id) == {w.occasion.id}
 
 
@@ -224,15 +212,11 @@ def test_leaving_one_family_leaves_shares_on_another_intact(client, db, shared_w
     db.add(ListOccasionShare(list_id=w.gift_list.id, occasion_id=other_occasion.id))
     db.flush()
 
-    client.delete(
-        f"/families/{w.family.id}/members/{w.owner.id}", headers=_auth(w.owner)
-    )
+    client.delete(f"/families/{w.family.id}/members/{w.owner.id}", headers=_auth(w.owner))
     assert _shared(db, w.gift_list.id) == {other_occasion.id}
 
 
-def test_leaving_deletes_shares_on_every_occasion_of_that_family(
-    client, db, shared_world
-):
+def test_leaving_deletes_shares_on_every_occasion_of_that_family(client, db, shared_world):
     """A family may run several occasions at once; a departure has to clear the
     departing member's shares on all of them, not just the one it found first."""
     w = shared_world
@@ -240,7 +224,5 @@ def test_leaving_deletes_shares_on_every_occasion_of_that_family(
     db.add(ListOccasionShare(list_id=w.gift_list.id, occasion_id=sibling.id))
     db.flush()
 
-    client.delete(
-        f"/families/{w.family.id}/members/{w.owner.id}", headers=_auth(w.owner)
-    )
+    client.delete(f"/families/{w.family.id}/members/{w.owner.id}", headers=_auth(w.owner))
     assert _shared(db, w.gift_list.id) == set()

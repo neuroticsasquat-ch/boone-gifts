@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query, status
 
-from app.folders import service as folder_service
 from app.dependencies import CurrentUser, DbSession, OwnedFolder
+from app.folders import service as folder_service
 from app.schemas.budget import BudgetBlock, BudgetRollup, BudgetWrite
 from app.schemas.claim import ShoppingPayload
 from app.schemas.folder import (
@@ -44,9 +44,7 @@ def get_folder(folder: OwnedFolder, user: CurrentUser, db: DbSession):
 
 
 @router.put("/{folder_id}", response_model=FolderRead)
-def update_folder(
-    request: FolderUpdate, folder: OwnedFolder, db: DbSession
-):
+def update_folder(request: FolderUpdate, folder: OwnedFolder, db: DbSession):
     update_data = request.model_dump(exclude_unset=True)
     return folder_service.update_folder(db, folder, update_data)
 
@@ -67,15 +65,13 @@ def add_item(
     db: DbSession,
 ):
     try:
-        folder_service.add_item(
-            db, folder=folder, list_id=request.list_id, user=user
-        )
+        folder_service.add_item(db, folder=folder, list_id=request.list_id, user=user)
     except NotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from None
     except ForbiddenError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN) from None
     except ConflictError:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT)
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT) from None
 
 
 @router.delete(
@@ -86,7 +82,7 @@ def remove_item(list_id: int, folder: OwnedFolder, db: DbSession):
     try:
         folder_service.remove_item(db, folder=folder, list_id=list_id)
     except NotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from None
 
 
 # `OwnedFolder` is the whole access story here: a folder belongs to one user,
@@ -97,9 +93,7 @@ def get_shopping(folder: OwnedFolder, user: CurrentUser, db: DbSession):
 
 
 @router.put("/{folder_id}/budget", response_model=BudgetRollup)
-def set_budget(
-    request: BudgetWrite, folder: OwnedFolder, user: CurrentUser, db: DbSession
-):
+def set_budget(request: BudgetWrite, folder: OwnedFolder, user: CurrentUser, db: DbSession):
     return folder_service.set_budget(db, folder.id, user.id, request.amount)
 
 
@@ -110,7 +104,7 @@ def clear_budget(folder: OwnedFolder, user: CurrentUser, db: DbSession):
     try:
         return folder_service.clear_budget(db, folder.id, user.id)
     except NotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from None
 
 
 # The per-giftee split beneath the overall (NEU-1326). Answers with the whole
@@ -125,24 +119,18 @@ def set_giftee_budget(
     db: DbSession,
 ):
     try:
-        return folder_service.set_giftee_budget(
-            db, folder.id, user, giftee_key, request.amount
-        )
+        return folder_service.set_giftee_budget(db, folder.id, user, giftee_key, request.amount)
     except BadRequestError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except NotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from None
 
 
-@router.delete(
-    "/{folder_id}/giftees/{giftee_key}/budget", response_model=BudgetBlock
-)
-def clear_giftee_budget(
-    giftee_key: str, folder: OwnedFolder, user: CurrentUser, db: DbSession
-):
+@router.delete("/{folder_id}/giftees/{giftee_key}/budget", response_model=BudgetBlock)
+def clear_giftee_budget(giftee_key: str, folder: OwnedFolder, user: CurrentUser, db: DbSession):
     try:
         return folder_service.clear_giftee_budget(db, folder.id, user, giftee_key)
     except BadRequestError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except NotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from None

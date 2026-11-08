@@ -69,18 +69,19 @@ class NamedRef(BaseModel):
     id: int
     name: str
 
+
 class DirectShareRoute(BaseModel):
     kind: Literal["direct"]
     person: NamedRef
+
 
 class OccasionShareRoute(BaseModel):
     kind: Literal["occasion"]
     occasion: NamedRef
     family: NamedRef
 
-ShareRoute = Annotated[
-    DirectShareRoute | OccasionShareRoute, Field(discriminator="kind")
-]
+
+ShareRoute = Annotated[DirectShareRoute | OccasionShareRoute, Field(discriminator="kind")]
 ```
 
 The validator is **deleted, not ported**. It exists to reject a state the union cannot represent in

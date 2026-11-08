@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import jwt
 
@@ -8,7 +8,6 @@ from app.models.family_invite import FamilyInvite
 from app.models.family_member import FamilyMember
 from app.models.invite import Invite
 from app.models.user import User
-
 
 COOKIE_NAME = "boone_refresh_token"
 
@@ -35,7 +34,7 @@ def _seed_family_invite(
         role=role,
         token=token,
         invited_by_id=inviter.id,
-        expires_at=datetime.now(timezone.utc) + timedelta(days=expires_in_days),
+        expires_at=datetime.now(UTC) + timedelta(days=expires_in_days),
         accepted_at=accepted_at,
         declined_at=declined_at,
     )
@@ -45,10 +44,13 @@ def _seed_family_invite(
 
 
 def test_login_success(client, admin_user):
-    response = client.post("/auth/login", json={
-        "email": "admin@test.com",
-        "password": "admin123",
-    })
+    response = client.post(
+        "/auth/login",
+        json={
+            "email": "admin@test.com",
+            "password": "admin123",
+        },
+    )
     assert response.status_code == 200
     data = response.json()
     assert "access_token" in data
@@ -58,28 +60,37 @@ def test_login_success(client, admin_user):
 
 
 def test_login_wrong_password(client, admin_user):
-    response = client.post("/auth/login", json={
-        "email": "admin@test.com",
-        "password": "wrong",
-    })
+    response = client.post(
+        "/auth/login",
+        json={
+            "email": "admin@test.com",
+            "password": "wrong",
+        },
+    )
     assert response.status_code == 401
 
 
 def test_login_nonexistent_user(client):
-    response = client.post("/auth/login", json={
-        "email": "nobody@test.com",
-        "password": "whatever",
-    })
+    response = client.post(
+        "/auth/login",
+        json={
+            "email": "nobody@test.com",
+            "password": "whatever",
+        },
+    )
     assert response.status_code == 401
 
 
 def test_login_inactive_user(client, admin_user, db):
     admin_user.is_active = False
     db.flush()
-    response = client.post("/auth/login", json={
-        "email": "admin@test.com",
-        "password": "admin123",
-    })
+    response = client.post(
+        "/auth/login",
+        json={
+            "email": "admin@test.com",
+            "password": "admin123",
+        },
+    )
     assert response.status_code == 401
 
 
@@ -87,17 +98,20 @@ def test_register_with_valid_invite(client, admin_user, db):
     invite = Invite(
         email="new@test.com",
         role="member",
-        expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+        expires_at=datetime.now(UTC) + timedelta(days=7),
         invited_by_id=admin_user.id,
     )
     db.add(invite)
     db.flush()
 
-    response = client.post("/auth/register", json={
-        "token": invite.token,
-        "name": "New User",
-        "password": "newpass123",
-    })
+    response = client.post(
+        "/auth/register",
+        json={
+            "token": invite.token,
+            "name": "New User",
+            "password": "newpass123",
+        },
+    )
     assert response.status_code == 200
     data = response.json()
     assert "access_token" in data
@@ -109,17 +123,20 @@ def test_register_with_expired_invite(client, admin_user, db):
     invite = Invite(
         email="expired@test.com",
         role="member",
-        expires_at=datetime.now(timezone.utc) - timedelta(days=1),
+        expires_at=datetime.now(UTC) - timedelta(days=1),
         invited_by_id=admin_user.id,
     )
     db.add(invite)
     db.flush()
 
-    response = client.post("/auth/register", json={
-        "token": invite.token,
-        "name": "Expired",
-        "password": "pass123",
-    })
+    response = client.post(
+        "/auth/register",
+        json={
+            "token": invite.token,
+            "name": "Expired",
+            "password": "pass123",
+        },
+    )
     assert response.status_code == 400
 
 
@@ -127,35 +144,44 @@ def test_register_with_used_invite(client, admin_user, db):
     invite = Invite(
         email="used@test.com",
         role="member",
-        expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+        expires_at=datetime.now(UTC) + timedelta(days=7),
         invited_by_id=admin_user.id,
     )
-    invite.used_at = datetime.now(timezone.utc)
+    invite.used_at = datetime.now(UTC)
     db.add(invite)
     db.flush()
 
-    response = client.post("/auth/register", json={
-        "token": invite.token,
-        "name": "Used",
-        "password": "pass123",
-    })
+    response = client.post(
+        "/auth/register",
+        json={
+            "token": invite.token,
+            "name": "Used",
+            "password": "pass123",
+        },
+    )
     assert response.status_code == 400
 
 
 def test_register_with_invalid_token(client):
-    response = client.post("/auth/register", json={
-        "token": "nonexistent-token",
-        "name": "Bad",
-        "password": "pass123",
-    })
+    response = client.post(
+        "/auth/register",
+        json={
+            "token": "nonexistent-token",
+            "name": "Bad",
+            "password": "pass123",
+        },
+    )
     assert response.status_code == 400
 
 
 def test_refresh_token(client, admin_user):
-    login = client.post("/auth/login", json={
-        "email": "admin@test.com",
-        "password": "admin123",
-    })
+    login = client.post(
+        "/auth/login",
+        json={
+            "email": "admin@test.com",
+            "password": "admin123",
+        },
+    )
     refresh_cookie = login.cookies[COOKIE_NAME]
 
     client.cookies.set(COOKIE_NAME, refresh_cookie)
@@ -186,10 +212,13 @@ def test_refresh_without_cookie(client):
 
 
 def test_logout_clears_cookie(client, admin_user):
-    login = client.post("/auth/login", json={
-        "email": "admin@test.com",
-        "password": "admin123",
-    })
+    login = client.post(
+        "/auth/login",
+        json={
+            "email": "admin@test.com",
+            "password": "admin123",
+        },
+    )
     assert COOKIE_NAME in login.cookies
 
     response = client.post("/auth/logout")
@@ -197,7 +226,7 @@ def test_logout_clears_cookie(client, admin_user):
     # Cookie should be set with max-age=0 to delete it
     set_cookie = response.headers.get("set-cookie", "")
     assert COOKIE_NAME in set_cookie
-    assert 'Max-Age=0' in set_cookie
+    assert "Max-Age=0" in set_cookie
 
 
 def test_logout_without_cookie(client):
@@ -267,7 +296,7 @@ def test_invite_info_admin_token_has_null_family_name(client, admin_user, db):
     invite = Invite(
         email="admin-invitee@test.com",
         role="member",
-        expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+        expires_at=datetime.now(UTC) + timedelta(days=7),
         invited_by_id=admin_user.id,
     )
     db.add(invite)
@@ -292,7 +321,7 @@ def test_invite_info_accepted_family_token(client, member_user, db):
         inviter=member_user,
         email="x@test.com",
         token="fam-info-acc",
-        accepted_at=datetime.now(timezone.utc),
+        accepted_at=datetime.now(UTC),
     )
     response = client.get("/auth/invite-info", params={"token": "fam-info-acc"})
     assert response.status_code == 400
@@ -317,9 +346,7 @@ def test_register_family_invite_creates_member(client, member_user, db):
     new_user = db.query(User).filter_by(email="newmember@test.com").one()
     assert new_user.role == "member"  # app role — NOT the family "organizer" role
 
-    membership = db.query(FamilyMember).filter_by(
-        family_id=family.id, user_id=new_user.id
-    ).one()
+    membership = db.query(FamilyMember).filter_by(family_id=family.id, user_id=new_user.id).one()
     assert membership.role == "organizer"  # family role from the invite
 
     db.refresh(invite)
@@ -346,9 +373,7 @@ def test_register_family_invite_token_joins_family_end_to_end(client, member_use
 
 def test_register_family_invite_existing_account_rejected(client, member_user, db):
     # member_user already exists; invite is addressed to their email.
-    _seed_family_invite(
-        db, inviter=member_user, email=member_user.email, token="fam-reg-dup"
-    )
+    _seed_family_invite(db, inviter=member_user, email=member_user.email, token="fam-reg-dup")
     response = client.post(
         "/auth/register",
         json={"token": "fam-reg-dup", "name": "Dup", "password": "newpass123"},
@@ -373,7 +398,7 @@ def test_register_accepted_family_invite(client, member_user, db):
         inviter=member_user,
         email="done@test.com",
         token="fam-reg-acc",
-        accepted_at=datetime.now(timezone.utc),
+        accepted_at=datetime.now(UTC),
     )
     response = client.post(
         "/auth/register",

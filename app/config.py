@@ -81,4 +81,5 @@ class Settings(BaseSettings):
         return value
 
 
-settings = Settings()
+# Every field without a default comes from the APP_* environment, which pyright can't see.
+settings = Settings()  # pyright: ignore[reportCallIssue]

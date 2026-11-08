@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from app.models.invite import Invite
 from app.models.user import User
@@ -12,7 +12,7 @@ def test_create_invite(db):
     invite = Invite(
         email="new@test.com",
         role="member",
-        expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+        expires_at=datetime.now(UTC) + timedelta(days=7),
         invited_by_id=admin.id,
     )
     db.add(invite)
@@ -33,7 +33,7 @@ def test_invite_is_valid(db):
     invite = Invite(
         email="valid@test.com",
         role="member",
-        expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+        expires_at=datetime.now(UTC) + timedelta(days=7),
         invited_by_id=admin.id,
     )
     db.add(invite)
@@ -50,7 +50,7 @@ def test_invite_expired(db):
     invite = Invite(
         email="expired@test.com",
         role="member",
-        expires_at=datetime.now(timezone.utc) - timedelta(days=1),
+        expires_at=datetime.now(UTC) - timedelta(days=1),
         invited_by_id=admin.id,
     )
     db.add(invite)
@@ -67,10 +67,10 @@ def test_invite_used(db):
     invite = Invite(
         email="used@test.com",
         role="member",
-        expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+        expires_at=datetime.now(UTC) + timedelta(days=7),
         invited_by_id=admin.id,
     )
-    invite.used_at = datetime.now(timezone.utc)
+    invite.used_at = datetime.now(UTC)
     db.add(invite)
     db.flush()
 

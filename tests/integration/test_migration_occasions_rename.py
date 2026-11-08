@@ -79,9 +79,7 @@ def _tables(engine):
     with engine.connect() as conn:
         return {
             row[0]
-            for row in conn.execute(
-                text("SELECT name FROM sqlite_master WHERE type='table'")
-            )
+            for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))
         }
 
 
@@ -138,26 +136,20 @@ def test_item_rows_survive_with_their_ids_and_parents(migrated):
 
 def test_no_schema_object_still_says_collection(migrated):
     with migrated.connect() as conn:
-        sql = " ".join(
-            row[0] or ""
-            for row in conn.execute(text("SELECT sql FROM sqlite_master"))
-        )
+        sql = " ".join(row[0] or "" for row in conn.execute(text("SELECT sql FROM sqlite_master")))
     assert "collection" not in sql.lower()
 
 
 def test_the_unique_constraint_still_bites(migrated):
-    with migrated.begin() as conn:
-        # SQLite names the columns rather than the constraint in the error text.
-        with pytest.raises(
+    # SQLite names the columns rather than the constraint in the error text.
+    with (
+        migrated.begin() as conn,
+        pytest.raises(
             IntegrityError,
-            match="UNIQUE constraint failed: occasion_items.occasion_id, "
-            "occasion_items.list_id",
-        ):
-            conn.execute(
-                text(
-                    "INSERT INTO occasion_items (occasion_id, list_id) VALUES (1, 1)"
-                )
-            )
+            match=r"UNIQUE constraint failed: occasion_items\.occasion_id, occasion_items\.list_id",
+        ),
+    ):
+        conn.execute(text("INSERT INTO occasion_items (occasion_id, list_id) VALUES (1, 1)"))
 
 
 def test_downgrade_restores_the_old_names_and_rows(migrated, db_path):

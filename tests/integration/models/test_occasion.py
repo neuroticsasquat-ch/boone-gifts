@@ -1,5 +1,6 @@
 import pytest
 import sqlalchemy
+import sqlalchemy.exc
 
 from app.models.family import Family
 from app.models.occasion import Occasion
@@ -24,9 +25,7 @@ def test_create_occasion(db):
     user = _user(db, "occasion_model1@test.com")
     family = _family(db, user)
 
-    occasion = Occasion(
-        family_id=family.id, name="Christmas 2026", created_by_id=user.id
-    )
+    occasion = Occasion(family_id=family.id, name="Christmas 2026", created_by_id=user.id)
     db.add(occasion)
     db.flush()
 
@@ -66,9 +65,7 @@ def test_a_family_may_hold_several_occasions(db):
     db.flush()
 
     rows = (
-        db.execute(
-            sqlalchemy.select(Occasion).where(Occasion.family_id == family.id)
-        )
+        db.execute(sqlalchemy.select(Occasion).where(Occasion.family_id == family.id))
         .scalars()
         .all()
     )

@@ -27,7 +27,7 @@ def forgot_password_limit() -> str:
 
 def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
     try:
-        item = exc.limit.limit
+        item = exc.limit.limit  # pyright: ignore[reportOptionalMemberAccess] -- caught below
         retry_after = item.multiples * item.GRANULARITY.seconds
     except AttributeError:
         retry_after = 60

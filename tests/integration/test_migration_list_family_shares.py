@@ -10,6 +10,7 @@ at the occasion (ADR 0002) — so this stops at the revision that does the backf
 rather than running the chain out. The migration still runs on any deploy coming
 from a database older than it, which is what keeps this worth testing.
 """
+
 import shutil
 
 import pytest
@@ -23,9 +24,7 @@ BACKFILL_REVISION = "c4f2a91d7e30"
 
 
 def _seed(conn):
-    for i, (email, name) in enumerate(
-        [("a@t.com", "A"), ("b@t.com", "B")], start=1
-    ):
+    for i, (email, name) in enumerate([("a@t.com", "A"), ("b@t.com", "B")], start=1):
         conn.execute(
             text(
                 "INSERT INTO users (id, email, name, password_hash, role, is_active) "
@@ -34,10 +33,7 @@ def _seed(conn):
             {"id": i, "email": email, "name": name},
         )
     conn.execute(
-        text(
-            "INSERT INTO families (id, name, created_by_id) VALUES "
-            "(1, 'F1', 1), (2, 'F2', 1)"
-        )
+        text("INSERT INTO families (id, name, created_by_id) VALUES (1, 'F1', 1), (2, 'F2', 1)")
     )
     # A belongs to both families; B to neither.
     conn.execute(
@@ -52,7 +48,6 @@ def _seed(conn):
             "(1, 'A active', 1, 0), (2, 'A archived', 1, 1), (3, 'B list', 2, 0)"
         )
     )
-
 
 
 @pytest.fixture(scope="module")
@@ -82,9 +77,7 @@ def _grants(engine):
     with engine.connect() as conn:
         return {
             (row[0], row[1])
-            for row in conn.execute(
-                text("SELECT list_id, family_id FROM list_family_shares")
-            )
+            for row in conn.execute(text("SELECT list_id, family_id FROM list_family_shares"))
         }
 
 
@@ -103,8 +96,6 @@ def test_downgrade_drops_the_table(migrated, db_path):
     with migrated.connect() as conn:
         tables = {
             row[0]
-            for row in conn.execute(
-                text("SELECT name FROM sqlite_master WHERE type='table'")
-            )
+            for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))
         }
     assert "list_family_shares" not in tables

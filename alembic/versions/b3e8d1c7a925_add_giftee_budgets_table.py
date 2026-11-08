@@ -5,17 +5,18 @@ Revises: f6b2c9e41a58
 Create Date: 2026-09-14 21:30:00.000000
 
 """
-from typing import Sequence, Union
 
-from alembic import op
+from collections.abc import Sequence
+
 import sqlalchemy as sa
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = 'b3e8d1c7a925'
-down_revision: Union[str, Sequence[str], None] = 'f6b2c9e41a58'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+revision: str = "b3e8d1c7a925"
+down_revision: str | Sequence[str] | None = "f6b2c9e41a58"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -37,38 +38,55 @@ def upgrade() -> None:
     and — as on `budgets` — that rule is the service's, not a check constraint.
     """
     op.create_table(
-        'giftee_budgets',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('user_id', sa.Integer(), nullable=False),
-        sa.Column('occasion_id', sa.Integer(), nullable=True),
-        sa.Column('folder_id', sa.Integer(), nullable=True),
-        sa.Column('giftee_key', sa.String(length=300), nullable=False),
-        sa.Column('owner_id', sa.Integer(), nullable=False),
-        sa.Column('account_person_id', sa.Integer(), nullable=True),
-        sa.Column('recipient_name', sa.String(length=255), nullable=True),
-        sa.Column('amount', sa.Numeric(precision=10, scale=2), nullable=False),
-        sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-        sa.ForeignKeyConstraint(['occasion_id'], ['occasions.id'], ),
-        sa.ForeignKeyConstraint(['folder_id'], ['folders.id'], ),
-        sa.ForeignKeyConstraint(['owner_id'], ['users.id'], ),
-        sa.ForeignKeyConstraint(['account_person_id'], ['account_people.id'], ),
-        sa.PrimaryKeyConstraint('id'),
+        "giftee_budgets",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("user_id", sa.Integer(), nullable=False),
+        sa.Column("occasion_id", sa.Integer(), nullable=True),
+        sa.Column("folder_id", sa.Integer(), nullable=True),
+        sa.Column("giftee_key", sa.String(length=300), nullable=False),
+        sa.Column("owner_id", sa.Integer(), nullable=False),
+        sa.Column("account_person_id", sa.Integer(), nullable=True),
+        sa.Column("recipient_name", sa.String(length=255), nullable=True),
+        sa.Column("amount", sa.Numeric(precision=10, scale=2), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["user_id"],
+            ["users.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["occasion_id"],
+            ["occasions.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["folder_id"],
+            ["folders.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["owner_id"],
+            ["users.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["account_person_id"],
+            ["account_people.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
-            'user_id', 'occasion_id', 'giftee_key',
-            name='uq_giftee_budgets_user_occasion_key',
+            "user_id",
+            "occasion_id",
+            "giftee_key",
+            name="uq_giftee_budgets_user_occasion_key",
         ),
         sa.UniqueConstraint(
-            'user_id', 'folder_id', 'giftee_key',
-            name='uq_giftee_budgets_user_folder_key',
+            "user_id",
+            "folder_id",
+            "giftee_key",
+            name="uq_giftee_budgets_user_folder_key",
         ),
     )
-    with op.batch_alter_table('giftee_budgets', schema=None) as batch_op:
+    with op.batch_alter_table("giftee_budgets", schema=None) as batch_op:
+        batch_op.create_index(batch_op.f("ix_giftee_budgets_user_id"), ["user_id"], unique=False)
         batch_op.create_index(
-            batch_op.f('ix_giftee_budgets_user_id'), ['user_id'], unique=False
-        )
-        batch_op.create_index(
-            batch_op.f('ix_giftee_budgets_account_person_id'),
-            ['account_person_id'],
+            batch_op.f("ix_giftee_budgets_account_person_id"),
+            ["account_person_id"],
             unique=False,
         )
 
@@ -79,7 +97,7 @@ def downgrade() -> None:
     Every giftee budget is lost — there is nowhere else in the schema to keep
     one. The overall `budgets` rows are untouched.
     """
-    with op.batch_alter_table('giftee_budgets', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_giftee_budgets_account_person_id'))
-        batch_op.drop_index(batch_op.f('ix_giftee_budgets_user_id'))
-    op.drop_table('giftee_budgets')
+    with op.batch_alter_table("giftee_budgets", schema=None) as batch_op:
+        batch_op.drop_index(batch_op.f("ix_giftee_budgets_account_person_id"))
+        batch_op.drop_index(batch_op.f("ix_giftee_budgets_user_id"))
+    op.drop_table("giftee_budgets")

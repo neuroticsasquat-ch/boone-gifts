@@ -56,12 +56,8 @@ def matrix(db):
     db.add(FamilyMember(family_id=family.id, user_id=b.id, role="member"))
     db.add(FamilyMember(family_id=ungranted.id, user_id=a.id, role="organizer"))
     db.add(FamilyMember(family_id=ungranted.id, user_id=f.id, role="member"))
-    occasion = Occasion(
-        family_id=family.id, name="Christmas 2026", created_by_id=a.id
-    )
-    ungranted_occasion = Occasion(
-        family_id=ungranted.id, name="Christmas 2026", created_by_id=a.id
-    )
+    occasion = Occasion(family_id=family.id, name="Christmas 2026", created_by_id=a.id)
+    ungranted_occasion = Occasion(family_id=ungranted.id, name="Christmas 2026", created_by_id=a.id)
     db.add_all([occasion, ungranted_occasion])
     db.flush()
     db.add(ListOccasionShare(list_id=gift_list.id, occasion_id=occasion.id))
@@ -76,7 +72,12 @@ def matrix(db):
     return SimpleNamespace(
         list_id=gift_list.id,
         gift_id=gift.id,
-        a=a, b=b, c=c, d=d, e=e, f=f,
+        a=a,
+        b=b,
+        c=c,
+        d=d,
+        e=e,
+        f=f,
         family=family,
         ungranted=ungranted,
         occasion=occasion,
@@ -86,9 +87,7 @@ def matrix(db):
 
 def test_get_list_access_matrix(client, matrix):
     def status_for(user):
-        return client.get(
-            f"/lists/{matrix.list_id}", headers=_headers(user)
-        ).status_code
+        return client.get(f"/lists/{matrix.list_id}", headers=_headers(user)).status_code
 
     assert status_for(matrix.a) == 200  # owner
     assert status_for(matrix.b) == 200  # co-member of a granted family
@@ -151,6 +150,4 @@ def test_archived_occasion_still_grants_visibility(client, db, matrix):
     matrix.occasion.is_archived = True
     db.flush()
 
-    assert client.get(
-        f"/lists/{matrix.list_id}", headers=_headers(matrix.b)
-    ).status_code == 200
+    assert client.get(f"/lists/{matrix.list_id}", headers=_headers(matrix.b)).status_code == 200

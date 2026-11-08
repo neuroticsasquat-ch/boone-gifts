@@ -12,6 +12,7 @@ from app.schemas.gift_list import (
     GiftListDetailOwner,
     GiftListDetailViewer,
     GiftListRead,
+    GiftListViewerRead,
     NamedRef,
     OccasionShareRoute,
 )
@@ -170,6 +171,7 @@ def test_get_list_as_viewer(mock_validate, mock_sets):
     mock_sets.assert_called_once_with(db, gift_list, viewer)
     # candidates is `suggested`, options is `allowed` — swapping them would
     # prompt on every claim and hide the correction path.
+    assert isinstance(result, GiftListDetailViewer)
     assert result.claim_candidates == suggested
     assert result.claim_options == allowed
     assert result == expected
@@ -257,6 +259,8 @@ def test_gift_list_read_includes_every_route():
     )
     result = GiftListRead.model_validate(obj)
     direct, occasion = result.shared_via
+    assert isinstance(direct, DirectShareRoute)
+    assert isinstance(occasion, OccasionShareRoute)
     assert (direct.person.id, direct.person.name) == (2, "Jane Boone")
     assert (occasion.occasion.id, occasion.occasion.name) == (3, "Christmas 2026")
     assert (occasion.family.id, occasion.family.name) == (1, "Boone Family")
@@ -267,9 +271,7 @@ def test_kind_discriminates_which_route_a_payload_becomes():
     schema needed a validator to refuse the mismatched combinations; the union
     cannot represent them."""
     result = GiftListRead.model_validate(
-        _read_source(
-            shared_via=[{"kind": "direct", "person": {"id": 2, "name": "Jane"}}]
-        )
+        _read_source(shared_via=[{"kind": "direct", "person": {"id": 2, "name": "Jane"}}])
     )
     assert isinstance(result.shared_via[0], DirectShareRoute)
 
@@ -278,17 +280,13 @@ def test_an_occasion_route_without_its_family_is_refused():
     """The occasion arm always carries `family: {id, name}`; a missing one would
     be a shape the client cannot render."""
     with pytest.raises(ValidationError):
-        OccasionShareRoute(
-            kind="occasion", occasion=NamedRef(id=3, name="Christmas 2026")
-        )
+        OccasionShareRoute(kind="occasion", occasion=NamedRef(id=3, name="Christmas 2026"))
 
 
 def test_a_direct_route_has_no_family_field_to_set():
     """There is no occasion behind a direct share, so there is no family
     either — and no way to attach one."""
-    route = DirectShareRoute(
-        kind="direct", person=NamedRef(id=2, name="Jane Boone")
-    )
+    route = DirectShareRoute(kind="direct", person=NamedRef(id=2, name="Jane Boone"))
     assert "family" not in route.model_dump()
 
 
@@ -348,6 +346,7 @@ def test_to_summaries_still_picks_the_schema_per_row(mock_routes):
     result = service.to_summaries(db, [owned, shared], viewer_id=5)
 
     assert not hasattr(result[0], "claimed_count")
+    assert isinstance(result[1], GiftListViewerRead)
     assert result[1].claimed_count == 0
 
 
@@ -356,9 +355,7 @@ def test_to_summaries_still_picks_the_schema_per_row(mock_routes):
 
 @patch(f"{REPO}.get_lists_by_ids")
 @patch(f"{REPO}.get_share_routes")
-def test_get_shared_lists_takes_its_scope_from_the_route_keys(
-    mock_routes, mock_by_ids
-):
+def test_get_shared_lists_takes_its_scope_from_the_route_keys(mock_routes, mock_by_ids):
     db = MagicMock()
     direct = DirectShareRoute(kind="direct", person=NamedRef(id=2, name="Jane Boone"))
     mock_routes.return_value = {10: [direct], 20: [direct]}

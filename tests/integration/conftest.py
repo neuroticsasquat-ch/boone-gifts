@@ -1,11 +1,11 @@
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
-from fastapi.testclient import TestClient
 
 from app.config import settings
 from app.database import Base
-from app.dependencies import get_db, create_access_token
+from app.dependencies import create_access_token, get_db
 from app.main import app
 from app.models import User
 from app.rate_limit import limiter
@@ -16,6 +16,7 @@ def _reset_rate_limiter():
     limiter.reset()
     yield
     limiter.reset()
+
 
 test_engine = create_engine(
     settings.test_database_url,

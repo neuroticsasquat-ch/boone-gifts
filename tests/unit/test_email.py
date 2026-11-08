@@ -151,9 +151,7 @@ class TestSendEmailSmtpProvider:
         instance.starttls.assert_not_called()
 
     def test_logs_in_when_credentials_set(self, monkeypatch: pytest.MonkeyPatch):
-        self._configure_smtp(
-            monkeypatch, email_smtp_username="me", email_smtp_password="pw"
-        )
+        self._configure_smtp(monkeypatch, email_smtp_username="me", email_smtp_password="pw")
         with patch("smtplib.SMTP") as mock_smtp:
             instance = mock_smtp.return_value.__enter__.return_value
             email_sender.send_email(
@@ -214,9 +212,7 @@ class TestSendEmailResendProvider:
             text="TEXT body",
         )
 
-    def test_posts_to_resend_with_bearer_token_and_payload(
-        self, monkeypatch: pytest.MonkeyPatch
-    ):
+    def test_posts_to_resend_with_bearer_token_and_payload(self, monkeypatch: pytest.MonkeyPatch):
         self._configure_resend(monkeypatch)
         with patch("app.email.sender.httpx.Client") as mock_client:
             instance = mock_client.return_value.__enter__.return_value
@@ -251,22 +247,16 @@ class TestSendEmailResendProvider:
         assert "reply_to" not in instance.post.call_args.kwargs["json"]
 
     @pytest.mark.parametrize("status", [400, 422, 500, 503])
-    def test_http_error_raises_email_send_error(
-        self, monkeypatch: pytest.MonkeyPatch, status: int
-    ):
+    def test_http_error_raises_email_send_error(self, monkeypatch: pytest.MonkeyPatch, status: int):
         self._configure_resend(monkeypatch)
         with patch("app.email.sender.httpx.Client") as mock_client:
             instance = mock_client.return_value.__enter__.return_value
-            instance.post.return_value = httpx.Response(
-                status, json={"message": "nope"}
-            )
+            instance.post.return_value = httpx.Response(status, json={"message": "nope"})
             with pytest.raises(email_sender.EmailSendError) as exc_info:
                 self._send()
         assert str(status) in str(exc_info.value)
 
-    def test_transport_error_raises_email_send_error(
-        self, monkeypatch: pytest.MonkeyPatch
-    ):
+    def test_transport_error_raises_email_send_error(self, monkeypatch: pytest.MonkeyPatch):
         self._configure_resend(monkeypatch)
         with patch("app.email.sender.httpx.Client") as mock_client:
             instance = mock_client.return_value.__enter__.return_value
@@ -274,9 +264,7 @@ class TestSendEmailResendProvider:
             with pytest.raises(email_sender.EmailSendError):
                 self._send()
 
-    def test_missing_api_key_raises_without_calling_resend(
-        self, monkeypatch: pytest.MonkeyPatch
-    ):
+    def test_missing_api_key_raises_without_calling_resend(self, monkeypatch: pytest.MonkeyPatch):
         self._configure_resend(monkeypatch, resend_api_key="")
         with (
             patch("app.email.sender.httpx.Client") as mock_client,
@@ -285,9 +273,7 @@ class TestSendEmailResendProvider:
             self._send()
         mock_client.assert_not_called()
 
-    def test_resend_provider_does_not_call_smtplib(
-        self, monkeypatch: pytest.MonkeyPatch
-    ):
+    def test_resend_provider_does_not_call_smtplib(self, monkeypatch: pytest.MonkeyPatch):
         self._configure_resend(monkeypatch)
         with (
             patch("smtplib.SMTP") as mock_smtp,

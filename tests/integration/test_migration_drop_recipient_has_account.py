@@ -6,6 +6,7 @@ COLUMN rather than batch mode; what needs proving is that the drop leaves every
 row's remaining data intact and converts nothing — the `true` rows are beta test
 data and become ordinary recipients, not account people (project decision 13).
 """
+
 import shutil
 from pathlib import Path
 
@@ -78,9 +79,7 @@ def test_upgrade_drops_the_column(db_path):
 def test_upgrade_keeps_every_row_and_its_recipient(db_path):
     _alembic("upgrade", REVISION, db_path)
     with _engine(db_path).connect() as conn:
-        rows = conn.execute(
-            text("SELECT id, recipient_name FROM lists ORDER BY id")
-        ).all()
+        rows = conn.execute(text("SELECT id, recipient_name FROM lists ORDER BY id")).all()
 
     # The `true` row keeps its name like any other: it is now a recipient in the
     # one remaining sense, not a converted account person.
@@ -91,9 +90,12 @@ def test_upgrade_converts_nothing_into_account_people(db_path):
     _alembic("upgrade", REVISION, db_path)
     with _engine(db_path).connect() as conn:
         assert conn.execute(text("SELECT COUNT(*) FROM account_people")).scalar() == 0
-        assert conn.execute(
-            text("SELECT COUNT(*) FROM lists WHERE account_person_id IS NOT NULL")
-        ).scalar() == 0
+        assert (
+            conn.execute(
+                text("SELECT COUNT(*) FROM lists WHERE account_person_id IS NOT NULL")
+            ).scalar()
+            == 0
+        )
 
 
 def test_downgrade_restores_an_empty_column(db_path):
@@ -101,10 +103,7 @@ def test_downgrade_restores_an_empty_column(db_path):
     _alembic("downgrade", PREVIOUS_HEAD, db_path)
     with _engine(db_path).connect() as conn:
         rows = conn.execute(
-            text(
-                "SELECT id, recipient_name, recipient_has_account "
-                "FROM lists ORDER BY id"
-            )
+            text("SELECT id, recipient_name, recipient_has_account FROM lists ORDER BY id")
         ).all()
 
     # The rows and their recipients survive; the dropped answers do not, and

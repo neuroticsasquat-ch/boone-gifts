@@ -35,11 +35,11 @@ def create_invite(
             role=request.role,
         )
     except NotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from None
     except ForbiddenError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN) from None
     except ConflictError:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT)
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT) from None
 
 
 @router.get("/{family_id}/invites", response_model=list[FamilyInviteRead])
@@ -47,41 +47,33 @@ def list_invites(family_id: int, user: CurrentUser, db: DbSession) -> list[Famil
     try:
         return invite_service.list_invites(db, family_id=family_id, actor=user)
     except NotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from None
     except ForbiddenError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN) from None
 
 
-@router.delete(
-    "/{family_id}/invites/{invite_id}", status_code=status.HTTP_204_NO_CONTENT
-)
-def revoke_invite(
-    family_id: int, invite_id: int, user: CurrentUser, db: DbSession
-) -> None:
+@router.delete("/{family_id}/invites/{invite_id}", status_code=status.HTTP_204_NO_CONTENT)
+def revoke_invite(family_id: int, invite_id: int, user: CurrentUser, db: DbSession) -> None:
     try:
-        invite_service.revoke_invite(
-            db, family_id=family_id, invite_id=invite_id, actor=user
-        )
+        invite_service.revoke_invite(db, family_id=family_id, invite_id=invite_id, actor=user)
     except NotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from None
     except ForbiddenError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN) from None
     except ConflictError:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT)
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT) from None
 
 
-@router.post(
-    "/invites/{token}/decline", status_code=status.HTTP_204_NO_CONTENT
-)
+@router.post("/invites/{token}/decline", status_code=status.HTTP_204_NO_CONTENT)
 def decline_invite(token: str, user: CurrentUser, db: DbSession) -> None:
     try:
         invite_service.decline_invite(db, token=token, actor=user)
     except NotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from None
     except ForbiddenError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN) from None
     except ConflictError:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT)
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT) from None
 
 
 @router.post("/invites/{token}/accept")
@@ -89,8 +81,8 @@ def accept_invite(token: str, user: CurrentUser, db: DbSession) -> dict:
     try:
         return invite_service.accept_invite(db, token=token, actor=user)
     except NotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from None
     except ForbiddenError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN) from None
     except ConflictError:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT)
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT) from None

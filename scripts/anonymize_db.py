@@ -1,6 +1,7 @@
 """Strip people out of a copy of the production database before local dev uses it.
 
-    docker compose exec boone-gifts-backend python -m scripts.anonymize_db data/.refresh/boone_gifts.db
+    docker compose exec boone-gifts-backend \
+        python -m scripts.anonymize_db data/.refresh/boone_gifts.db
 
 `scripts/refresh_db.sh` (`task db:refresh`) runs this on the downloaded backup
 *before* it replaces the local database, so the file the app reads never holds a
@@ -142,9 +143,7 @@ def check(conn: sqlite3.Connection, password_hash: str) -> None:
         ).fetchone()[0],
     }
     for table in CLEARED_TABLES:
-        leftovers[f"{table} rows"] = conn.execute(
-            f"SELECT count(*) FROM {table}"
-        ).fetchone()[0]
+        leftovers[f"{table} rows"] = conn.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
 
     failed = {what: n for what, n in leftovers.items() if n}
     if failed:

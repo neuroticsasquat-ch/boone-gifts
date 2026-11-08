@@ -4,6 +4,7 @@ The mutual-exclusion rule is enforced here rather than by a check constraint
 (SQLite cannot gain one without `render_as_batch` recreating the table), so it
 is tested here in both directions — both scopes and neither.
 """
+
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
@@ -49,9 +50,12 @@ def _budget(amount: str) -> MagicMock:
 def test_both_scopes_is_refused(call):
     """A budget filed against an occasion *and* a folder would be counted twice
     and cleared once. Nothing writes one."""
-    with patch(REPO) as repo, patch(CLAIMS_REPO):
-        with pytest.raises(BadRequestError, match="never both"):
-            call(MagicMock())
+    with (
+        patch(REPO) as repo,
+        patch(CLAIMS_REPO),
+        pytest.raises(BadRequestError, match="never both"),
+    ):
+        call(MagicMock())
     repo.create_budget.assert_not_called()
 
 
@@ -66,9 +70,12 @@ def test_both_scopes_is_refused(call):
 def test_neither_scope_is_refused(call):
     """A budget belonging to nothing is unreachable from either tab, and would
     silently take the place of the real one on the next write."""
-    with patch(REPO) as repo, patch(CLAIMS_REPO):
-        with pytest.raises(BadRequestError, match="must belong"):
-            call(MagicMock())
+    with (
+        patch(REPO) as repo,
+        patch(CLAIMS_REPO),
+        pytest.raises(BadRequestError, match="must belong"),
+    ):
+        call(MagicMock())
     repo.create_budget.assert_not_called()
 
 
@@ -83,9 +90,7 @@ def test_rollup_reports_no_target_when_no_budget_is_set():
     db = MagicMock()
     with patch(REPO) as repo, patch(CLAIMS_REPO) as claims_repo:
         repo.find_budget.return_value = None
-        claims_repo.get_spend_for_occasion.return_value = _spend(
-            spent="18.00", bought=1, total=3
-        )
+        claims_repo.get_spend_for_occasion.return_value = _spend(spent="18.00", bought=1, total=3)
         repo.get_giftee_budgets.return_value = []
 
         rollup = service.get_rollup(db, user_id=1, occasion_id=2)
@@ -128,9 +133,7 @@ def test_rollup_lets_remaining_go_negative():
     db = MagicMock()
     with patch(REPO) as repo, patch(CLAIMS_REPO) as claims_repo:
         repo.find_budget.return_value = _budget("50.00")
-        claims_repo.get_spend_for_occasion.return_value = _spend(
-            spent="80.00", bought=2, total=2
-        )
+        claims_repo.get_spend_for_occasion.return_value = _spend(spent="80.00", bought=2, total=2)
 
         rollup = service.get_rollup(db, user_id=1, occasion_id=2)
 
@@ -160,9 +163,7 @@ def test_set_budget_creates_when_none_exists():
         repo.find_budget.side_effect = [None, _budget("200.00")]
         claims_repo.get_spend_for_occasion.return_value = _spend()
 
-        rollup = service.set_budget(
-            db, user_id=1, amount=Decimal("200.00"), occasion_id=2
-        )
+        rollup = service.set_budget(db, user_id=1, amount=Decimal("200.00"), occasion_id=2)
 
     repo.create_budget.assert_called_once_with(
         db, user_id=1, amount=Decimal("200.00"), occasion_id=2, folder_id=None
@@ -192,9 +193,7 @@ def test_clear_budget_deletes_and_returns_the_counts_it_leaves():
     existing = _budget("200.00")
     with patch(REPO) as repo, patch(CLAIMS_REPO) as claims_repo:
         repo.find_budget.side_effect = [existing, None]
-        claims_repo.get_spend_for_occasion.return_value = _spend(
-            spent="18.00", bought=1, total=3
-        )
+        claims_repo.get_spend_for_occasion.return_value = _spend(spent="18.00", bought=1, total=3)
 
         rollup = service.clear_budget(db, user_id=1, occasion_id=2)
 
@@ -293,9 +292,7 @@ def _overall(amount: str | None, giftee_amounts: list[str], spent="0.00") -> dic
     db = MagicMock()
     with patch(REPO) as repo, patch(CLAIMS_REPO) as claims_repo:
         repo.find_budget.return_value = None if amount is None else _budget(amount)
-        repo.get_giftee_budgets.return_value = [
-            _giftee_budget(a) for a in giftee_amounts
-        ]
+        repo.get_giftee_budgets.return_value = [_giftee_budget(a) for a in giftee_amounts]
         claims_repo.get_spend_for_occasion.return_value = _spend(spent=spent)
         return service.get_rollup(db, user_id=1, occasion_id=2)
 

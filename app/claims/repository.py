@@ -5,7 +5,8 @@ rather than a claim-shaped query in each domain that has to unwind one. The
 teardown callers — connections, families, list occasions, users — reach for
 these instead of writing claim SQL of their own.
 """
-from datetime import datetime, timezone
+
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import case, delete, func, select
@@ -24,9 +25,7 @@ def get_claim(db: Session, claim_id: int) -> Claim | None:
 
 
 def get_claim_for_gift(db: Session, gift_id: int) -> Claim | None:
-    return db.execute(
-        select(Claim).where(Claim.gift_id == gift_id)
-    ).scalar_one_or_none()
+    return db.execute(select(Claim).where(Claim.gift_id == gift_id)).scalar_one_or_none()
 
 
 def create_claim(
@@ -42,7 +41,7 @@ def create_claim(
         gift_id=gift_id,
         user_id=user_id,
         occasion_id=occasion_id,
-        claimed_at=datetime.now(timezone.utc),
+        claimed_at=datetime.now(UTC),
     )
     try:
         # A SAVEPOINT, so losing the race unwinds this insert and nothing else.
@@ -70,10 +69,7 @@ def delete_claim(db: Session, claim: Claim) -> None:
 def has_claimed_gifts(db: Session, list_id: int) -> bool:
     gift_ids = select(Gift.id).where(Gift.list_id == list_id)
     return (
-        db.execute(
-            select(Claim.id).where(Claim.gift_id.in_(gift_ids)).limit(1)
-        ).first()
-        is not None
+        db.execute(select(Claim.id).where(Claim.gift_id.in_(gift_ids)).limit(1)).first() is not None
     )
 
 
@@ -98,11 +94,7 @@ def unclaim_for_users(db: Session, list_id: int, user_ids: list[int]) -> None:
     if not user_ids:
         return
     gift_ids = select(Gift.id).where(Gift.list_id == list_id)
-    db.execute(
-        delete(Claim).where(
-            Claim.gift_id.in_(gift_ids), Claim.user_id.in_(user_ids)
-        )
-    )
+    db.execute(delete(Claim).where(Claim.gift_id.in_(gift_ids), Claim.user_id.in_(user_ids)))
     db.flush()
 
 
@@ -113,12 +105,8 @@ def unclaim_gifts_between(db: Session, user_a_id: int, user_b_id: int) -> None:
     gifts_a = select(Gift.id).where(Gift.list_id.in_(lists_a))
     gifts_b = select(Gift.id).where(Gift.list_id.in_(lists_b))
 
-    db.execute(
-        delete(Claim).where(Claim.gift_id.in_(gifts_a), Claim.user_id == user_b_id)
-    )
-    db.execute(
-        delete(Claim).where(Claim.gift_id.in_(gifts_b), Claim.user_id == user_a_id)
-    )
+    db.execute(delete(Claim).where(Claim.gift_id.in_(gifts_a), Claim.user_id == user_b_id))
+    db.execute(delete(Claim).where(Claim.gift_id.in_(gifts_b), Claim.user_id == user_a_id))
     db.flush()
 
 
@@ -184,14 +172,13 @@ def _shopping_rows(db: Session, statement) -> list[dict]:
             "purchased_at": claim.purchased_at,
             "amount_paid": claim.amount_paid,
         }
-        for claim, gift, list_name, owner_id, account_person_id, recipient_name
-        in db.execute(statement).all()
+        for claim, gift, list_name, owner_id, account_person_id, recipient_name in db.execute(
+            statement
+        ).all()
     ]
 
 
-def get_shopping_for_occasion(
-    db: Session, occasion_id: int, user_id: int
-) -> list[dict]:
+def get_shopping_for_occasion(db: Session, occasion_id: int, user_id: int) -> list[dict]:
     """The caller's own claims filed under one occasion.
 
     Keyed on the stored filing alone — no join back to the shares. Filing is
@@ -240,9 +227,7 @@ def _claimed_lists_select():
     )
 
 
-def get_claimed_lists_for_occasion(
-    db: Session, occasion_id: int, user_id: int
-) -> list[GiftList]:
+def get_claimed_lists_for_occasion(db: Session, occasion_id: int, user_id: int) -> list[GiftList]:
     return list(
         db.execute(
             _claimed_lists_select().where(
@@ -255,9 +240,7 @@ def get_claimed_lists_for_occasion(
     )
 
 
-def get_claimed_lists_for_folder(
-    db: Session, folder_id: int, user_id: int
-) -> list[GiftList]:
+def get_claimed_lists_for_folder(db: Session, folder_id: int, user_id: int) -> list[GiftList]:
     return list(
         db.execute(
             _claimed_lists_select()
@@ -378,9 +361,7 @@ def _spend_by_giftee_select():
     the overall's figures by construction, because both count the same rows.
     """
     return (
-        select(
-            *_GIFTEE_COLUMNS, _TOTAL_COUNT, _BOUGHT_COUNT, _SPENT, _UNPRICED_COUNT
-        )
+        select(*_GIFTEE_COLUMNS, _TOTAL_COUNT, _BOUGHT_COUNT, _SPENT, _UNPRICED_COUNT)
         .join(Gift, Claim.gift_id == Gift.id)
         .join(GiftList, Gift.list_id == GiftList.id)
         .group_by(*_GIFTEE_COLUMNS)
@@ -389,9 +370,7 @@ def _spend_by_giftee_select():
 
 def _spend_by_giftee(db: Session, statement) -> dict[str, dict]:
     return {
-        key_for_triple(
-            row.owner_id, row.account_person_id, row.recipient_name
-        ): _spend_from(row)
+        key_for_triple(row.owner_id, row.account_person_id, row.recipient_name): _spend_from(row)
         for row in db.execute(statement).all()
     }
 
@@ -409,9 +388,7 @@ def get_spend_by_giftee_for_occasion(
     )
 
 
-def get_spend_by_giftee_for_folder(
-    db: Session, folder_id: int, user_id: int
-) -> dict[str, dict]:
+def get_spend_by_giftee_for_folder(db: Session, folder_id: int, user_id: int) -> dict[str, dict]:
     """The caller's spend on the folder's lists, split by giftee key."""
     return _spend_by_giftee(
         db,

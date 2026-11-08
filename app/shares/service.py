@@ -7,18 +7,16 @@ from app.email.sender import send_email
 from app.models.gift_list import GiftList
 from app.models.list_share import ListShare
 from app.models.user import User
-from app.shares import repository as repo
 from app.services.exceptions import (
     BadRequestError,
     ConflictError,
     ForbiddenError,
     NotFoundError,
 )
+from app.shares import repository as repo
 
 
-def create_share(
-    db: Session, list_id: int, user_id: int, current_user_id: int
-) -> ListShare:
+def create_share(db: Session, list_id: int, user_id: int, current_user_id: int) -> ListShare:
     if user_id == current_user_id:
         raise BadRequestError("Cannot share a list with yourself.")
 

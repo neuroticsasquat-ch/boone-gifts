@@ -24,24 +24,24 @@ destructive flag to guard.
 
 import argparse
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy import select
 
 from app.database import Base, SessionLocal, engine
-from app.models.budget import Budget
-from app.models.giftee_budget import GifteeBudget
-from app.models.claim import Claim
 from app.models.account_person import AccountPerson
-from app.models.folder import Folder
-from app.models.folder_item import FolderItem
+from app.models.budget import Budget
+from app.models.claim import Claim
 from app.models.connection import Connection
 from app.models.family import Family
 from app.models.family_invite import FamilyInvite
 from app.models.family_member import FamilyMember
+from app.models.folder import Folder
+from app.models.folder_item import FolderItem
 from app.models.gift import Gift
 from app.models.gift_list import GiftList
+from app.models.giftee_budget import GifteeBudget
 from app.models.list_occasion_share import ListOccasionShare
 from app.models.list_share import ListShare
 from app.models.occasion import Occasion
@@ -72,27 +72,15 @@ def purge(db) -> int:
 
     Ordered child-first because SQLite runs with PRAGMA foreign_keys=ON, so a
     parent row with surviving children raises rather than cascading."""
-    user_ids = set(
-        db.execute(select(User.id).where(User.email.in_(SEED_EMAILS))).scalars()
-    )
+    user_ids = set(db.execute(select(User.id).where(User.email.in_(SEED_EMAILS))).scalars())
     if not user_ids:
         return 0
 
-    list_ids = set(
-        db.execute(
-            select(GiftList.id).where(GiftList.owner_id.in_(user_ids))
-        ).scalars()
-    )
+    list_ids = set(db.execute(select(GiftList.id).where(GiftList.owner_id.in_(user_ids))).scalars())
     family_ids = set(
-        db.execute(
-            select(Family.id).where(Family.created_by_id.in_(user_ids))
-        ).scalars()
+        db.execute(select(Family.id).where(Family.created_by_id.in_(user_ids))).scalars()
     )
-    folder_ids = set(
-        db.execute(
-            select(Folder.id).where(Folder.owner_id.in_(user_ids))
-        ).scalars()
-    )
+    folder_ids = set(db.execute(select(Folder.id).where(Folder.owner_id.in_(user_ids))).scalars())
 
     # A fixture user may hold a claim on a list this purge is not deleting, and a
     # non-fixture list may be shared with them or into one of their families — so
@@ -101,23 +89,19 @@ def purge(db) -> int:
     if list_ids or user_ids:
         # Claims hold a foreign key into `gifts`, so they go first — by either
         # route, since a fixture user's claim may sit on a non-fixture gift.
-        gift_ids = set(
-            db.execute(select(Gift.id).where(Gift.list_id.in_(list_ids))).scalars()
+        gift_ids = set(db.execute(select(Gift.id).where(Gift.list_id.in_(list_ids))).scalars())
+        db.query(Claim).filter(Claim.gift_id.in_(gift_ids) | Claim.user_id.in_(user_ids)).delete(
+            synchronize_session=False
         )
-        db.query(Claim).filter(
-            Claim.gift_id.in_(gift_ids) | Claim.user_id.in_(user_ids)
-        ).delete(synchronize_session=False)
-        db.query(Gift).filter(
-            Gift.list_id.in_(list_ids)
-        ).delete(synchronize_session=False)
+        db.query(Gift).filter(Gift.list_id.in_(list_ids)).delete(synchronize_session=False)
         db.query(ListShare).filter(
             ListShare.list_id.in_(list_ids) | ListShare.user_id.in_(user_ids)
         ).delete(synchronize_session=False)
-    occasion_ids = set(
-        db.execute(
-            select(Occasion.id).where(Occasion.family_id.in_(family_ids))
-        ).scalars()
-    ) if family_ids else set()
+    occasion_ids = (
+        set(db.execute(select(Occasion.id).where(Occasion.family_id.in_(family_ids))).scalars())
+        if family_ids
+        else set()
+    )
     # Budgets point at the occasions and folders below and at the users above,
     # so they go before all three. By either route: a fixture user may budget a
     # non-fixture occasion, and a non-fixture user may budget nothing of ours,
@@ -152,38 +136,27 @@ def purge(db) -> int:
             | ListOccasionShare.occasion_id.in_(occasion_ids)
         ).delete(synchronize_session=False)
     if occasion_ids:
-        db.query(Occasion).filter(Occasion.id.in_(occasion_ids)).delete(
-            synchronize_session=False
-        )
+        db.query(Occasion).filter(Occasion.id.in_(occasion_ids)).delete(synchronize_session=False)
     if folder_ids or list_ids:
         db.query(FolderItem).filter(
-            FolderItem.folder_id.in_(folder_ids)
-            | FolderItem.list_id.in_(list_ids)
+            FolderItem.folder_id.in_(folder_ids) | FolderItem.list_id.in_(list_ids)
         ).delete(synchronize_session=False)
     if folder_ids:
-        db.query(Folder).filter(Folder.id.in_(folder_ids)).delete(
-            synchronize_session=False
-        )
+        db.query(Folder).filter(Folder.id.in_(folder_ids)).delete(synchronize_session=False)
     if family_ids or user_ids:
         db.query(FamilyInvite).filter(
-            FamilyInvite.family_id.in_(family_ids)
-            | FamilyInvite.invited_by_id.in_(user_ids)
+            FamilyInvite.family_id.in_(family_ids) | FamilyInvite.invited_by_id.in_(user_ids)
         ).delete(synchronize_session=False)
         db.query(FamilyMember).filter(
-            FamilyMember.family_id.in_(family_ids)
-            | FamilyMember.user_id.in_(user_ids)
+            FamilyMember.family_id.in_(family_ids) | FamilyMember.user_id.in_(user_ids)
         ).delete(synchronize_session=False)
     if family_ids:
-        db.query(Family).filter(Family.id.in_(family_ids)).delete(
-            synchronize_session=False
-        )
+        db.query(Family).filter(Family.id.in_(family_ids)).delete(synchronize_session=False)
     db.query(Connection).filter(
         Connection.requester_id.in_(user_ids) | Connection.addressee_id.in_(user_ids)
     ).delete(synchronize_session=False)
     if list_ids:
-        db.query(GiftList).filter(GiftList.id.in_(list_ids)).delete(
-            synchronize_session=False
-        )
+        db.query(GiftList).filter(GiftList.id.in_(list_ids)).delete(synchronize_session=False)
     # After the lists: lists.account_person_id references these rows and the FK
     # is enforced.
     db.query(AccountPerson).filter(AccountPerson.user_id.in_(user_ids)).delete(
@@ -195,7 +168,7 @@ def purge(db) -> int:
 
 
 def seed(db, password: str) -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     users: dict[str, User] = {}
     for email, name, role in SEED_USERS:
@@ -211,8 +184,7 @@ def seed(db, password: str) -> None:
     gran = users["gran@example.com"]
     dave = users["cousin@example.com"]
 
-    def new_list(owner, name, description=None, recipient=None,
-                 archived=False, person=None):
+    def new_list(owner, name, description=None, recipient=None, archived=False, person=None):
         gift_list = GiftList(
             name=name,
             description=description,
@@ -271,8 +243,7 @@ def seed(db, password: str) -> None:
 
     gran_list = new_list(gran, "Gran's List", person=gran_person)
     grandpa_list = new_list(gran, "Grandpa's List", person=grandpa_person)
-    kitchen_list = new_list(gran, "Ideas for the Kitchen",
-                            "For the house, not for either of us")
+    kitchen_list = new_list(gran, "Ideas for the Kitchen", "For the house, not for either of us")
     dave_wishlist = new_list(dave, "Dave's Wishlist")
     # The year-three case: a standing list shared to every Christmas the Boones
     # have ever run, two of them archived. It is the only fixture that proves a
@@ -305,20 +276,18 @@ def seed(db, password: str) -> None:
     # Tom's three claim states, so every budget case is reachable by hand: taken
     # but not yet bought, bought with an amount, and bought with the amount
     # skipped — the last of which a rollup must report as an understatement.
-    add_gifts(jane_wishlist, ["Headphones", "Gardening gloves", "Tea sampler"],
-              claimed_by=tom)
-    add_gifts(carol_wishlist, ["Scarf", "Cookbook"],
-              claimed_by=tom, bought=Decimal("64.99"))
+    add_gifts(jane_wishlist, ["Headphones", "Gardening gloves", "Tea sampler"], claimed_by=tom)
+    add_gifts(carol_wishlist, ["Scarf", "Cookbook"], claimed_by=tom, bought=Decimal("64.99"))
     add_gifts(gran_list, ["Cardigan", "Bird feeder"])
     # Claimed and filed under an *archived* Christmas, which is the only way to
     # see by hand that an archived occasion still serves its shopping tab.
-    add_gifts(grandpa_list, ["Fishing reel", "Reading lamp"],
-              claimed_by=tom, bought=Decimal("42.00"))
+    add_gifts(
+        grandpa_list, ["Fishing reel", "Reading lamp"], claimed_by=tom, bought=Decimal("42.00")
+    )
     add_gifts(kitchen_list, ["Stand mixer", "Knife block"])
     # Reaches Tom only through the Extended family's occasion, so it is also the
     # claim whose filing NEU-1269 has to resolve without a direct share.
-    add_gifts(dave_wishlist, ["Board game", "Whiskey glasses"],
-              claimed_by=tom, bought=SKIPPED)
+    add_gifts(dave_wishlist, ["Board game", "Whiskey glasses"], claimed_by=tom, bought=SKIPPED)
     # Left unclaimed on purpose: claiming one as Tom is how the silent filing is
     # checked by hand, and the picker's "show past occasions" needs the two
     # archived Christmases behind it.
@@ -326,12 +295,15 @@ def seed(db, password: str) -> None:
 
     # Dave's request stays pending so the connection-request UI has something to
     # render; the rest are accepted.
-    db.add(Connection(requester_id=tom.id, addressee_id=jane.id, status="accepted",
-                      accepted_at=now))
-    db.add(Connection(requester_id=carol.id, addressee_id=tom.id, status="accepted",
-                      accepted_at=now))
-    db.add(Connection(requester_id=gran.id, addressee_id=tom.id, status="accepted",
-                      accepted_at=now))
+    db.add(
+        Connection(requester_id=tom.id, addressee_id=jane.id, status="accepted", accepted_at=now)
+    )
+    db.add(
+        Connection(requester_id=carol.id, addressee_id=tom.id, status="accepted", accepted_at=now)
+    )
+    db.add(
+        Connection(requester_id=gran.id, addressee_id=tom.id, status="accepted", accepted_at=now)
+    )
     db.add(Connection(requester_id=dave.id, addressee_id=tom.id, status="pending"))
 
     boones = Family(name="Boone Family", created_by_id=tom.id)
@@ -369,9 +341,7 @@ def seed(db, password: str) -> None:
     # active (the single-click case), several active (the select case), and none
     # at all (the disabled row). The archived one exists to prove that archiving
     # blocks new shares without withdrawing the shares already made.
-    boones_christmas = Occasion(
-        family_id=boones.id, name="Christmas 2026", created_by_id=tom.id
-    )
+    boones_christmas = Occasion(family_id=boones.id, name="Christmas 2026", created_by_id=tom.id)
     boones_last_year = Occasion(
         family_id=boones.id,
         name="Christmas 2025",
@@ -389,9 +359,7 @@ def seed(db, password: str) -> None:
     extended_christmas = Occasion(
         family_id=extended.id, name="Christmas 2026", created_by_id=carol.id
     )
-    extended_birthday = Occasion(
-        family_id=extended.id, name="Gran's 80th", created_by_id=carol.id
-    )
+    extended_birthday = Occasion(family_id=extended.id, name="Gran's 80th", created_by_id=carol.id)
     # Two occasions gone quiet, so the archive nudge is reachable by hand — one
     # nudging and one snoozed, because suppression cannot be seen unless both
     # states are on screen at once and no occasion can be in both.
@@ -412,9 +380,7 @@ def seed(db, password: str) -> None:
     extended_gone_quiet = Occasion(
         family_id=extended.id, name="Summer BBQ 2026", created_by_id=tom.id
     )
-    extended_snoozed = Occasion(
-        family_id=extended.id, name="Easter 2026", created_by_id=tom.id
-    )
+    extended_snoozed = Occasion(family_id=extended.id, name="Easter 2026", created_by_id=tom.id)
     db.add_all(
         [
             boones_christmas,
@@ -464,9 +430,9 @@ def seed(db, password: str) -> None:
     # to no occasion, and the folder tab is its only route (project spec §9.4).
     def file_under(gift_list, occasion, claimer=tom):
         gift_ids = select(Gift.id).where(Gift.list_id == gift_list.id)
-        db.query(Claim).filter(
-            Claim.gift_id.in_(gift_ids), Claim.user_id == claimer.id
-        ).update({"occasion_id": occasion.id}, synchronize_session=False)
+        db.query(Claim).filter(Claim.gift_id.in_(gift_ids), Claim.user_id == claimer.id).update(
+            {"occasion_id": occasion.id}, synchronize_session=False
+        )
 
     file_under(carol_wishlist, boones_christmas)
     file_under(grandpa_list, boones_last_year)
@@ -476,8 +442,9 @@ def seed(db, password: str) -> None:
     # up on his strip rather than somewhere he would have to go looking.
     file_under(tom_christmas, boones_christmas, claimer=carol)
 
-    christmas = Folder(owner_id=tom.id, name="Christmas 2026 Shopping",
-                           description="Everyone I'm buying for")
+    christmas = Folder(
+        owner_id=tom.id, name="Christmas 2026 Shopping", description="Everyone I'm buying for"
+    )
     birthdays = Folder(owner_id=tom.id, name="Kids' Birthdays")
     db.add_all([christmas, birthdays])
     db.flush()
@@ -490,34 +457,36 @@ def seed(db, password: str) -> None:
     # it, and — the one that matters most — a total that is honestly incomplete.
     # Every one is Tom's own; no other fixture user gets a budget, because a
     # second budget on the same occasion is only ever visible to its own owner.
-    db.add_all([
-        # Under: 64.99 of 100.00 spent, 35.01 left.
-        Budget(user_id=tom.id, occasion_id=boones_christmas.id,
-               amount=Decimal("100.00")),
-        # Exactly at target: 42.00 of 42.00, nothing left and nothing overspent.
-        Budget(user_id=tom.id, occasion_id=boones_last_year.id,
-               amount=Decimal("42.00")),
-        # Bought, but the amount was skipped: 0.00 of 25.00 spent with one
-        # unpriced purchase, so the line must read as an understatement rather
-        # than as an untouched budget.
-        Budget(user_id=tom.id, occasion_id=extended_christmas.id,
-               amount=Decimal("25.00")),
-        # Over: the folder holds Carol's list, so 64.99 lands against 50.00 and
-        # `remaining` goes negative. A budget is a target, not a limit.
-        Budget(user_id=tom.id, folder_id=christmas.id, amount=Decimal("50.00")),
-    ])
+    db.add_all(
+        [
+            # Under: 64.99 of 100.00 spent, 35.01 left.
+            Budget(user_id=tom.id, occasion_id=boones_christmas.id, amount=Decimal("100.00")),
+            # Exactly at target: 42.00 of 42.00, nothing left and nothing overspent.
+            Budget(user_id=tom.id, occasion_id=boones_last_year.id, amount=Decimal("42.00")),
+            # Bought, but the amount was skipped: 0.00 of 25.00 spent with one
+            # unpriced purchase, so the line must read as an understatement rather
+            # than as an untouched budget.
+            Budget(user_id=tom.id, occasion_id=extended_christmas.id, amount=Decimal("25.00")),
+            # Over: the folder holds Carol's list, so 64.99 lands against 50.00 and
+            # `remaining` goes negative. A budget is a target, not a limit.
+            Budget(user_id=tom.id, folder_id=christmas.id, amount=Decimal("50.00")),
+        ]
+    )
 
     db.commit()
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Seed the dev database")
-    parser.add_argument("--password", default=DEFAULT_PASSWORD,
-                        help=f"Password for every seeded user (default: {DEFAULT_PASSWORD})")
-    parser.add_argument("--reset", action="store_true",
-                        help="Delete existing seed data first, then seed")
-    parser.add_argument("--purge", action="store_true",
-                        help="Delete seed data and exit")
+    parser.add_argument(
+        "--password",
+        default=DEFAULT_PASSWORD,
+        help=f"Password for every seeded user (default: {DEFAULT_PASSWORD})",
+    )
+    parser.add_argument(
+        "--reset", action="store_true", help="Delete existing seed data first, then seed"
+    )
+    parser.add_argument("--purge", action="store_true", help="Delete seed data and exit")
     args = parser.parse_args()
 
     Base.metadata.create_all(bind=engine)
@@ -529,9 +498,9 @@ def main() -> None:
             if args.purge:
                 return
 
-        existing = db.execute(
-            select(User.email).where(User.email.in_(SEED_EMAILS))
-        ).scalars().first()
+        existing = (
+            db.execute(select(User.email).where(User.email.in_(SEED_EMAILS))).scalars().first()
+        )
         if existing:
             print(f"Seed data already present ({existing}). Re-run with --reset.")
             sys.exit(1)

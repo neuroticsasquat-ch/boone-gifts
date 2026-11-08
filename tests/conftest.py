@@ -3,6 +3,7 @@
 Nothing here is about any one domain — this file exists for the settings that
 have to be true before the first test builds its first user.
 """
+
 import pytest
 
 # Four is bcrypt's own floor, and the suite is the one place where a work factor

@@ -50,12 +50,14 @@ def list_families(db: Session, user_id: int) -> list[dict]:
         if family is None:
             continue
         member_count = repo.get_member_count(db, membership.family_id)
-        result.append({
-            "id": family.id,
-            "name": family.name,
-            "role": membership.role,
-            "member_count": member_count,
-        })
+        result.append(
+            {
+                "id": family.id,
+                "name": family.name,
+                "role": membership.role,
+                "member_count": member_count,
+            }
+        )
     return result
 
 
@@ -163,7 +165,11 @@ def update_member_role(
     target = repo.get_family_member(db, family_id=family_id, user_id=target_user_id)
     if target is None:
         raise NotFoundError("Member not found.")
-    if role == "member" and target.role == "organizer" and repo.count_organizers(db, family_id) == 1:
+    if (
+        role == "member"
+        and target.role == "organizer"
+        and repo.count_organizers(db, family_id) == 1
+    ):
         raise ConflictError("Cannot demote the last organizer.")
     repo.update_member_role(db, target, role)
     return _build_family_detail(db, family_id)

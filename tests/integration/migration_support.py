@@ -19,6 +19,7 @@ Neither changes what is under test: every test still gets its own throwaway
 SQLite file, built by the same revisions, and still runs its own upgrade or
 downgrade against it.
 """
+
 from collections.abc import Callable
 from pathlib import Path
 
@@ -62,8 +63,7 @@ def alembic(command_name: str, target: str, db_path: Path) -> None:
     """
     if command_name not in _COMMANDS:
         raise ValueError(
-            f"Unknown Alembic command {command_name!r}; "
-            f"expected one of {sorted(_COMMANDS)}."
+            f"Unknown Alembic command {command_name!r}; expected one of {sorted(_COMMANDS)}."
         )
     original = settings.database_url
     settings.database_url = f"sqlite:///{db_path}"

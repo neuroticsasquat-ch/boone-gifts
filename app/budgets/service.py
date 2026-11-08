@@ -13,6 +13,7 @@ predicate (`CONTEXT.md` invariant 2): the giftees it shows are derived from
 lists the caller can already view, and routing that through the predicate is
 what keeps a term added there from being quietly missed here.
 """
+
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
@@ -69,6 +70,7 @@ def _spend(
 ) -> dict:
     if occasion_id is not None:
         return claims_repo.get_spend_for_occasion(db, occasion_id, user_id)
+    assert folder_id is not None  # _require_one_scope ran first
     return claims_repo.get_spend_for_folder(db, folder_id, user_id)
 
 
@@ -81,6 +83,7 @@ def _spend_by_giftee(
 ) -> dict[str, dict]:
     if occasion_id is not None:
         return claims_repo.get_spend_by_giftee_for_occasion(db, occasion_id, user_id)
+    assert folder_id is not None  # _require_one_scope ran first
     return claims_repo.get_spend_by_giftee_for_folder(db, folder_id, user_id)
 
 
@@ -187,6 +190,7 @@ def _claimed_lists(
     """Source 2: the lists behind the caller's own shopping rows in scope."""
     if occasion_id is not None:
         return claims_repo.get_claimed_lists_for_occasion(db, occasion_id, user_id)
+    assert folder_id is not None  # _require_one_scope ran first
     return claims_repo.get_claimed_lists_for_folder(db, folder_id, user_id)
 
 
@@ -224,12 +228,8 @@ def _giftees_from_lists(
     seen: set[int] = set()
     entries: dict[str, dict] = {}
     for gift_list in [
-        *_visible_lists(
-            db, actor=actor, occasion_id=occasion_id, folder_id=folder_id
-        ),
-        *_claimed_lists(
-            db, user_id=actor.id, occasion_id=occasion_id, folder_id=folder_id
-        ),
+        *_visible_lists(db, actor=actor, occasion_id=occasion_id, folder_id=folder_id),
+        *_claimed_lists(db, user_id=actor.id, occasion_id=occasion_id, folder_id=folder_id),
     ]:
         if gift_list.id in seen:
             continue
@@ -292,14 +292,10 @@ def _giftees(
     folder_id: int | None,
     giftee_budgets: list[GifteeBudget],
 ) -> list[dict]:
-    entries = _giftees_from_lists(
-        db, actor=actor, occasion_id=occasion_id, folder_id=folder_id
-    )
+    entries = _giftees_from_lists(db, actor=actor, occasion_id=occasion_id, folder_id=folder_id)
     _add_orphaned_rows(db, entries, giftee_budgets)
     amounts = {budget.giftee_key: budget.amount for budget in giftee_budgets}
-    spend = _spend_by_giftee(
-        db, user_id=actor.id, occasion_id=occasion_id, folder_id=folder_id
-    )
+    spend = _spend_by_giftee(db, user_id=actor.id, occasion_id=occasion_id, folder_id=folder_id)
     for key, entry in entries.items():
         entry["budget"] = _giftee_rollup(amounts.get(key), spend.get(key, _NO_SPEND))
     return sorted(entries.values(), key=_giftee_order)
@@ -326,12 +322,8 @@ def get_rollup(
     a target, not a limit.
     """
     _require_one_scope(occasion_id, folder_id)
-    budget = repo.find_budget(
-        db, user_id=user_id, occasion_id=occasion_id, folder_id=folder_id
-    )
-    spend = _spend(
-        db, user_id=user_id, occasion_id=occasion_id, folder_id=folder_id
-    )
+    budget = repo.find_budget(db, user_id=user_id, occasion_id=occasion_id, folder_id=folder_id)
+    spend = _spend(db, user_id=user_id, occasion_id=occasion_id, folder_id=folder_id)
     giftee_budgets = repo.get_giftee_budgets(
         db, user_id=user_id, occasion_id=occasion_id, folder_id=folder_id
     )
@@ -359,12 +351,8 @@ def get_block(
     giftee_budgets = repo.get_giftee_budgets(
         db, user_id=actor.id, occasion_id=occasion_id, folder_id=folder_id
     )
-    budget = repo.find_budget(
-        db, user_id=actor.id, occasion_id=occasion_id, folder_id=folder_id
-    )
-    spend = _spend(
-        db, user_id=actor.id, occasion_id=occasion_id, folder_id=folder_id
-    )
+    budget = repo.find_budget(db, user_id=actor.id, occasion_id=occasion_id, folder_id=folder_id)
+    spend = _spend(db, user_id=actor.id, occasion_id=occasion_id, folder_id=folder_id)
     amount: Decimal | None = budget.amount if budget is not None else None
     return {
         "budget": _overall_rollup(amount, spend, giftee_budgets),
@@ -394,9 +382,7 @@ def set_budget(
     """Set or replace the caller's own budget for one scope, and return the
     rollup — the client's budget line is one round trip, not two."""
     _require_one_scope(occasion_id, folder_id)
-    budget = repo.find_budget(
-        db, user_id=user_id, occasion_id=occasion_id, folder_id=folder_id
-    )
+    budget = repo.find_budget(db, user_id=user_id, occasion_id=occasion_id, folder_id=folder_id)
     if budget is None:
         repo.create_budget(
             db,
@@ -407,9 +393,7 @@ def set_budget(
         )
     else:
         repo.update_amount(db, budget, amount)
-    return get_rollup(
-        db, user_id=user_id, occasion_id=occasion_id, folder_id=folder_id
-    )
+    return get_rollup(db, user_id=user_id, occasion_id=occasion_id, folder_id=folder_id)
 
 
 def clear_budget(
@@ -425,15 +409,11 @@ def clear_budget(
     anything — so the client re-renders the same line with no target on it.
     """
     _require_one_scope(occasion_id, folder_id)
-    budget = repo.find_budget(
-        db, user_id=user_id, occasion_id=occasion_id, folder_id=folder_id
-    )
+    budget = repo.find_budget(db, user_id=user_id, occasion_id=occasion_id, folder_id=folder_id)
     if budget is None:
         raise NotFoundError(NO_BUDGET)
     repo.delete_budget(db, budget)
-    return get_rollup(
-        db, user_id=user_id, occasion_id=occasion_id, folder_id=folder_id
-    )
+    return get_rollup(db, user_id=user_id, occasion_id=occasion_id, folder_id=folder_id)
 
 
 # ---------------------------------------------------------------------------
@@ -445,7 +425,7 @@ def _parse_key(giftee_key: str):
     try:
         return parse_key(giftee_key)
     except ValueError:
-        raise BadRequestError(MALFORMED_KEY)
+        raise BadRequestError(MALFORMED_KEY) from None
 
 
 def set_giftee_budget(

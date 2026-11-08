@@ -1,12 +1,13 @@
 from collections.abc import Sequence
+from datetime import UTC
 
 from sqlalchemy import Integer, String, cast, delete, literal, null, or_, select
 from sqlalchemy.orm import Session, aliased
 
 from app.claims import repository as claims_repo
-from app.models.folder_item import FolderItem
 from app.models.family import Family
 from app.models.family_member import FamilyMember
+from app.models.folder_item import FolderItem
 from app.models.gift import Gift
 from app.models.gift_list import GiftList
 from app.models.list_occasion_share import ListOccasionShare
@@ -42,10 +43,14 @@ def create_list(
 
 
 def get_lists_by_owner(db: Session, owner_id: int, archived: bool = False) -> list[GiftList]:
-    query = select(GiftList).where(
-        GiftList.owner_id == owner_id,
-        GiftList.is_archived == archived,
-    ).order_by(GiftList.updated_at.desc())
+    query = (
+        select(GiftList)
+        .where(
+            GiftList.owner_id == owner_id,
+            GiftList.is_archived == archived,
+        )
+        .order_by(GiftList.updated_at.desc())
+    )
     return list(db.execute(query).scalars().all())
 
 
@@ -124,9 +129,7 @@ def get_share_routes(
         via_occasion = via_occasion.where(ListOccasionShare.list_id.in_(list_ids))
 
     routes = direct.union_all(via_occasion).subquery()
-    query = select(routes).order_by(
-        routes.c.list_id, routes.c.priority, routes.c.source_id
-    )
+    query = select(routes).order_by(routes.c.list_id, routes.c.priority, routes.c.source_id)
 
     by_list: dict[int, list[ShareRoute]] = {}
     for row in db.execute(query).all():
@@ -182,14 +185,18 @@ def get_all_visible_lists(db: Session, user_id: int, archived: bool = False) -> 
         .join(FamilyMember, FamilyMember.family_id == Occasion.family_id)
         .where(FamilyMember.user_id == user_id)
     )
-    query = select(GiftList).where(
-        or_(
-            GiftList.owner_id == user_id,
-            GiftList.id.in_(shared_list_ids),
-            GiftList.id.in_(occasion_list_ids),
-        ),
-        GiftList.is_archived == archived,
-    ).order_by(GiftList.updated_at.desc())
+    query = (
+        select(GiftList)
+        .where(
+            or_(
+                GiftList.owner_id == user_id,
+                GiftList.id.in_(shared_list_ids),
+                GiftList.id.in_(occasion_list_ids),
+            ),
+            GiftList.is_archived == archived,
+        )
+        .order_by(GiftList.updated_at.desc())
+    )
     return list(db.execute(query).scalars().all())
 
 
@@ -218,6 +225,7 @@ def delete_list(db: Session, gift_list: GiftList) -> None:
 
 def get_unseen_share_count(db: Session, user_id: int) -> int:
     from sqlalchemy import func as sa_func
+
     result = db.execute(
         select(sa_func.count())
         .select_from(ListShare)
@@ -227,7 +235,8 @@ def get_unseen_share_count(db: Session, user_id: int) -> int:
 
 
 def mark_share_seen(db: Session, list_id: int, user_id: int) -> None:
-    from datetime import datetime, timezone
+    from datetime import datetime
+
     share = db.execute(
         select(ListShare).where(
             ListShare.list_id == list_id,
@@ -236,5 +245,5 @@ def mark_share_seen(db: Session, list_id: int, user_id: int) -> None:
         )
     ).scalar_one_or_none()
     if share:
-        share.seen_at = datetime.now(timezone.utc)
+        share.seen_at = datetime.now(UTC)
         db.flush()

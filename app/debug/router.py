@@ -11,6 +11,4 @@ class TelemetryTestError(RuntimeError):
 
 @router.post("/raise-test-error")
 def raise_test_error(admin: AdminUser) -> None:
-    raise TelemetryTestError(
-        "boone-gifts.debug.raise-test-error: deliberate test error"
-    )
+    raise TelemetryTestError("boone-gifts.debug.raise-test-error: deliberate test error")

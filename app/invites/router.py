@@ -29,4 +29,4 @@ def delete_invite(invite_id: int, admin: AdminUser, db: DbSession):
     try:
         invite_service.delete_invite(db, invite_id)
     except NotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from None

@@ -1,6 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import (
     BaseModel,
@@ -47,9 +47,7 @@ class OccasionShareRoute(BaseModel):
 # `SharedVia` needed one to refuse a `family` on the direct arm and demand it on
 # the occasion arm; the union cannot represent either state, so the rule has one
 # home instead of two.
-ShareRoute = Annotated[
-    DirectShareRoute | OccasionShareRoute, Field(discriminator="kind")
-]
+ShareRoute = Annotated[DirectShareRoute | OccasionShareRoute, Field(discriminator="kind")]
 
 
 class RecipientFields(BaseModel):
@@ -129,7 +127,7 @@ class GiftRead(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def flatten_claim(cls, data: object) -> object:
+    def flatten_claim(cls, data: Any) -> Any:
         if not hasattr(data, "claim"):
             return data
         claim = data.claim
@@ -220,7 +218,7 @@ class GiftListViewerRead(GiftListRead):
 
     @model_validator(mode="before")
     @classmethod
-    def count_claims(cls, data: object, info: ValidationInfo) -> object:
+    def count_claims(cls, data: Any, info: ValidationInfo) -> Any:
         if not hasattr(data, "gifts"):
             # No gifts to walk, so there is nothing to count here: either an
             # already-built row being revalidated (a folder's nested `lists`),
@@ -238,20 +236,14 @@ class GiftListViewerRead(GiftListRead):
             )
         # Read every declared field off the row as usual, then add the two
         # things the row cannot answer for itself.
-        values = {
-            name: getattr(data, name)
-            for name in cls.model_fields
-            if hasattr(data, name)
-        }
+        values = {name: getattr(data, name) for name in cls.model_fields if hasattr(data, name)}
         # Both counts come off the claims already loaded with the row rather
         # than a query per list: `GiftList.gifts` and `Gift.claim` are both
         # selectin, so a whole shared scope costs two queries, not two per row.
         claims = [g.claim for g in data.gifts if g.claim is not None]
         values["claimed_count"] = len(claims)
         values["my_unpurchased_claim_count"] = sum(
-            1
-            for claim in claims
-            if claim.user_id == viewer_id and claim.purchased_at is None
+            1 for claim in claims if claim.user_id == viewer_id and claim.purchased_at is None
         )
         return values
 

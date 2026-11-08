@@ -78,9 +78,7 @@ def test_explicit_sentry_release_wins_over_source_commit(
 
 
 @pytest.mark.parametrize("value", ["", "   "])
-def test_release_is_unset_without_a_commit(
-    telemetry_env: pytest.MonkeyPatch, value: str
-) -> None:
+def test_release_is_unset_without_a_commit(telemetry_env: pytest.MonkeyPatch, value: str) -> None:
     telemetry_env.setenv("SOURCE_COMMIT", value)
     telemetry_env.setenv("APP_SENTRY_RELEASE", value)
     assert Settings(_env_file=None).release is None

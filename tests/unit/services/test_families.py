@@ -156,9 +156,7 @@ def test_get_family_detail_not_a_member(mock_get_family, mock_get_member, db):
 @patch(f"{REPO}.get_family_members_with_users")
 @patch(f"{REPO}.get_family_member")
 @patch(f"{REPO}.get_family")
-def test_get_family_detail_happy_path(
-    mock_get_family, mock_get_member, mock_get_members, db
-):
+def test_get_family_detail_happy_path(mock_get_family, mock_get_member, mock_get_members, db):
     family = _make_family(id=1, name="Smith Family", created_by_id=10)
     member = _make_member(id=1, family_id=1, user_id=10, role="organizer")
     user = _make_user(id=10, name="Alice")
@@ -262,7 +260,13 @@ def test_delete_family_not_organizer(mock_get_family, mock_get_member, db):
 @patch(f"{REPO}.get_family_member")
 @patch(f"{REPO}.get_family")
 def test_delete_family_happy_path(
-    mock_get_family, mock_get_member, mock_delete_members, mock_delete_family, mock_ids, mock_cleanup, db
+    mock_get_family,
+    mock_get_member,
+    mock_delete_members,
+    mock_delete_family,
+    mock_ids,
+    mock_cleanup,
+    db,
 ):
     family = _make_family(id=1)
     member = _make_member(id=1, family_id=1, user_id=10, role="organizer")
@@ -284,7 +288,13 @@ def test_delete_family_happy_path(
 @patch(f"{REPO}.get_family_member")
 @patch(f"{REPO}.get_family")
 def test_delete_family_triggers_cleanup_for_each_pair(
-    mock_get_family, mock_get_member, mock_delete_members, mock_delete_family, mock_ids, mock_cleanup, db
+    mock_get_family,
+    mock_get_member,
+    mock_delete_members,
+    mock_delete_family,
+    mock_ids,
+    mock_cleanup,
+    db,
 ):
     family = _make_family(id=1)
     mock_get_family.return_value = family
@@ -310,7 +320,13 @@ def test_delete_family_triggers_cleanup_for_each_pair(
 @patch(f"{REPO}.get_family_member")
 @patch(f"{REPO}.get_family")
 def test_delete_family_cleanup_runs_after_members_deleted(
-    mock_get_family, mock_get_member, mock_delete_members, mock_delete_family, mock_ids, mock_cleanup, db
+    mock_get_family,
+    mock_get_member,
+    mock_delete_members,
+    mock_delete_family,
+    mock_ids,
+    mock_cleanup,
+    db,
 ):
     family = _make_family(id=1)
     mock_get_family.return_value = family
@@ -639,9 +655,7 @@ def test_update_role_demote_last_organizer_raises_conflict(
     target = _make_member(user_id=10, role="organizer")  # self-demote, sole organizer
     mock_get_member.side_effect = [actor, target]
     with pytest.raises(ConflictError):
-        service.update_member_role(
-            db, family_id=1, actor_id=10, target_user_id=10, role="member"
-        )
+        service.update_member_role(db, family_id=1, actor_id=10, target_user_id=10, role="member")
     mock_update.assert_not_called()
 
 
@@ -677,9 +691,7 @@ def test_users_share_family_no_memberships_returns_false():
 @patch(f"{SVC}.delete_folder_items_between")
 @patch(f"{SVC}.unclaim_gifts_between")
 @patch(f"{SVC}.users_share_access", return_value=False)
-def test_cleanup_if_dropped_runs_when_no_shared_access(
-    mock_access, mock_unclaim, mock_items, db
-):
+def test_cleanup_if_dropped_runs_when_no_shared_access(mock_access, mock_unclaim, mock_items, db):
     service._cleanup_if_dropped(db, 10, 20)
     mock_access.assert_called_once_with(db, 10, 20)
     mock_unclaim.assert_called_once_with(db, 10, 20)
@@ -689,9 +701,7 @@ def test_cleanup_if_dropped_runs_when_no_shared_access(
 @patch(f"{SVC}.delete_folder_items_between")
 @patch(f"{SVC}.unclaim_gifts_between")
 @patch(f"{SVC}.users_share_access", return_value=True)
-def test_cleanup_if_dropped_skips_when_access_remains(
-    mock_access, mock_unclaim, mock_items, db
-):
+def test_cleanup_if_dropped_skips_when_access_remains(mock_access, mock_unclaim, mock_items, db):
     service._cleanup_if_dropped(db, 10, 20)
     mock_access.assert_called_once_with(db, 10, 20)
     mock_unclaim.assert_not_called()
