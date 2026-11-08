@@ -10,14 +10,14 @@ dependencies = [
     # The strict xfail in tests/integration/test_opentelemetry_startup.py fails CI once
     # a release lifts the cap (contrib #5120) -- then drop this, it and the Dependabot ignore.
     "sqlalchemy>=2.0.57,<2.1",
-    "pydantic>=2.14.2",
+    "pydantic>=2.14.3",
     "pydantic-settings>=2.16.2",
     "pyjwt>=2.15.1",
     "bcrypt>=5.0.0",
     "alembic>=1.20.1",
     "httpx>=0.28.1",
     "slowapi>=0.1.10",
-    "sentry-sdk[fastapi]>=2.73.0",
+    "sentry-sdk[fastapi]>=2.74.0",
     "opentelemetry-distro>=0.66b1",
     "opentelemetry-exporter-otlp-proto-http>=1.45.2",
     "opentelemetry-instrumentation-fastapi>=0.66b1",
@@ -41,7 +41,7 @@ filterwarnings = [
 dev = [
     "pyright[nodejs]>=1.1.414",
     "pytest>=9.2.0",
-    "ruff>=0.17.3",
+    "ruff>=0.17.4",
 ]
 
 # An app, not a library: uv installs the dependencies only, never the project itself.
