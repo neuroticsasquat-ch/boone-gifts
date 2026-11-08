@@ -71,9 +71,10 @@ jobs:
     with:
       file: Dockerfile.prod
       # Runs as root. The SQLite database lives on the Coolify volume mounted at /data, whose
-      # files the root container has always written, and the restore runbook (ops
-      # backups/sqlite.md) copies them back in as root. A non-root USER couldn't write them
-      # without a chown on the VM first, so the switch is its own change, not this one.
+      # files the root container has always written. The 03:05 backup reads that volume as
+      # root on the host, and its restore (ops backups/sqlite.md) copies files back in as
+      # root, so they stay root-owned. A non-root USER couldn't write them without a chown on
+      # the VM and a change to the restore, so the switch is its own change, not this one.
       allow-root: true
 
   ci: # the one required check; the name is the contract

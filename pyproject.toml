@@ -44,6 +44,10 @@ dev = [
     "ruff>=0.17.3",
 ]
 
+# An app, not a library: uv installs the dependencies only, never the project itself.
+[tool.uv]
+package = false
+
 # The fleet's ruff config (mlb-today, closinglineup). CI runs `ruff check` and
 # `ruff format --check` through the shared python.yml.
 [tool.ruff]
@@ -56,8 +60,8 @@ select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
 # Set notation and typographic dashes the budget docstrings and comments use on purpose.
 allowed-confusables = ["∪", "−", "–"]
 
-# CI runs pyright through the shared python.yml. Basic mode: the codebase was never
-# type-checked before the shared workflows, so strict is a follow-up.
+# CI runs pyright through the shared python.yml, in its default (standard) mode: the
+# codebase was never type-checked before the shared workflows, so strict is a follow-up.
 [tool.pyright]
 include = ["app", "alembic", "scripts", "tests", "main.py"]
 exclude = ["**/__pycache__"]

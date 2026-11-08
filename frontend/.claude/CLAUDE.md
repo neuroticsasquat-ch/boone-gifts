@@ -16,4 +16,4 @@ specs_dir: docs
      and tickets are filed under, and the repo label loop.py filters tickets on. -->
 linear_initiative: Boone Gifts
 linear_team: Neuroticsasquatch
-linear_repo: boone-gifts-frontend
+linear_repo: boone-gifts

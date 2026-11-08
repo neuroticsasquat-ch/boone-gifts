@@ -684,7 +684,7 @@ section that claims to hold everything shared with the viewer.
 ## Critical conventions
 - **Docker**: `node_modules` lives in a named volume so the bind mount can't shadow it. After a dependency change (yours or pulled), run `task build` — it syncs the volume, which a plain image rebuild does not.
 - **Vite HMR**: WSS on port 443 (`clientPort`) so it works behind Traefik's TLS.
-- **Pre-commit**: `.pre-commit-config.yaml` runs `task lint`, `task typecheck` and `task test`, which exec into the `boone-gifts-frontend` container, so it must be up to commit. The hooks fire only when a `.ts`/`.tsx`/`.js`/`.mjs`/`.json` file is staged.
+- **Pre-commit**: the root `.pre-commit-config.yaml` runs `task fe:lint`, `task fe:typecheck` and `task fe:test`, which exec into the `boone-gifts-frontend` container, so it must be up to commit. These hooks fire only when a `.ts`/`.tsx`/`.js`/`.mjs`/`.json` file under `frontend/` is staged.
 - **Never store the access token in localStorage** — `src/api/client.ts` keeps it in memory and exports `setAccessToken` / `getAccessToken` / `clearAccessToken`.
 - **Type imports**: use `import type { ... }` — `verbatimModuleSyntax` is on.
 - **Types** in `src/types/index.ts`: `AuthUser` is decoded from the JWT payload (`role`), and `Gift` vs `GiftOwnerView` are separate because owners get responses without claim fields.
@@ -713,8 +713,8 @@ section that claims to hold everything shared with the viewer.
 
 **Releases are cut by hand, driven by two tasks.** `task release-branch` cuts the next `release/vX.Y.Z` off `main` — a minor bump from the latest GitHub release by default, `-- --major` or `-- --patch` to change that. `task release-notes` branches off the current release branch, regenerates `RELEASE_NOTES.md` with `git cliff --tag <version> -u --prepend`, opens a PR against the release branch, waits for CI and squash-merges it; the version comes from the release branch name, so nothing else has to track it. Both run on the host, not in the container. There is still no release *workflow*: the tag (`tag_pattern = "v[0-9].*"`) and the GitHub release are made by hand. Nothing regenerates the notes afterwards, so a subject that was wrong at merge time can only be fixed by rewriting history or editing the notes directly. `git cliff --unreleased` previews what the next release will read like.
 
-## Pre-commit (planned, not yet installed)
-Pre-commit will live **on the host** (system Python), not in the container; its hooks delegate to `task` commands that run the checks inside Docker (`task lint`, `task test`). Never install pre-commit or its hooks inside the container.
+## Pre-commit
+Pre-commit lives **on the host** (system Python), not in a container; its hooks delegate to `task` commands that run the checks inside Docker (`task fe:lint`, `task fe:test`, and the backend's). Never install pre-commit or its hooks inside a container.
 
 ## Production
 - **Deploy**: an assets-only Cloudflare Worker (`wrangler.jsonc`, no `main`) built by Workers Builds from the `boone-gifts` repo with root directory `frontend` — build command `pnpm build`, deploy command `npx wrangler deploy`. `not_found_handling: "single-page-application"` serves `index.html` for deep links; there is no `_redirects`. Build variables and local checks: README "Deployment".

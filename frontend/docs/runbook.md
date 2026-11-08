@@ -50,7 +50,9 @@ This triggers a new build and deploy with the revert.
 
 Set in Workers & Pages → `boone-gifts-frontend` → Settings → Build → **build** variables. Not Worker runtime variables: the bundle is static, so every value is fixed at build time, and the dashboard refuses runtime variables on an assets-only Worker anyway.
 
-The README's "Deployment" table is the list of what to set and why: `NODE_VERSION`, `VITE_API_URL`, `VITE_SENTRY_DSN`, `VITE_SENTRY_ENVIRONMENT`, `SENTRY_URL` and `SENTRY_AUTH_TOKEN` (as a **secret**). Leave `SENTRY_ORG` and `SENTRY_PROJECT` unset; they default to `bugsinkhasnoorgs` and `boone-gifts-frontend`.
+The README's "Deployment" table is the list of what to set and why: `VITE_API_URL`, `VITE_SENTRY_DSN`, `VITE_SENTRY_ENVIRONMENT`, `SENTRY_URL` and `SENTRY_AUTH_TOKEN` (as a **secret**). Leave `SENTRY_ORG` and `SENTRY_PROJECT` unset; they default to `bugsinkhasnoorgs` and `boone-gifts-frontend`.
+
+The Node version comes from `frontend/.node-version`, so `NODE_VERSION` isn't needed.
 
 After changing any variable, merge to `main` for it to take effect.
 
