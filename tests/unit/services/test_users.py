@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -32,9 +32,6 @@ REPO = "app.users.service.repo"
 @pytest.fixture
 def db():
     return MagicMock()
-
-
-from unittest.mock import patch
 
 
 @patch(f"{REPO}.get_all_users")

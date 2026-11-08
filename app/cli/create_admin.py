@@ -3,7 +3,7 @@ import sys
 
 from sqlalchemy import select
 
-from app.database import SessionLocal, engine, Base
+from app.database import Base, SessionLocal, engine
 from app.models.user import User
 
 
@@ -26,9 +26,7 @@ def main():
 
     db = SessionLocal()
     try:
-        existing = db.execute(
-            select(User).where(User.email == email)
-        ).scalar_one_or_none()
+        existing = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
 
         if existing:
             print(f"User with email {email} already exists.")

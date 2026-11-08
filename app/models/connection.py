@@ -9,9 +9,7 @@ from app.database import Base
 class Connection(Base):
     __tablename__ = "connections"
     __table_args__ = (
-        UniqueConstraint(
-            "requester_id", "addressee_id", name="uq_connections_requester_addressee"
-        ),
+        UniqueConstraint("requester_id", "addressee_id", name="uq_connections_requester_addressee"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)

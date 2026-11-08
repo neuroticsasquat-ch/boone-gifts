@@ -35,7 +35,7 @@ def test_user_default_role(db):
 
 
 def test_user_email_unique(db):
-    import sqlalchemy
+    import sqlalchemy.exc
 
     user1 = User(email="dupe@example.com", name="First", password_hash="h")
     db.add(user1)

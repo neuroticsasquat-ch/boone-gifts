@@ -9,14 +9,10 @@ from app.models.user import User
 
 
 def find_user_by_email(db: Session, email: str) -> User | None:
-    return db.execute(
-        select(User).where(User.email == email)
-    ).scalar_one_or_none()
+    return db.execute(select(User).where(User.email == email)).scalar_one_or_none()
 
 
-def find_unaccepted_invite_by_email(
-    db: Session, family_id: int, email: str
-) -> FamilyInvite | None:
+def find_unaccepted_invite_by_email(db: Session, family_id: int, email: str) -> FamilyInvite | None:
     return (
         db.execute(
             select(FamilyInvite)
@@ -77,9 +73,7 @@ def get_invite(db: Session, invite_id: int) -> FamilyInvite | None:
 
 
 def get_invite_by_token(db: Session, token: str) -> FamilyInvite | None:
-    return db.execute(
-        select(FamilyInvite).where(FamilyInvite.token == token)
-    ).scalar_one_or_none()
+    return db.execute(select(FamilyInvite).where(FamilyInvite.token == token)).scalar_one_or_none()
 
 
 def delete_invite(db: Session, invite: FamilyInvite) -> None:
@@ -87,9 +81,7 @@ def delete_invite(db: Session, invite: FamilyInvite) -> None:
     db.flush()
 
 
-def list_incoming_invites(
-    db: Session, email: str
-) -> list[tuple[FamilyInvite, Family, User]]:
+def list_incoming_invites(db: Session, email: str) -> list[tuple[FamilyInvite, Family, User]]:
     rows = db.execute(
         select(FamilyInvite, Family, User)
         .join(Family, FamilyInvite.family_id == Family.id)

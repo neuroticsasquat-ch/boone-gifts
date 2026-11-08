@@ -46,12 +46,8 @@ class GifteeBudget(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
-    occasion_id: Mapped[int | None] = mapped_column(
-        ForeignKey("occasions.id"), default=None
-    )
-    folder_id: Mapped[int | None] = mapped_column(
-        ForeignKey("folders.id"), default=None
-    )
+    occasion_id: Mapped[int | None] = mapped_column(ForeignKey("occasions.id"), default=None)
+    folder_id: Mapped[int | None] = mapped_column(ForeignKey("folders.id"), default=None)
     # The opaque handle the API addresses a giftee by (decision 1).
     giftee_key: Mapped[str] = mapped_column(String(300))
     # The list owner the giftee resolves through — the giftee themself for an

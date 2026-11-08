@@ -33,7 +33,10 @@ def _reject_person_with_recipient(
 
 
 def create_list(
-    db: Session, name: str, description: str | None, owner: User,
+    db: Session,
+    name: str,
+    description: str | None,
+    owner: User,
     occasion_ids: list[int] | None = None,
     recipient_name: str | None = None,
     account_person_id: int | None = None,
@@ -70,9 +73,7 @@ def to_summary(gift_list: GiftList, user_id: int) -> GiftListRead | GiftListView
     """
     if gift_list.owner_id == user_id:
         return GiftListRead.model_validate(gift_list)
-    return GiftListViewerRead.model_validate(
-        gift_list, context={"viewer_id": user_id}
-    )
+    return GiftListViewerRead.model_validate(gift_list, context={"viewer_id": user_id})
 
 
 def to_summaries(
@@ -102,15 +103,14 @@ def to_summaries(
     # the rest means `?filter=owned`, where every row is owned, makes no route
     # query at all rather than one guaranteed to come back empty — and it is the
     # same predicate the SQL already applies, not a second one to keep in step.
-    foreign_ids = [
-        gift_list.id for gift_list in lists if gift_list.owner_id != viewer_id
-    ]
+    foreign_ids = [gift_list.id for gift_list in lists if gift_list.owner_id != viewer_id]
     routes = repo.get_share_routes(db, viewer_id, foreign_ids)
     for gift_list in lists:
         # Absent from the mapping means no route: a row the caller owns, or one
         # they reached some way this endpoint does not report. Either way an
         # empty array, never null.
-        gift_list.shared_via = routes.get(gift_list.id, [])
+        # A transient attribute, not a column: GiftListRead reads it from_attributes.
+        gift_list.shared_via = routes.get(gift_list.id, [])  # pyright: ignore[reportAttributeAccessIssue]
     return [to_summary(gift_list, viewer_id) for gift_list in lists]
 
 
@@ -179,9 +179,7 @@ def update_list(db: Session, gift_list: GiftList, updates: dict) -> GiftList:
     resulting_recipient = updates.get("recipient_name", gift_list.recipient_name)
     _reject_person_with_recipient(resulting_person_id, resulting_recipient)
     if "account_person_id" in updates:
-        account_service.get_owned_person_id(
-            db, gift_list.owner_id, updates["account_person_id"]
-        )
+        account_service.get_owned_person_id(db, gift_list.owner_id, updates["account_person_id"])
     return repo.update_list(db, gift_list, updates)
 
 

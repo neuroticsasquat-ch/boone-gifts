@@ -14,9 +14,7 @@ def render_list_shared_email(
     subject = _SUBJECT_TEMPLATE.format(sharer_name=sharer_name)
 
     possessive_html = (
-        f"<strong>{recipient_name}&rsquo;s</strong> list"
-        if recipient_name
-        else "their list"
+        f"<strong>{recipient_name}&rsquo;s</strong> list" if recipient_name else "their list"
     )
     possessive_text = f"{recipient_name}'s list" if recipient_name else "their list"
 

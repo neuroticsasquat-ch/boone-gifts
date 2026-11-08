@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -16,7 +16,7 @@ def create_invite(
     invite = Invite(
         email=email,
         role=role,
-        expires_at=datetime.now(timezone.utc) + timedelta(days=expires_in_days),
+        expires_at=datetime.now(UTC) + timedelta(days=expires_in_days),
         invited_by_id=invited_by_id,
     )
     db.add(invite)

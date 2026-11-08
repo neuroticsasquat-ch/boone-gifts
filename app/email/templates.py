@@ -13,7 +13,7 @@ _HTML_LAYOUT = """\
     </div>
   </body>
 </html>
-"""
+"""  # noqa: E501 -- email clients need inline styles, one attribute per element
 
 _TEXT_FOOTER = "\n\n--\nBoone Gifts\n"
 

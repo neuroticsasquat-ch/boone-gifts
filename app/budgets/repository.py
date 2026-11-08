@@ -3,6 +3,7 @@
 The rollup's other half — what the caller has actually spent — is counted in
 `app/claims/repository.py`, where every claim query lives.
 """
+
 from decimal import Decimal
 
 from sqlalchemy import delete, or_, select
@@ -31,9 +32,7 @@ def find_budget(
         if occasion_id is not None
         else Budget.folder_id == folder_id
     )
-    return db.execute(
-        select(Budget).where(Budget.user_id == user_id, scope)
-    ).scalar_one_or_none()
+    return db.execute(select(Budget).where(Budget.user_id == user_id, scope)).scalar_one_or_none()
 
 
 def create_budget(
@@ -172,9 +171,7 @@ def create_giftee_budget(
     return budget
 
 
-def update_giftee_amount(
-    db: Session, budget: GifteeBudget, amount: Decimal
-) -> GifteeBudget:
+def update_giftee_amount(db: Session, budget: GifteeBudget, amount: Decimal) -> GifteeBudget:
     budget.amount = amount
     db.flush()
     return budget
@@ -191,9 +188,8 @@ def find_user_names(db: Session, user_ids: set[int]) -> dict[int, str]:
     group it still renders as needs a label (decision 3, source 3)."""
     if not user_ids:
         return {}
-    return dict(
-        db.execute(select(User.id, User.name).where(User.id.in_(user_ids))).all()
-    )
+    rows = db.execute(select(User.id, User.name).where(User.id.in_(user_ids))).all()
+    return {user_id: name for user_id, name in rows}
 
 
 def find_person_names(db: Session, person_ids: set[int]) -> dict[int, str]:
@@ -202,13 +198,10 @@ def find_person_names(db: Session, person_ids: set[int]) -> dict[int, str]:
     deletes the row (`delete_giftee_budgets_for_people`)."""
     if not person_ids:
         return {}
-    return dict(
-        db.execute(
-            select(AccountPerson.id, AccountPerson.name).where(
-                AccountPerson.id.in_(person_ids)
-            )
-        ).all()
-    )
+    rows = db.execute(
+        select(AccountPerson.id, AccountPerson.name).where(AccountPerson.id.in_(person_ids))
+    ).all()
+    return {person_id: name for person_id, name in rows}
 
 
 # The four cascades, each beside the overall budget's (decision 7). A recipient
@@ -221,14 +214,10 @@ def delete_giftee_budgets_for_folder(db: Session, folder_id: int) -> None:
     db.flush()
 
 
-def delete_giftee_budgets_for_occasions(
-    db: Session, occasion_ids: list[int]
-) -> None:
+def delete_giftee_budgets_for_occasions(db: Session, occasion_ids: list[int]) -> None:
     if not occasion_ids:
         return
-    db.execute(
-        delete(GifteeBudget).where(GifteeBudget.occasion_id.in_(occasion_ids))
-    )
+    db.execute(delete(GifteeBudget).where(GifteeBudget.occasion_id.in_(occasion_ids)))
     db.flush()
 
 
@@ -249,7 +238,5 @@ def delete_giftee_budgets_for_people(db: Session, person_ids: list[int]) -> None
     scope. Must run before the people rows are deleted; the FK is enforced."""
     if not person_ids:
         return
-    db.execute(
-        delete(GifteeBudget).where(GifteeBudget.account_person_id.in_(person_ids))
-    )
+    db.execute(delete(GifteeBudget).where(GifteeBudget.account_person_id.in_(person_ids)))
     db.flush()

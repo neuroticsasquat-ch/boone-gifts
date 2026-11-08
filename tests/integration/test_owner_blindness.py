@@ -11,7 +11,8 @@ tests are the belt to that braces, and they are deliberately written as a sweep
 over the whole payload rather than as assertions about named fields: a guard
 that only knows today's field names cannot catch tomorrow's leak.
 """
-from datetime import datetime, timezone
+
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
@@ -66,8 +67,8 @@ def owned_list_with_a_claim(db, member_user, admin_user, shared_list):
         Claim(
             gift_id=claimed.id,
             user_id=admin_user.id,
-            claimed_at=datetime.now(timezone.utc),
-            purchased_at=datetime.now(timezone.utc),
+            claimed_at=datetime.now(UTC),
+            purchased_at=datetime.now(UTC),
             amount_paid=Decimal("31.50"),
         )
     )
@@ -75,9 +76,7 @@ def owned_list_with_a_claim(db, member_user, admin_user, shared_list):
     return shared_list
 
 
-def test_owned_rows_carry_no_claim_state(
-    client, member_headers, owned_list_with_a_claim
-):
+def test_owned_rows_carry_no_claim_state(client, member_headers, owned_list_with_a_claim):
     """The leak ADR 0003 was written about: `claimed_count` on `GET /lists`."""
     response = client.get("/lists?filter=owned", headers=member_headers)
     assert response.status_code == 200
@@ -92,19 +91,13 @@ def test_the_unfiltered_scope_is_blind_on_the_rows_the_caller_owns(
     schema is chosen per row rather than declared once on the endpoint."""
     response = client.get("/lists", headers=member_headers)
     assert response.status_code == 200
-    owned = [
-        row for row in response.json() if row["id"] == owned_list_with_a_claim.id
-    ]
+    owned = [row for row in response.json() if row["id"] == owned_list_with_a_claim.id]
     assert owned, "the fixture list should be in scope"
     _assert_blind(owned)
 
 
-def test_list_detail_is_blind_for_its_owner(
-    client, member_headers, owned_list_with_a_claim
-):
-    response = client.get(
-        f"/lists/{owned_list_with_a_claim.id}", headers=member_headers
-    )
+def test_list_detail_is_blind_for_its_owner(client, member_headers, owned_list_with_a_claim):
+    response = client.get(f"/lists/{owned_list_with_a_claim.id}", headers=member_headers)
     assert response.status_code == 200
     assert len(response.json()["gifts"]) == 2
     _assert_blind(response.json())
@@ -131,9 +124,7 @@ def test_a_viewer_still_gets_the_claimed_count(
     from the people it is for."""
     response = client.get("/lists?filter=shared", headers=admin_headers)
     assert response.status_code == 200
-    row = next(
-        row for row in response.json() if row["id"] == owned_list_with_a_claim.id
-    )
+    row = next(row for row in response.json() if row["id"] == owned_list_with_a_claim.id)
     assert row["claimed_count"] == 1
     assert row["gift_count"] == 2
 
@@ -141,9 +132,7 @@ def test_a_viewer_still_gets_the_claimed_count(
 def test_a_viewer_sees_the_claim_on_the_gift(
     client, admin_headers, admin_user, owned_list_with_a_claim
 ):
-    response = client.get(
-        f"/lists/{owned_list_with_a_claim.id}", headers=admin_headers
-    )
+    response = client.get(f"/lists/{owned_list_with_a_claim.id}", headers=admin_headers)
     assert response.status_code == 200
     claimed = next(g for g in response.json()["gifts"] if g["name"] == "Claimed")
     assert claimed["claimed_by_id"] == admin_user.id
@@ -175,16 +164,14 @@ def test_a_folders_rows_keep_the_count_for_the_lists_it_does_not_own(
         Claim(
             gift_id=to_buy.id,
             user_id=admin_user.id,
-            claimed_at=datetime.now(timezone.utc),
+            claimed_at=datetime.now(UTC),
         )
     )
     db.flush()
 
     response = client.get(f"/folders/{folder.id}", headers=admin_headers)
     assert response.status_code == 200
-    row = next(
-        r for r in response.json()["lists"] if r["id"] == owned_list_with_a_claim.id
-    )
+    row = next(r for r in response.json()["lists"] if r["id"] == owned_list_with_a_claim.id)
     assert row["claimed_count"] == 2
     assert row["my_unpurchased_claim_count"] == 1
 
@@ -207,18 +194,14 @@ def test_a_folders_rows_stay_blind_on_the_owners_own_lists(
     _assert_blind(response.json()["lists"])
 
 
-def test_a_viewer_gets_their_own_unpurchased_count(
-    client, admin_headers, owned_list_with_a_claim
-):
+def test_a_viewer_gets_their_own_unpurchased_count(client, admin_headers, owned_list_with_a_claim):
     """The same two halves for `my_unpurchased_claim_count` (NEU-1279): absent
     from every owner-facing payload above — `CLAIM_KEYS` carries it, so every
     sweep in this file already checks that — and present for the viewer it is
     about. Here the admin's one claim is already bought, so nothing is to buy."""
     response = client.get("/lists?filter=shared", headers=admin_headers)
     assert response.status_code == 200
-    row = next(
-        row for row in response.json() if row["id"] == owned_list_with_a_claim.id
-    )
+    row = next(row for row in response.json() if row["id"] == owned_list_with_a_claim.id)
     assert row["claimed_count"] == 1
     assert row["my_unpurchased_claim_count"] == 0
 
@@ -242,19 +225,11 @@ def test_the_occasion_index_is_blind_on_an_occasion_holding_the_owners_list(
     family = Family(name="Boone Family", created_by_id=member_user.id)
     db.add(family)
     db.flush()
-    db.add(
-        FamilyMember(family_id=family.id, user_id=member_user.id, role="organizer")
-    )
-    occasion = Occasion(
-        family_id=family.id, name="Christmas 2026", created_by_id=member_user.id
-    )
+    db.add(FamilyMember(family_id=family.id, user_id=member_user.id, role="organizer"))
+    occasion = Occasion(family_id=family.id, name="Christmas 2026", created_by_id=member_user.id)
     db.add(occasion)
     db.flush()
-    db.add(
-        ListOccasionShare(
-            list_id=owned_list_with_a_claim.id, occasion_id=occasion.id
-        )
-    )
+    db.add(ListOccasionShare(list_id=owned_list_with_a_claim.id, occasion_id=occasion.id))
     db.flush()
 
     response = client.get("/occasions", headers=member_headers)
@@ -297,22 +272,16 @@ def test_the_archive_prompts_carry_no_claim_state(
     from app.models.list_occasion_share import ListOccasionShare
     from app.models.occasion import Occasion
 
-    stale = datetime.now(timezone.utc) - timedelta(days=61)
+    stale = datetime.now(UTC) - timedelta(days=61)
     family = Family(name="Boone Family", created_by_id=member_user.id)
     db.add(family)
     db.flush()
-    db.add(
-        FamilyMember(family_id=family.id, user_id=member_user.id, role="organizer")
-    )
-    occasion = Occasion(
-        family_id=family.id, name="Christmas 2019", created_by_id=member_user.id
-    )
+    db.add(FamilyMember(family_id=family.id, user_id=member_user.id, role="organizer"))
+    occasion = Occasion(family_id=family.id, name="Christmas 2019", created_by_id=member_user.id)
     occasion.created_at = stale
     db.add(occasion)
     db.flush()
-    share = ListOccasionShare(
-        list_id=owned_list_with_a_claim.id, occasion_id=occasion.id
-    )
+    share = ListOccasionShare(list_id=owned_list_with_a_claim.id, occasion_id=occasion.id)
     db.add(share)
     db.flush()
     share.created_at = stale
@@ -322,12 +291,10 @@ def test_the_archive_prompts_carry_no_claim_state(
     # what makes the assertion below a guard rather than a formality: any claim
     # term added to the eligibility query would now read a clock of `now`, the
     # occasion would stop being stale, and the row would disappear.
-    claim = db.execute(
-        sqlalchemy.select(Claim).where(Claim.user_id != member_user.id)
-    ).scalar_one()
+    claim = db.execute(sqlalchemy.select(Claim).where(Claim.user_id != member_user.id)).scalar_one()
     claim.occasion_id = occasion.id
-    claim.claimed_at = datetime.now(timezone.utc)
-    claim.purchased_at = datetime.now(timezone.utc)
+    claim.claimed_at = datetime.now(UTC)
+    claim.purchased_at = datetime.now(UTC)
     db.flush()
 
     response = client.get("/occasions/archive-prompts", headers=member_headers)
@@ -365,9 +332,7 @@ def test_the_giftee_budget_block_never_names_the_owners_own_list(
             FamilyMember(family_id=family.id, user_id=admin_user.id, role="member"),
         ]
     )
-    occasion = Occasion(
-        family_id=family.id, name="Christmas 2026", created_by_id=member_user.id
-    )
+    occasion = Occasion(family_id=family.id, name="Christmas 2026", created_by_id=member_user.id)
     db.add(occasion)
     db.flush()
     admins = GiftList(name="Admin's List", owner_id=admin_user.id)

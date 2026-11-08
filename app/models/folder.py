@@ -19,10 +19,8 @@ class Folder(Base):
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
     description: Mapped[str | None] = mapped_column(String(500), default=None)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(
-        server_default=func.now(), onupdate=func.now()
-    )
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
 
-    items: Mapped[list["FolderItem"]] = relationship(
+    items: Mapped[list[FolderItem]] = relationship(
         "FolderItem", lazy="selectin", cascade="all, delete-orphan"
     )

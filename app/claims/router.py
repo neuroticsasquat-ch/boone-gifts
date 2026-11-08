@@ -9,9 +9,7 @@ router = APIRouter(prefix="/claims", tags=["claims"])
 
 
 @router.patch("/{claim_id}", response_model=ClaimRead)
-def update_claim(
-    claim_id: int, updates: ClaimUpdate, user: CurrentUser, db: DbSession
-):
+def update_claim(claim_id: int, updates: ClaimUpdate, user: CurrentUser, db: DbSession):
     # No 404 arm: a claim that does not exist answers 403 like anyone else's,
     # so the list's owner learns nothing by probing ids.
     try:
@@ -19,4 +17,4 @@ def update_claim(
             db, claim_id, user, updates.model_dump(exclude_unset=True)
         )
     except ForbiddenError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN) from None

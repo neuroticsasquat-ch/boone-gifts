@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 import jwt
@@ -11,8 +11,8 @@ from app.config import settings
 from app.connections.repository import find_accepted_connection_between
 from app.database import SessionLocal
 from app.models.folder import Folder
-from app.models.user import User
 from app.models.gift_list import GiftList
+from app.models.user import User
 
 
 def get_db():
@@ -33,7 +33,7 @@ security = HTTPBearer()
 
 
 def create_access_token(user: User, *, iat: datetime | None = None) -> str:
-    issued_at = iat or datetime.now(timezone.utc)
+    issued_at = iat or datetime.now(UTC)
     payload = {
         "sub": str(user.id),
         "email": user.email,
@@ -46,7 +46,7 @@ def create_access_token(user: User, *, iat: datetime | None = None) -> str:
 
 
 def create_refresh_token(user: User, *, iat: datetime | None = None) -> str:
-    issued_at = iat or datetime.now(timezone.utc)
+    issued_at = iat or datetime.now(UTC)
     payload = {
         "sub": str(user.id),
         "type": "refresh",
@@ -68,7 +68,7 @@ def get_current_user(
             options={"verify_iat": False},
         )
     except jwt.InvalidTokenError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED) from None
 
     if payload.get("type") == "refresh":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
@@ -81,7 +81,7 @@ def get_current_user(
     pwd_changed = user.password_changed_at
     if pwd_changed is not None and iat is not None:
         if pwd_changed.tzinfo is None:
-            pwd_changed = pwd_changed.replace(tzinfo=timezone.utc)
+            pwd_changed = pwd_changed.replace(tzinfo=UTC)
         if int(pwd_changed.timestamp()) > int(iat):
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 

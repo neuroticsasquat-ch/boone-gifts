@@ -1,6 +1,6 @@
-import sqlalchemy
-
 import pytest
+import sqlalchemy
+import sqlalchemy.exc
 
 from app.models.folder import Folder
 from app.models.folder_item import FolderItem

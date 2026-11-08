@@ -79,6 +79,4 @@ def _send_via_resend(*, to: str, subject: str, html: str, text: str) -> None:
 
     if resp.status_code >= 400:
         logger.warning("resend returned HTTP %s: %s", resp.status_code, resp.text[:500])
-        raise EmailSendError(
-            f"resend returned HTTP {resp.status_code}: {resp.text[:200]}"
-        )
+        raise EmailSendError(f"resend returned HTTP {resp.status_code}: {resp.text[:200]}")

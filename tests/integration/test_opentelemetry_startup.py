@@ -184,7 +184,5 @@ def test_the_health_check_query_is_a_span(tmp_path):
     "fails until the sqlalchemy cap, its Dependabot ignore and this test are removed.",
 )
 def test_the_sqlalchemy_instrumentation_supports_sqlalchemy_2_1():
-    [requirement] = [
-        Requirement(spec) for spec in sqlalchemy_instrumentation._instruments
-    ]
+    [requirement] = [Requirement(spec) for spec in sqlalchemy_instrumentation._instruments]
     assert requirement.specifier.contains("2.1.0")

@@ -28,9 +28,9 @@ def replace_account(
     try:
         return account_service.replace_account(db, user, request, confirm=confirm)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
     except BadRequestError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except account_service.LabelsWouldBeStripped as e:
         # A bare `{"affected_lists": N}` body rather than this API's usual
         # `{"detail": ...}`: the count is the whole point of the 409 and the

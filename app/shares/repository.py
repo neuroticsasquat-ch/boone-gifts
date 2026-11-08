@@ -24,20 +24,12 @@ def create_share(db: Session, list_id: int, user_id: int) -> ListShare:
 
 
 def get_shares_for_list(db: Session, list_id: int) -> list[ListShare]:
-    return list(
-        db.execute(select(ListShare).where(ListShare.list_id == list_id))
-        .scalars()
-        .all()
-    )
+    return list(db.execute(select(ListShare).where(ListShare.list_id == list_id)).scalars().all())
 
 
 def get_shared_users(db: Session, list_id: int) -> list[User]:
     share_user_ids = select(ListShare.user_id).where(ListShare.list_id == list_id)
-    return list(
-        db.execute(select(User).where(User.id.in_(share_user_ids)))
-        .scalars()
-        .all()
-    )
+    return list(db.execute(select(User).where(User.id.in_(share_user_ids))).scalars().all())
 
 
 def delete_share(db: Session, share: ListShare) -> None:
@@ -45,9 +37,7 @@ def delete_share(db: Session, share: ListShare) -> None:
     db.flush()
 
 
-def find_folder_items_for_unshare(
-    db: Session, list_id: int, user_id: int
-) -> list[FolderItem]:
+def find_folder_items_for_unshare(db: Session, list_id: int, user_id: int) -> list[FolderItem]:
     folder_ids = select(Folder.id).where(Folder.owner_id == user_id)
     return list(
         db.execute(

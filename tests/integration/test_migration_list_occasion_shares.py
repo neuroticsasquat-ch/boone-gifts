@@ -11,6 +11,7 @@ import shutil
 
 import pytest
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import IntegrityError
 
 from tests.integration.migration_support import alembic as _alembic
 from tests.integration.migration_support import build_template
@@ -26,20 +27,12 @@ def _seed(conn):
             "VALUES (1, 'a@t.com', 'A', 'x', 'member', 1)"
         )
     )
+    conn.execute(text("INSERT INTO families (id, name, created_by_id) VALUES (1, 'F1', 1)"))
     conn.execute(
-        text("INSERT INTO families (id, name, created_by_id) VALUES (1, 'F1', 1)")
+        text("INSERT INTO family_members (family_id, user_id, role) VALUES (1, 1, 'organizer')")
     )
     conn.execute(
-        text(
-            "INSERT INTO family_members (family_id, user_id, role) "
-            "VALUES (1, 1, 'organizer')"
-        )
-    )
-    conn.execute(
-        text(
-            "INSERT INTO lists (id, name, owner_id, is_archived) "
-            "VALUES (1, 'A list', 1, 0)"
-        )
+        text("INSERT INTO lists (id, name, owner_id, is_archived) VALUES (1, 'A list', 1, 0)")
     )
     conn.execute(
         text(
@@ -47,11 +40,7 @@ def _seed(conn):
             "VALUES (1, 1, 'Christmas 2026', 0, 1)"
         )
     )
-    conn.execute(
-        text(
-            "INSERT INTO list_family_shares (list_id, family_id) VALUES (1, 1)"
-        )
-    )
+    conn.execute(text("INSERT INTO list_family_shares (list_id, family_id) VALUES (1, 1)"))
 
 
 @pytest.fixture(scope="module")
@@ -75,9 +64,7 @@ def _tables(engine):
     with engine.connect() as conn:
         return {
             row[0]
-            for row in conn.execute(
-                text("SELECT name FROM sqlite_master WHERE type='table'")
-            )
+            for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))
         }
 
 
@@ -95,9 +82,7 @@ def test_upgrade_creates_an_empty_list_occasion_shares(seeded):
 
     assert "list_occasion_shares" in _tables(engine)
     with engine.connect() as conn:
-        count = conn.execute(
-            text("SELECT COUNT(*) FROM list_occasion_shares")
-        ).scalar()
+        count = conn.execute(text("SELECT COUNT(*) FROM list_occasion_shares")).scalar()
     assert count == 0
 
 
@@ -106,19 +91,9 @@ def test_the_new_table_takes_a_share_and_rejects_a_duplicate(seeded):
     _alembic("upgrade", REVISION, db_path)
 
     with engine.begin() as conn:
-        conn.execute(
-            text(
-                "INSERT INTO list_occasion_shares (list_id, occasion_id) VALUES (1, 1)"
-            )
-        )
-    with pytest.raises(Exception):
-        with engine.begin() as conn:
-            conn.execute(
-                text(
-                    "INSERT INTO list_occasion_shares (list_id, occasion_id) "
-                    "VALUES (1, 1)"
-                )
-            )
+        conn.execute(text("INSERT INTO list_occasion_shares (list_id, occasion_id) VALUES (1, 1)"))
+    with pytest.raises(IntegrityError), engine.begin() as conn:
+        conn.execute(text("INSERT INTO list_occasion_shares (list_id, occasion_id) VALUES (1, 1)"))
 
 
 def test_claims_are_untouched_by_the_drop(seeded):
@@ -132,18 +107,13 @@ def test_claims_are_untouched_by_the_drop(seeded):
     engine, db_path = seeded
     with engine.begin() as conn:
         conn.execute(
-            text(
-                "INSERT INTO gifts (id, list_id, name, claimed_by_id) "
-                "VALUES (1, 1, 'A Book', 1)"
-            )
+            text("INSERT INTO gifts (id, list_id, name, claimed_by_id) VALUES (1, 1, 'A Book', 1)")
         )
 
     _alembic("upgrade", REVISION, db_path)
 
     with engine.connect() as conn:
-        claimed_by = conn.execute(
-            text("SELECT claimed_by_id FROM gifts WHERE id = 1")
-        ).scalar()
+        claimed_by = conn.execute(text("SELECT claimed_by_id FROM gifts WHERE id = 1")).scalar()
     assert claimed_by == 1
 
 

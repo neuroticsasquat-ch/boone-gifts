@@ -1,16 +1,17 @@
 """Share-to-an-occasion: creation behavior, the share management API, the
 archived-occasion rules, and the claim handling on revoke (NEU-1265)."""
-from datetime import datetime, timezone
+
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
 
 from app.dependencies import create_access_token
 from app.models.claim import Claim
-from app.models.folder import Folder
-from app.models.folder_item import FolderItem
 from app.models.family import Family
 from app.models.family_member import FamilyMember
+from app.models.folder import Folder
+from app.models.folder_item import FolderItem
 from app.models.gift import Gift
 from app.models.gift_list import GiftList
 from app.models.list_occasion_share import ListOccasionShare
@@ -62,10 +63,7 @@ def _mkoccasion(db, family, name, created_by, is_archived=False):
 
 
 def _shared(db, list_id):
-    return {
-        row.occasion_id
-        for row in db.query(ListOccasionShare).filter_by(list_id=list_id).all()
-    }
+    return {row.occasion_id for row in db.query(ListOccasionShare).filter_by(list_id=list_id).all()}
 
 
 @pytest.fixture
@@ -96,15 +94,13 @@ def world(db):
 
 
 def test_create_with_no_occasions_shares_with_none(client, db, world):
-    resp = client.post(
-        "/lists", headers=_auth(world.owner), json={"name": "Private"}
-    )
+    resp = client.post("/lists", headers=_auth(world.owner), json={"name": "Private"})
     assert resp.status_code == 201
     assert _shared(db, resp.json()["id"]) == set()
 
     # And it is invisible in a co-member's shared scope.
     shared = client.get("/lists?filter=shared", headers=_auth(world.rel)).json()
-    assert "Private" not in {l["name"] for l in shared}
+    assert "Private" not in {lst["name"] for lst in shared}
 
 
 def test_create_with_occasion_ids_shares_with_exactly_those(client, db, world):
@@ -117,7 +113,7 @@ def test_create_with_occasion_ids_shares_with_exactly_those(client, db, world):
     assert _shared(db, resp.json()["id"]) == {world.boones_xmas.id}
 
     rel_view = client.get("/lists?filter=shared", headers=_auth(world.rel)).json()
-    entry = next(l for l in rel_view if l["name"] == "Birthday")
+    entry = next(lst for lst in rel_view if lst["name"] == "Birthday")
     assert entry["shared_via"] == [
         {
             "kind": "occasion",
@@ -127,7 +123,7 @@ def test_create_with_occasion_ids_shares_with_exactly_those(client, db, world):
     ]
 
     cousin_view = client.get("/lists?filter=shared", headers=_auth(world.cousin)).json()
-    assert "Birthday" not in {l["name"] for l in cousin_view}
+    assert "Birthday" not in {lst["name"] for lst in cousin_view}
 
 
 def test_create_with_an_occasion_the_caller_is_not_in_returns_403(client, db, world):
@@ -170,10 +166,7 @@ def test_create_with_a_foreign_occasion_writes_no_partial_shares(client, db, wor
         },
     )
     assert resp.status_code == 403
-    assert (
-        db.query(ListOccasionShare).filter_by(occasion_id=world.boones_xmas.id).count()
-        == 0
-    )
+    assert db.query(ListOccasionShare).filter_by(occasion_id=world.boones_xmas.id).count() == 0
 
 
 # ---------------------------------------------------------------------------
@@ -189,15 +182,11 @@ def owned_list(db, world):
     return gift_list
 
 
-def test_get_lists_every_family_with_its_occasions_and_shared_flags(
-    client, db, world, owned_list
-):
+def test_get_lists_every_family_with_its_occasions_and_shared_flags(client, db, world, owned_list):
     db.add(ListOccasionShare(list_id=owned_list.id, occasion_id=world.boones_xmas.id))
     db.flush()
 
-    resp = client.get(
-        f"/lists/{owned_list.id}/families", headers=_auth(world.owner)
-    )
+    resp = client.get(f"/lists/{owned_list.id}/families", headers=_auth(world.owner))
     assert resp.status_code == 200
     assert resp.json() == [
         {
@@ -229,9 +218,7 @@ def test_get_lists_every_family_with_its_occasions_and_shared_flags(
     ]
 
 
-def test_get_lists_a_family_with_no_active_occasion_as_an_empty_list(
-    client, db, world, owned_list
-):
+def test_get_lists_a_family_with_no_active_occasion_as_an_empty_list(client, db, world, owned_list):
     """The "no active occasion" state: the family is still listed, because the
     control renders it disabled with the reason rather than hiding it."""
     workmates = _mkfamily(db, "Work Friends", world.owner)
@@ -290,9 +277,7 @@ def test_get_carries_every_member_id_of_each_family(client, db, world, owned_lis
     }
 
 
-def test_get_carries_just_the_owner_for_a_family_of_one(
-    client, db, world, owned_list
-):
+def test_get_carries_just_the_owner_for_a_family_of_one(client, db, world, owned_list):
     workmates = _mkfamily(db, "Work Friends", world.owner)
 
     resp = client.get(f"/lists/{owned_list.id}/families", headers=_auth(world.owner))
@@ -316,9 +301,7 @@ def test_get_costs_no_query_per_family(client, db, world, owned_list):
             seen.append(statement)
 
         try:
-            resp = client.get(
-                f"/lists/{owned_list.id}/families", headers=_auth(world.owner)
-            )
+            resp = client.get(f"/lists/{owned_list.id}/families", headers=_auth(world.owner))
             assert resp.status_code == 200
             return len(seen), len(resp.json())
         finally:
@@ -382,12 +365,8 @@ def test_put_for_an_occasion_the_owner_is_not_a_member_of_returns_403(
     assert resp.status_code == 403
 
 
-def test_put_for_an_occasion_that_does_not_exist_returns_404(
-    client, world, owned_list
-):
-    resp = client.put(
-        f"/lists/{owned_list.id}/occasions/999999", headers=_auth(world.owner)
-    )
+def test_put_for_an_occasion_that_does_not_exist_returns_404(client, world, owned_list):
+    resp = client.put(f"/lists/{owned_list.id}/occasions/999999", headers=_auth(world.owner))
     assert resp.status_code == 404
 
 
@@ -395,9 +374,7 @@ def test_put_for_an_archived_occasion_returns_409(client, db, world, owned_list)
     """Archiving blocks new shares, and only that (ADR 0002 §5.4)."""
     archived = _mkoccasion(db, world.boones, "Christmas 2025", world.owner, True)
 
-    resp = client.put(
-        f"/lists/{owned_list.id}/occasions/{archived.id}", headers=_auth(world.owner)
-    )
+    resp = client.put(f"/lists/{owned_list.id}/occasions/{archived.id}", headers=_auth(world.owner))
     assert resp.status_code == 409
     assert _shared(db, owned_list.id) == set()
 
@@ -411,9 +388,7 @@ def test_put_on_an_archived_occasion_already_shared_to_stays_a_noop_204(
     db.add(ListOccasionShare(list_id=owned_list.id, occasion_id=archived.id))
     db.flush()
 
-    resp = client.put(
-        f"/lists/{owned_list.id}/occasions/{archived.id}", headers=_auth(world.owner)
-    )
+    resp = client.put(f"/lists/{owned_list.id}/occasions/{archived.id}", headers=_auth(world.owner))
     assert resp.status_code == 204
     assert _shared(db, owned_list.id) == {archived.id}
 
@@ -423,17 +398,13 @@ def test_toggling_on_grants_visibility_immediately(client, db, world, owned_list
         f"/lists/{owned_list.id}/occasions/{world.boones_xmas.id}",
         headers=_auth(world.owner),
     )
-    assert client.get(
-        f"/lists/{owned_list.id}", headers=_auth(world.rel)
-    ).status_code == 200
+    assert client.get(f"/lists/{owned_list.id}", headers=_auth(world.rel)).status_code == 200
 
     client.delete(
         f"/lists/{owned_list.id}/occasions/{world.boones_xmas.id}",
         headers=_auth(world.owner),
     )
-    assert client.get(
-        f"/lists/{owned_list.id}", headers=_auth(world.rel)
-    ).status_code == 403
+    assert client.get(f"/lists/{owned_list.id}", headers=_auth(world.rel)).status_code == 403
 
 
 # ---------------------------------------------------------------------------
@@ -451,11 +422,7 @@ def claimed(db, world, owned_list):
     folder = Folder(name="Rel's Shopping", owner_id=world.rel.id)
     db.add(folder)
     db.flush()
-    db.add(
-        Claim(
-            gift_id=gift.id, user_id=world.rel.id, claimed_at=datetime.now(timezone.utc)
-        )
-    )
+    db.add(Claim(gift_id=gift.id, user_id=world.rel.id, claimed_at=datetime.now(UTC)))
     db.flush()
     db.add(FolderItem(folder_id=folder.id, list_id=owned_list.id))
     db.flush()
@@ -612,7 +579,7 @@ def test_revoke_ignores_the_owners_own_claim(client, db, world, owned_list):
         Claim(
             gift_id=gift.id,
             user_id=world.owner.id,
-            claimed_at=datetime.now(timezone.utc),
+            claimed_at=datetime.now(UTC),
         )
     )
     db.flush()
@@ -664,7 +631,5 @@ def test_deleting_a_list_deletes_its_shares(client, db, world, owned_list):
     db.flush()
     list_id = owned_list.id
 
-    assert client.delete(
-        f"/lists/{list_id}", headers=_auth(world.owner)
-    ).status_code == 204
+    assert client.delete(f"/lists/{list_id}", headers=_auth(world.owner)).status_code == 204
     assert _shared(db, list_id) == set()

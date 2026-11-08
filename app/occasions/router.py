@@ -32,9 +32,9 @@ def list_occasions(
             db, family_id=family_id, actor=user, archived=archived
         )
     except NotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from None
     except ForbiddenError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN) from None
 
 
 @router.post(
@@ -42,17 +42,15 @@ def list_occasions(
     response_model=OccasionCreateRead,
     status_code=status.HTTP_201_CREATED,
 )
-def create_occasion(
-    family_id: int, request: OccasionCreate, user: CurrentUser, db: DbSession
-):
+def create_occasion(family_id: int, request: OccasionCreate, user: CurrentUser, db: DbSession):
     try:
         occasion, has_other_active = occasion_service.create_occasion(
             db, family_id=family_id, actor=user, name=request.name
         )
     except NotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from None
     except ForbiddenError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN) from None
     return OccasionCreateRead(
         **OccasionRead.model_validate(occasion).model_dump(),
         has_other_active=has_other_active,
@@ -94,13 +92,11 @@ def list_archive_prompts(user: CurrentUser, db: DbSession):
 @router.get("/occasions/{occasion_id}", response_model=OccasionDetailRead)
 def get_occasion(occasion_id: int, user: CurrentUser, db: DbSession):
     try:
-        occasion, family = occasion_service.get_occasion(
-            db, occasion_id=occasion_id, actor=user
-        )
+        occasion, family = occasion_service.get_occasion(db, occasion_id=occasion_id, actor=user)
     except NotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from None
     except ForbiddenError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN) from None
     return OccasionDetailRead(
         **OccasionRead.model_validate(occasion).model_dump(),
         family_name=family.name,
@@ -108,9 +104,7 @@ def get_occasion(occasion_id: int, user: CurrentUser, db: DbSession):
 
 
 @router.put("/occasions/{occasion_id}", response_model=OccasionRead)
-def update_occasion(
-    occasion_id: int, request: OccasionUpdate, user: CurrentUser, db: DbSession
-):
+def update_occasion(occasion_id: int, request: OccasionUpdate, user: CurrentUser, db: DbSession):
     try:
         return occasion_service.update_occasion(
             db,
@@ -119,9 +113,9 @@ def update_occasion(
             update_data=request.model_dump(exclude_unset=True),
         )
     except NotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from None
     except ForbiddenError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN) from None
 
 
 # No `response_model`: the service picks the schema per row, and declaring one
@@ -132,9 +126,9 @@ def list_occasion_lists(occasion_id: int, user: CurrentUser, db: DbSession):
     try:
         return occasion_service.list_lists(db, occasion_id=occasion_id, actor=user)
     except NotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from None
     except ForbiddenError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN) from None
 
 
 @router.get("/occasions/{occasion_id}/shopping", response_model=ShoppingPayload)
@@ -142,26 +136,24 @@ def list_occasion_shopping(occasion_id: int, user: CurrentUser, db: DbSession):
     try:
         return occasion_service.list_shopping(db, occasion_id=occasion_id, actor=user)
     except NotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from None
     except ForbiddenError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN) from None
 
 
 # Always the caller's own budget. There is no path here — and none anywhere —
 # that names whose budget to read, which is what makes "no endpoint returns
 # another user's spend" a shape rather than a promise.
 @router.put("/occasions/{occasion_id}/budget", response_model=BudgetRollup)
-def set_occasion_budget(
-    occasion_id: int, request: BudgetWrite, user: CurrentUser, db: DbSession
-):
+def set_occasion_budget(occasion_id: int, request: BudgetWrite, user: CurrentUser, db: DbSession):
     try:
         return occasion_service.set_budget(
             db, occasion_id=occasion_id, actor=user, amount=request.amount
         )
     except NotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from None
     except ForbiddenError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN) from None
 
 
 # 200 with the rollup, not 204: the tab re-renders the same budget line with no
@@ -169,13 +161,11 @@ def set_occasion_budget(
 @router.delete("/occasions/{occasion_id}/budget", response_model=BudgetRollup)
 def clear_occasion_budget(occasion_id: int, user: CurrentUser, db: DbSession):
     try:
-        return occasion_service.clear_budget(
-            db, occasion_id=occasion_id, actor=user
-        )
+        return occasion_service.clear_budget(db, occasion_id=occasion_id, actor=user)
     except NotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from None
     except ForbiddenError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN) from None
 
 
 # The per-giftee split beneath the overall (NEU-1326). Answers with the whole
@@ -203,11 +193,11 @@ def set_occasion_giftee_budget(
             amount=request.amount,
         )
     except BadRequestError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except NotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from None
     except ForbiddenError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN) from None
 
 
 @router.delete(
@@ -222,11 +212,12 @@ def clear_occasion_giftee_budget(
             db, occasion_id=occasion_id, actor=user, giftee_key=giftee_key
         )
     except BadRequestError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except NotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from None
     except ForbiddenError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN) from None
+
 
 # No body: the 30-day snooze is the server's rule, not the client's. 204 rather
 # than the prompt list, because the banner already knows which row it removed
@@ -238,10 +229,8 @@ def clear_occasion_giftee_budget(
 )
 def dismiss_archive_prompt(occasion_id: int, user: CurrentUser, db: DbSession):
     try:
-        occasion_service.dismiss_archive_prompt(
-            db, occasion_id=occasion_id, actor=user
-        )
+        occasion_service.dismiss_archive_prompt(db, occasion_id=occasion_id, actor=user)
     except NotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from None
     except ForbiddenError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN) from None

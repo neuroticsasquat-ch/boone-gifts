@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from sqlalchemy.orm import Session
@@ -44,7 +44,7 @@ def _require_organizer(
 
 
 def _is_expired(expires_at: datetime) -> bool:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if expires_at.tzinfo is None:
         now = now.replace(tzinfo=None)
     return expires_at < now
@@ -75,9 +75,7 @@ def create_invite(
 
     existing_user = repo.find_user_by_email(db, email)
     if existing_user is not None:
-        member = families_repo.get_family_member(
-            db, family_id=family_id, user_id=existing_user.id
-        )
+        member = families_repo.get_family_member(db, family_id=family_id, user_id=existing_user.id)
         if member is not None:
             raise ConflictError("Already a member of this family.")
 
@@ -93,7 +91,7 @@ def create_invite(
         email=email,
         role=role,
         token=str(uuid4()),
-        expires_at=datetime.now(timezone.utc) + timedelta(days=INVITE_EXPIRY_DAYS),
+        expires_at=datetime.now(UTC) + timedelta(days=INVITE_EXPIRY_DAYS),
         invited_by_id=actor.id,
     )
 
@@ -146,7 +144,7 @@ def decline_invite(db: Session, token: str, actor: User) -> None:
         raise NotFoundError("Invite not found.")
     _require_recipient(invite, actor)
     _require_pending(invite)
-    invite.declined_at = datetime.now(timezone.utc)
+    invite.declined_at = datetime.now(UTC)
     db.flush()
 
 
@@ -174,14 +172,16 @@ def accept_invite(db: Session, token: str, actor: User) -> dict:
         raise NotFoundError("Invite not found.")
     _require_recipient(invite, actor)
     _require_pending(invite)
-    if families_repo.get_family_member(
-        db, family_id=invite.family_id, user_id=actor.id
-    ) is not None:
+    if (
+        families_repo.get_family_member(db, family_id=invite.family_id, user_id=actor.id)
+        is not None
+    ):
         raise ConflictError("Already a member of this family.")
     families_repo.create_family_member(
         db, family_id=invite.family_id, user_id=actor.id, role=invite.role
     )
-    invite.accepted_at = datetime.now(timezone.utc)
+    invite.accepted_at = datetime.now(UTC)
     db.flush()
     family = families_repo.get_family(db, invite.family_id)
+    assert family is not None  # the invite's family_id is a foreign key
     return {"family": {"id": family.id, "name": family.name}, "role": invite.role}

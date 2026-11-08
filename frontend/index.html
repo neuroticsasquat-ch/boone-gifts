@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Boone Gifts</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      new MutationObserver(function(mutations) {
+        mutations.forEach(function(m) {
+          m.addedNodes.forEach(function(n) {
+            if (n.querySelectorAll) {
+              n.querySelectorAll('input,textarea').forEach(function(el) {
+                el.setAttribute('autocorrect', 'off');
+                el.setAttribute('autocapitalize', 'off');
+                el.setAttribute('spellcheck', 'false');
+              });
+            }
+          });
+        });
+      }).observe(document.getElementById('root'), { childList: true, subtree: true });
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

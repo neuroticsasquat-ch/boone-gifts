@@ -1,5 +1,5 @@
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from app.models.claim import Claim
@@ -16,7 +16,7 @@ def _claimed_gift(db, gift_list, name, claimer, purchased_at=None, amount_paid=N
         Claim(
             gift_id=gift.id,
             user_id=claimer.id,
-            claimed_at=datetime.now(timezone.utc),
+            claimed_at=datetime.now(UTC),
             purchased_at=purchased_at,
             amount_paid=amount_paid,
         )
@@ -204,10 +204,8 @@ def test_unclaim_gift_by_other_user(
     assert response.status_code == 403
 
 
-def test_get_list_hides_claims_from_owner(
-    client, member_headers, admin_user, shared_list, db
-):
-    gift = _claimed_gift(db, shared_list, "Secret Claim", admin_user)
+def test_get_list_hides_claims_from_owner(client, member_headers, admin_user, shared_list, db):
+    _claimed_gift(db, shared_list, "Secret Claim", admin_user)
 
     response = client.get(f"/lists/{shared_list.id}", headers=member_headers)
     assert response.status_code == 200
@@ -216,10 +214,8 @@ def test_get_list_hides_claims_from_owner(
     assert "claimed_at" not in gift_data
 
 
-def test_get_list_shows_claims_to_shared_user(
-    client, admin_user, admin_headers, shared_list, db
-):
-    gift = _claimed_gift(db, shared_list, "Visible Claim", admin_user)
+def test_get_list_shows_claims_to_shared_user(client, admin_user, admin_headers, shared_list, db):
+    _claimed_gift(db, shared_list, "Visible Claim", admin_user)
 
     response = client.get(f"/lists/{shared_list.id}", headers=admin_headers)
     assert response.status_code == 200
@@ -240,7 +236,7 @@ def test_get_list_with_a_recipient_hides_claims_from_the_owner(
     client, member_headers, admin_user, shared_list, db
 ):
     shared_list.recipient_name = "Beth"
-    gift = _claimed_gift(db, shared_list, "For Beth", admin_user)
+    _claimed_gift(db, shared_list, "For Beth", admin_user)
     assert shared_list.kept_for_absent_person is True
 
     response = client.get(f"/lists/{shared_list.id}", headers=member_headers)
@@ -251,9 +247,7 @@ def test_get_list_with_a_recipient_hides_claims_from_the_owner(
     assert "claimed_at" not in data["gifts"][0]
 
 
-def test_owner_cannot_claim_on_a_list_kept_for_a_recipient(
-    client, member_headers, sample_list, db
-):
+def test_owner_cannot_claim_on_a_list_kept_for_a_recipient(client, member_headers, sample_list, db):
     sample_list.recipient_name = "Beth"
     gift = Gift(list_id=sample_list.id, name="For Beth")
     db.add(gift)
@@ -273,32 +267,53 @@ def test_concurrent_claims_exactly_one_wins():
     Standalone test (no fixtures) to avoid SQLite locking conflicts from
     the transactional db fixture. Uses test_engine/TestSession directly.
     """
-    from app.models.gift_list import GiftList
-    from app.models.list_share import ListShare
-    from app.models.connection import Connection
-    from app.models.user import User
-    from app.dependencies import create_access_token, get_db
-    from app.main import app
     from fastapi.testclient import TestClient
     from sqlalchemy import text
-    from tests.integration.conftest import test_engine, TestSession
+
+    from app.dependencies import create_access_token, get_db
+    from app.main import app
+    from app.models.connection import Connection
+    from app.models.gift_list import GiftList
+    from app.models.list_share import ListShare
+    from app.models.user import User
+    from tests.integration.conftest import TestSession, test_engine
 
     def _cleanup(conn):
-        conn.execute(text("DELETE FROM claims WHERE gift_id IN "
-                          "(SELECT id FROM gifts WHERE list_id IN "
-                          "(SELECT id FROM lists WHERE owner_id IN "
-                          "(SELECT id FROM users WHERE email LIKE 'race_%@test.com')))"))
-        conn.execute(text("DELETE FROM gifts WHERE list_id IN "
-                          "(SELECT id FROM lists WHERE owner_id IN "
-                          "(SELECT id FROM users WHERE email LIKE 'race_%@test.com'))"))
-        conn.execute(text("DELETE FROM list_shares WHERE list_id IN "
-                          "(SELECT id FROM lists WHERE owner_id IN "
-                          "(SELECT id FROM users WHERE email LIKE 'race_%@test.com'))"))
-        conn.execute(text("DELETE FROM lists WHERE owner_id IN "
-                          "(SELECT id FROM users WHERE email LIKE 'race_%@test.com')"))
-        conn.execute(text("DELETE FROM connections WHERE "
-                          "requester_id IN (SELECT id FROM users WHERE email LIKE 'race_%@test.com') "
-                          "OR addressee_id IN (SELECT id FROM users WHERE email LIKE 'race_%@test.com')"))
+        conn.execute(
+            text(
+                "DELETE FROM claims WHERE gift_id IN "
+                "(SELECT id FROM gifts WHERE list_id IN "
+                "(SELECT id FROM lists WHERE owner_id IN "
+                "(SELECT id FROM users WHERE email LIKE 'race_%@test.com')))"
+            )
+        )
+        conn.execute(
+            text(
+                "DELETE FROM gifts WHERE list_id IN "
+                "(SELECT id FROM lists WHERE owner_id IN "
+                "(SELECT id FROM users WHERE email LIKE 'race_%@test.com'))"
+            )
+        )
+        conn.execute(
+            text(
+                "DELETE FROM list_shares WHERE list_id IN "
+                "(SELECT id FROM lists WHERE owner_id IN "
+                "(SELECT id FROM users WHERE email LIKE 'race_%@test.com'))"
+            )
+        )
+        conn.execute(
+            text(
+                "DELETE FROM lists WHERE owner_id IN "
+                "(SELECT id FROM users WHERE email LIKE 'race_%@test.com')"
+            )
+        )
+        conn.execute(
+            text(
+                "DELETE FROM connections WHERE "
+                "requester_id IN (SELECT id FROM users WHERE email LIKE 'race_%@test.com') "
+                "OR addressee_id IN (SELECT id FROM users WHERE email LIKE 'race_%@test.com')"
+            )
+        )
         conn.execute(text("DELETE FROM users WHERE email LIKE 'race_%@test.com'"))
         conn.commit()
 
@@ -307,11 +322,17 @@ def test_concurrent_claims_exactly_one_wins():
 
     setup_db = TestSession()
     try:
-        owner = User(email="race_owner@test.com", name="Race Owner", role="member", password_hash="x")
+        owner = User(
+            email="race_owner@test.com", name="Race Owner", role="member", password_hash="x"
+        )
         owner.set_password("pass")
-        claimer1 = User(email="race_claimer1@test.com", name="Claimer One", role="member", password_hash="x")
+        claimer1 = User(
+            email="race_claimer1@test.com", name="Claimer One", role="member", password_hash="x"
+        )
         claimer1.set_password("pass")
-        claimer2 = User(email="race_claimer2@test.com", name="Claimer Two", role="member", password_hash="x")
+        claimer2 = User(
+            email="race_claimer2@test.com", name="Claimer Two", role="member", password_hash="x"
+        )
         claimer2.set_password("pass")
         setup_db.add_all([owner, claimer1, claimer2])
         setup_db.flush()
@@ -414,6 +435,7 @@ def test_unclaim_gift_on_archived_list(client, admin_user, admin_headers, shared
 
 # Purchase endpoint tests
 
+
 def test_purchase_gift(client, admin_user, admin_headers, shared_list, db):
     gift = _claimed_gift(db, shared_list, "Purchased Gift", admin_user)
 
@@ -429,7 +451,7 @@ def test_purchase_gift(client, admin_user, admin_headers, shared_list, db):
 
 def test_unpurchase_gift(client, admin_user, admin_headers, shared_list, db):
     gift = _claimed_gift(
-        db, shared_list, "Was Purchased", admin_user, purchased_at=datetime.now(timezone.utc)
+        db, shared_list, "Was Purchased", admin_user, purchased_at=datetime.now(UTC)
     )
 
     response = client.delete(
@@ -441,9 +463,7 @@ def test_unpurchase_gift(client, admin_user, admin_headers, shared_list, db):
     assert data["purchased_at"] is None
 
 
-def test_purchase_gift_non_claimer_403(
-    client, admin_user, member_headers, shared_list, db
-):
+def test_purchase_gift_non_claimer_403(client, admin_user, member_headers, shared_list, db):
     gift = _claimed_gift(db, shared_list, "Not Your Claim", admin_user)
 
     response = client.post(
@@ -453,11 +473,9 @@ def test_purchase_gift_non_claimer_403(
     assert response.status_code == 403
 
 
-def test_unpurchase_gift_non_claimer_403(
-    client, admin_user, member_headers, shared_list, db
-):
+def test_unpurchase_gift_non_claimer_403(client, admin_user, member_headers, shared_list, db):
     gift = _claimed_gift(
-        db, shared_list, "Not Your Purchase", admin_user, purchased_at=datetime.now(timezone.utc)
+        db, shared_list, "Not Your Purchase", admin_user, purchased_at=datetime.now(UTC)
     )
 
     response = client.delete(
@@ -469,7 +487,11 @@ def test_unpurchase_gift_non_claimer_403(
 
 def test_unclaim_clears_purchased_at(client, admin_user, admin_headers, shared_list, db):
     gift = _claimed_gift(
-        db, shared_list, "Purchase Then Unclaim", admin_user, purchased_at=datetime.now(timezone.utc)
+        db,
+        shared_list,
+        "Purchase Then Unclaim",
+        admin_user,
+        purchased_at=datetime.now(UTC),
     )
 
     response = client.delete(
@@ -493,9 +515,7 @@ def test_purchase_gift_not_found(client, admin_headers, shared_list):
 # --- what the claim cost (NEU-1268) ---
 
 
-def test_purchase_records_what_it_cost(
-    client, admin_user, admin_headers, shared_list, db
-):
+def test_purchase_records_what_it_cost(client, admin_user, admin_headers, shared_list, db):
     gift = _claimed_gift(db, shared_list, "Skillet", admin_user)
 
     response = client.post(
@@ -533,7 +553,7 @@ def test_unpurchase_leaves_the_amount_for_re_ticking(
         shared_list,
         "Bought Then Unticked",
         admin_user,
-        purchased_at=datetime.now(timezone.utc),
+        purchased_at=datetime.now(UTC),
         amount_paid=Decimal("31.50"),
     )
 
@@ -547,9 +567,7 @@ def test_unpurchase_leaves_the_amount_for_re_ticking(
     assert data["amount_paid"] == "31.50"
 
 
-def test_unclaiming_takes_the_amount_with_it(
-    client, admin_user, admin_headers, shared_list, db
-):
+def test_unclaiming_takes_the_amount_with_it(client, admin_user, admin_headers, shared_list, db):
     """Unclaim deletes the row, so there is no explicit purchase reset to
     forget — and no orphaned spend left behind either (ADR 0003)."""
     gift = _claimed_gift(
@@ -557,7 +575,7 @@ def test_unclaiming_takes_the_amount_with_it(
         shared_list,
         "Handed Back",
         admin_user,
-        purchased_at=datetime.now(timezone.utc),
+        purchased_at=datetime.now(UTC),
         amount_paid=Decimal("31.50"),
     )
 

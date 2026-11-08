@@ -8,11 +8,7 @@ from app.database import Base
 
 class FolderItem(Base):
     __tablename__ = "folder_items"
-    __table_args__ = (
-        UniqueConstraint(
-            "folder_id", "list_id", name="uq_folder_items_folder_list"
-        ),
-    )
+    __table_args__ = (UniqueConstraint("folder_id", "list_id", name="uq_folder_items_folder_list"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     folder_id: Mapped[int] = mapped_column(ForeignKey("folders.id"))

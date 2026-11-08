@@ -1,3 +1,5 @@
+from datetime import UTC
+
 from app.models.connection import Connection
 
 
@@ -166,8 +168,8 @@ def test_delete_connection(client, member_headers, connection):
 
 
 def test_delete_connection_not_party(client, member_user, admin_user, db):
-    from app.models.user import User
     from app.dependencies import create_access_token
+    from app.models.user import User
 
     other = User(email="other2@test.com", name="Other", password_hash="h")
     other.set_password("other123")
@@ -186,8 +188,9 @@ def test_delete_connection_not_party(client, member_user, admin_user, db):
     other_headers = {"Authorization": f"Bearer {other_token}"}
 
     from fastapi.testclient import TestClient
-    from app.main import app
+
     from app.dependencies import get_db
+    from app.main import app
 
     def override_get_db():
         yield db
@@ -205,9 +208,7 @@ def test_delete_connection_not_found(client, member_headers):
     assert response.status_code == 404
 
 
-def test_disconnect_revokes_shares(
-    client, member_user, member_headers, admin_user, connection, db
-):
+def test_disconnect_revokes_shares(client, member_user, member_headers, admin_user, connection, db):
     from app.models.gift_list import GiftList
     from app.models.list_share import ListShare
 
@@ -236,14 +237,12 @@ def test_disconnect_revokes_shares(
     assert remaining is None
 
 
-def test_disconnect_unclaims_gifts(
-    client, member_user, member_headers, admin_user, connection, db
-):
-    from datetime import datetime, timezone
+def test_disconnect_unclaims_gifts(client, member_user, member_headers, admin_user, connection, db):
+    from datetime import datetime
 
     from app.models.claim import Claim
-    from app.models.gift_list import GiftList
     from app.models.gift import Gift
+    from app.models.gift_list import GiftList
     from app.models.list_share import ListShare
 
     gift_list = GiftList(name="Claimed List", owner_id=member_user.id)
@@ -257,11 +256,7 @@ def test_disconnect_unclaims_gifts(
     gift = Gift(list_id=gift_list.id, name="Claimed Gift")
     db.add(gift)
     db.flush()
-    db.add(
-        Claim(
-            gift_id=gift.id, user_id=admin_user.id, claimed_at=datetime.now(timezone.utc)
-        )
-    )
+    db.add(Claim(gift_id=gift.id, user_id=admin_user.id, claimed_at=datetime.now(UTC)))
     db.flush()
 
     response = client.delete(
@@ -278,10 +273,10 @@ def test_disconnect_unclaims_gifts(
 def test_disconnect_removes_folder_items(
     client, member_user, member_headers, admin_user, connection, db
 ):
-    from app.models.gift_list import GiftList
-    from app.models.list_share import ListShare
     from app.models.folder import Folder
     from app.models.folder_item import FolderItem
+    from app.models.gift_list import GiftList
+    from app.models.list_share import ListShare
 
     admin_list = GiftList(name="Admin's List", owner_id=admin_user.id)
     db.add(admin_list)
@@ -291,15 +286,11 @@ def test_disconnect_removes_folder_items(
     db.add(share)
     db.flush()
 
-    member_folder = Folder(
-        name="Member Folder", owner_id=member_user.id
-    )
+    member_folder = Folder(name="Member Folder", owner_id=member_user.id)
     db.add(member_folder)
     db.flush()
 
-    item = FolderItem(
-        folder_id=member_folder.id, list_id=admin_list.id
-    )
+    item = FolderItem(folder_id=member_folder.id, list_id=admin_list.id)
     db.add(item)
     db.flush()
 

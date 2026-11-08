@@ -15,9 +15,7 @@ from app.services.exceptions import (
 )
 
 
-def build_connection_response(
-    db: Session, connection: Connection, current_user_id: int
-) -> dict:
+def build_connection_response(db: Session, connection: Connection, current_user_id: int) -> dict:
     other_id = (
         connection.addressee_id
         if connection.requester_id == current_user_id

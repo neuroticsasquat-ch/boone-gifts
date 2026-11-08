@@ -1,6 +1,6 @@
-import sqlalchemy
-
 import pytest
+import sqlalchemy
+import sqlalchemy.exc
 
 from app.models.connection import Connection
 from app.models.user import User

@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -31,9 +31,7 @@ def visible():
 def no_routes():
     """`to_summaries` asks the lists repository for share routes on every
     list-row response. Tests about anything else stub it away."""
-    with patch(
-        "app.lists.service.repo.get_share_routes", return_value={}
-    ) as mock:
+    with patch("app.lists.service.repo.get_share_routes", return_value={}) as mock:
         yield mock
 
 
@@ -49,8 +47,8 @@ def _make_folder(
     col.description = description
     col.owner_id = owner_id
     col.items = []
-    col.created_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
-    col.updated_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    col.created_at = datetime(2026, 1, 1, tzinfo=UTC)
+    col.updated_at = datetime(2026, 1, 1, tzinfo=UTC)
     return col
 
 
@@ -73,9 +71,7 @@ def _make_gift_list(id: int = 10, owner_id: int = 1) -> MagicMock:
     return gl
 
 
-def _make_folder_item(
-    id: int = 1, folder_id: int = 1, list_id: int = 10
-) -> MagicMock:
+def _make_folder_item(id: int = 1, folder_id: int = 1, list_id: int = 10) -> MagicMock:
     item = MagicMock(spec=FolderItem)
     item.id = id
     item.folder_id = folder_id

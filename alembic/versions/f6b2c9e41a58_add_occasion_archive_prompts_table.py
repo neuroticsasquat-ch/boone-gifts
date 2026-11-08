@@ -5,17 +5,18 @@ Revises: c1f9a7d4e260
 Create Date: 2026-09-10 06:00:00.000000
 
 """
-from typing import Sequence, Union
 
-from alembic import op
+from collections.abc import Sequence
+
 import sqlalchemy as sa
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = 'f6b2c9e41a58'
-down_revision: Union[str, Sequence[str], None] = 'c1f9a7d4e260'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+revision: str = "f6b2c9e41a58"
+down_revision: str | Sequence[str] | None = "c1f9a7d4e260"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -40,16 +41,23 @@ def upgrade() -> None:
     can never silence another eligible member's.
     """
     op.create_table(
-        'occasion_archive_prompts',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('user_id', sa.Integer(), nullable=False),
-        sa.Column('occasion_id', sa.Integer(), nullable=False),
-        sa.Column('dismissed_until', sa.DateTime(), nullable=False),
-        sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-        sa.ForeignKeyConstraint(['occasion_id'], ['occasions.id'], ),
-        sa.PrimaryKeyConstraint('id'),
-        sa.UniqueConstraint('user_id', 'occasion_id',
-                            name='uq_occasion_archive_prompts_user_occasion'),
+        "occasion_archive_prompts",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("user_id", sa.Integer(), nullable=False),
+        sa.Column("occasion_id", sa.Integer(), nullable=False),
+        sa.Column("dismissed_until", sa.DateTime(), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["user_id"],
+            ["users.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["occasion_id"],
+            ["occasions.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint(
+            "user_id", "occasion_id", name="uq_occasion_archive_prompts_user_occasion"
+        ),
     )
 
 
@@ -61,4 +69,4 @@ def downgrade() -> None:
     the safe direction to fail in: the user is asked again rather than silenced
     by a row nobody can see.
     """
-    op.drop_table('occasion_archive_prompts')
+    op.drop_table("occasion_archive_prompts")

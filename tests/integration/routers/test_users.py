@@ -56,16 +56,12 @@ def test_update_user_as_member(client, admin_user, member_headers):
 
 
 def test_delete_user_as_admin(client, member_user, admin_headers):
-    response = client.delete(
-        f"/users/{member_user.id}", headers=admin_headers
-    )
+    response = client.delete(f"/users/{member_user.id}", headers=admin_headers)
     assert response.status_code == 204
 
 
 def test_delete_user_as_member(client, admin_user, member_headers):
-    response = client.delete(
-        f"/users/{admin_user.id}", headers=member_headers
-    )
+    response = client.delete(f"/users/{admin_user.id}", headers=member_headers)
     assert response.status_code == 403
 
 
@@ -81,18 +77,24 @@ def test_deactivate_user_blocks_login(client, admin_user, member_user, admin_hea
     assert response.status_code == 200
     assert response.json()["is_active"] is False
 
-    login = client.post("/auth/login", json={
-        "email": "member@test.com",
-        "password": "member123",
-    })
+    login = client.post(
+        "/auth/login",
+        json={
+            "email": "member@test.com",
+            "password": "member123",
+        },
+    )
     assert login.status_code == 401
 
 
 def test_deactivate_user_blocks_refresh(client, admin_user, member_user, admin_headers):
-    login = client.post("/auth/login", json={
-        "email": "member@test.com",
-        "password": "member123",
-    })
+    login = client.post(
+        "/auth/login",
+        json={
+            "email": "member@test.com",
+            "password": "member123",
+        },
+    )
     assert login.status_code == 200
     refresh_cookie = login.cookies[COOKIE_NAME]
 
@@ -123,10 +125,13 @@ def test_reactivate_user_restores_login(client, admin_user, member_user, admin_h
     )
     assert r.status_code == 200
 
-    login = client.post("/auth/login", json={
-        "email": "member@test.com",
-        "password": "member123",
-    })
+    login = client.post(
+        "/auth/login",
+        json={
+            "email": "member@test.com",
+            "password": "member123",
+        },
+    )
     assert login.status_code == 200
 
 

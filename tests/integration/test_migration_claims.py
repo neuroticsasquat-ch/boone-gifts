@@ -11,6 +11,7 @@ import shutil
 
 import pytest
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import IntegrityError
 
 from tests.integration.migration_support import alembic as _alembic
 from tests.integration.migration_support import build_template
@@ -28,10 +29,7 @@ def _seed(conn):
         )
     )
     conn.execute(
-        text(
-            "INSERT INTO lists (id, name, owner_id, is_archived) "
-            "VALUES (1, 'A list', 1, 0)"
-        )
+        text("INSERT INTO lists (id, name, owner_id, is_archived) VALUES (1, 'A list', 1, 0)")
     )
     conn.execute(
         text(
@@ -85,9 +83,7 @@ def test_upgrade_backfills_every_claim(seeded):
     _alembic("upgrade", REVISION, db_path)
 
     with engine.connect() as conn:
-        rows = conn.execute(
-            text("SELECT gift_id, user_id FROM claims ORDER BY gift_id")
-        ).all()
+        rows = conn.execute(text("SELECT gift_id, user_id FROM claims ORDER BY gift_id")).all()
     # The unclaimed gift gets no row; the two claimed ones keep their claimer.
     assert rows == [(1, 2), (2, 2)]
 
@@ -122,14 +118,13 @@ def test_one_claimer_per_gift_is_enforced(seeded):
     engine, db_path = seeded
     _alembic("upgrade", REVISION, db_path)
 
-    with pytest.raises(Exception):
-        with engine.begin() as conn:
-            conn.execute(
-                text(
-                    "INSERT INTO claims (gift_id, user_id, claimed_at) "
-                    "VALUES (1, 1, '2026-04-05 06:07:08')"
-                )
+    with pytest.raises(IntegrityError), engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO claims (gift_id, user_id, claimed_at) "
+                "VALUES (1, 1, '2026-04-05 06:07:08')"
             )
+        )
 
 
 def test_downgrade_puts_the_claims_back_on_the_gift_row(seeded):
@@ -139,10 +134,7 @@ def test_downgrade_puts_the_claims_back_on_the_gift_row(seeded):
 
     with engine.connect() as conn:
         rows = conn.execute(
-            text(
-                "SELECT claimed_by_id, claimed_at, purchased_at FROM gifts "
-                "ORDER BY id"
-            )
+            text("SELECT claimed_by_id, claimed_at, purchased_at FROM gifts ORDER BY id")
         ).all()
     assert rows == [
         (2, "2026-01-02 03:04:05", None),

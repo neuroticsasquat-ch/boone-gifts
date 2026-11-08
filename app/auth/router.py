@@ -57,7 +57,7 @@ def login(request: Request, body: LoginRequest, response: Response, db: DbSessio
     try:
         tokens = auth_service.login(db, body.email, body.password)
     except UnauthorizedError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED) from None
 
     set_refresh_cookie(response, tokens["refresh_token"])
     return AccessTokenResponse(access_token=tokens["access_token"])
@@ -71,21 +71,19 @@ def invite_info(token: str, db: DbSession):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
-        )
+        ) from e
 
 
 @router.post("/register", response_model=AccessTokenResponse)
 @limiter.limit(register_limit)
 def register(request: Request, body: RegisterRequest, response: Response, db: DbSession):
     try:
-        tokens = auth_service.register(
-            db, body.token, body.name, body.password, body.email
-        )
+        tokens = auth_service.register(db, body.token, body.name, body.password, body.email)
     except BadRequestError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
-        )
+        ) from e
 
     set_refresh_cookie(response, tokens["refresh_token"])
     return AccessTokenResponse(access_token=tokens["access_token"])
@@ -105,7 +103,7 @@ def refresh(
     try:
         tokens = auth_service.refresh(db, boone_refresh_token)
     except UnauthorizedError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED) from None
 
     set_refresh_cookie(response, tokens["refresh_token"])
     return AccessTokenResponse(access_token=tokens["access_token"])
@@ -128,7 +126,7 @@ def reset_password(body: ResetPasswordRequest, db: DbSession):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
-        )
+        ) from e
     return GenericMessageResponse(message="Password updated.")
 
 
@@ -140,14 +138,12 @@ def change_password(
     db: DbSession,
 ):
     try:
-        tokens = auth_service.change_password(
-            db, user, body.current_password, body.new_password
-        )
+        tokens = auth_service.change_password(db, user, body.current_password, body.new_password)
     except BadRequestError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
-        )
+        ) from e
 
     set_refresh_cookie(response, tokens["refresh_token"])
     return AccessTokenResponse(access_token=tokens["access_token"])

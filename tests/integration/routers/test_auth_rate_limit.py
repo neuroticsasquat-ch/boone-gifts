@@ -65,6 +65,7 @@ def test_rate_limit_disabled_when_setting_off(client, monkeypatch):
     monkeypatch.setattr(settings, "rate_limit_enabled", False)
 
     from app.main import app
+
     monkeypatch.setattr(app.state.limiter, "enabled", False)
 
     payload = {"email": "nobody@test.com", "password": "x"}

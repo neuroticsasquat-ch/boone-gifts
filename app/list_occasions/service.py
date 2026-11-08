@@ -82,9 +82,7 @@ def list_share_targets(db: Session, gift_list: GiftList) -> list[dict]:
     ]
 
 
-def create_share(
-    db: Session, gift_list: GiftList, occasion_id: int, user: User
-) -> None:
+def create_share(db: Session, gift_list: GiftList, occasion_id: int, user: User) -> None:
     """Share a list to an occasion. Idempotent.
 
     Sharing to an archived occasion is refused — archiving blocks new shares,
@@ -120,9 +118,7 @@ def revoke_share(
     if share is None:
         return
 
-    losing_ids = repo.get_member_ids_losing_access(
-        db, gift_list.id, occasion, gift_list.owner_id
-    )
+    losing_ids = repo.get_member_ids_losing_access(db, gift_list.id, occasion, gift_list.owner_id)
     if claims is None and claims_repo.any_claims_by_users(db, gift_list.id, losing_ids):
         raise ConflictError(CLAIMED_MESSAGE)
 

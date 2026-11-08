@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import DateTime, Row, delete, func, or_, select
 from sqlalchemy.orm import Session
@@ -11,12 +11,8 @@ from app.models.occasion import Occasion
 from app.models.occasion_archive_prompt import OccasionArchivePrompt
 
 
-def create_occasion(
-    db: Session, family_id: int, name: str, created_by_id: int
-) -> Occasion:
-    occasion = Occasion(
-        family_id=family_id, name=name, created_by_id=created_by_id
-    )
+def create_occasion(db: Session, family_id: int, name: str, created_by_id: int) -> Occasion:
+    occasion = Occasion(family_id=family_id, name=name, created_by_id=created_by_id)
     db.add(occasion)
     db.flush()
     return occasion
@@ -26,9 +22,7 @@ def get_occasion(db: Session, occasion_id: int) -> Occasion | None:
     return db.get(Occasion, occasion_id)
 
 
-def get_occasions_for_family(
-    db: Session, family_id: int, archived: bool
-) -> list[Occasion]:
+def get_occasions_for_family(db: Session, family_id: int, archived: bool) -> list[Occasion]:
     return list(
         db.execute(
             select(Occasion)
@@ -68,9 +62,7 @@ def get_occasion_ids_for_family(db: Session, family_id: int) -> list[int]:
     """Every occasion of one family, archived included — the callers that use
     this are unwinding the family, and archiving is not deletion."""
     return list(
-        db.execute(
-            select(Occasion.id).where(Occasion.family_id == family_id)
-        ).scalars().all()
+        db.execute(select(Occasion.id).where(Occasion.family_id == family_id)).scalars().all()
     )
 
 
@@ -187,9 +179,7 @@ def last_activity_at_expr(user_id: int):
     )
 
 
-def get_occasion_summaries(
-    db: Session, user_id: int, archived: bool
-) -> list[Row]:
+def get_occasion_summaries(db: Session, user_id: int, archived: bool) -> list[Row]:
     """Every occasion in every family this user belongs to, with its counts.
 
     Scoped by the caller's memberships through the join, so an occasion they
@@ -268,9 +258,7 @@ def get_occasion_summaries(
     )
 
 
-def get_archive_prompts(
-    db: Session, user_id: int, idle_days: int
-) -> list[Row]:
+def get_archive_prompts(db: Session, user_id: int, idle_days: int) -> list[Row]:
     """Every occasion this caller should be asked to archive.
 
     Across every family they belong to, with no parameter of any kind: like
@@ -307,7 +295,7 @@ def get_archive_prompts(
     the next reader to assume it is `last_activity_at`, which it deliberately is
     not.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     idle_cutoff = now - timedelta(days=idle_days)
     live_dismissal = (
         select(OccasionArchivePrompt.id)
@@ -383,18 +371,12 @@ def delete_prompts_for_occasions(db: Session, occasion_ids: list[int]) -> None:
     if not occasion_ids:
         return
     db.execute(
-        delete(OccasionArchivePrompt).where(
-            OccasionArchivePrompt.occasion_id.in_(occasion_ids)
-        )
+        delete(OccasionArchivePrompt).where(OccasionArchivePrompt.occasion_id.in_(occasion_ids))
     )
     db.flush()
 
 
 def delete_prompts_by_user(db: Session, user_id: int) -> None:
     """Every prompt row this user has dismissed, anywhere."""
-    db.execute(
-        delete(OccasionArchivePrompt).where(
-            OccasionArchivePrompt.user_id == user_id
-        )
-    )
+    db.execute(delete(OccasionArchivePrompt).where(OccasionArchivePrompt.user_id == user_id))
     db.flush()

@@ -1,3 +1,4 @@
+from datetime import UTC
 from types import SimpleNamespace
 
 import pytest
@@ -76,8 +77,17 @@ def family_world(db):
     db.flush()
 
     return SimpleNamespace(
-        u=u, p=p, q=q, f1=f1, f2=f2, o1=o1, o2=o2,
-        l_u=l_u, l_p=l_p, l_p_arch=l_p_arch, l_q=l_q,
+        u=u,
+        p=p,
+        q=q,
+        f1=f1,
+        f2=f2,
+        o1=o1,
+        o2=o2,
+        l_u=l_u,
+        l_p=l_p,
+        l_p_arch=l_p_arch,
+        l_q=l_q,
     )
 
 
@@ -112,21 +122,21 @@ def test_create_list_unauthenticated(client):
 def test_list_lists_owned(client, member_user, member_headers, sample_list):
     response = client.get("/lists", headers=member_headers)
     assert response.status_code == 200
-    names = [l["name"] for l in response.json()]
+    names = [lst["name"] for lst in response.json()]
     assert "Member's Wishlist" in names
 
 
 def test_list_lists_shared(client, admin_user, admin_headers, shared_list):
     response = client.get("/lists", headers=admin_headers)
     assert response.status_code == 200
-    names = [l["name"] for l in response.json()]
+    names = [lst["name"] for lst in response.json()]
     assert "Member's Wishlist" in names
 
 
 def test_list_lists_excludes_unshared(client, admin_user, admin_headers, sample_list):
     response = client.get("/lists", headers=admin_headers)
     assert response.status_code == 200
-    names = [l["name"] for l in response.json()]
+    names = [lst["name"] for lst in response.json()]
     assert "Member's Wishlist" not in names
 
 
@@ -242,21 +252,20 @@ def test_filter_shared_returns_both_paths(client, family_world):
     w = family_world
     resp = client.get("/lists?filter=shared", headers=_auth(w.u))
     assert resp.status_code == 200
-    names = {l["name"] for l in resp.json()}
+    names = {lst["name"] for lst in resp.json()}
     assert names == {"P's List", "Q's List"}
     assert "U's List" not in names  # own list excluded
     assert "P's Archived" not in names  # archived excluded by default
 
 
-def test_filter_shared_reports_the_occasion_route_with_its_family(
-    client, family_world
-):
+def test_filter_shared_reports_the_occasion_route_with_its_family(client, family_world):
     """The occasion arm carries its family alongside it — the viewer needs both
     to make sense of the route."""
     w = family_world
     row = next(
-        l for l in client.get("/lists?filter=shared", headers=_auth(w.u)).json()
-        if l["name"] == "Q's List"
+        lst
+        for lst in client.get("/lists?filter=shared", headers=_auth(w.u)).json()
+        if lst["name"] == "Q's List"
     )
     assert row["shared_via"] == [
         {
@@ -267,23 +276,20 @@ def test_filter_shared_reports_the_occasion_route_with_its_family(
     ]
 
 
-def test_filter_shared_returns_one_row_however_many_routes_it_has(
-    client, family_world
-):
+def test_filter_shared_returns_one_row_however_many_routes_it_has(client, family_world):
     """L_p is shared directly with U *and* to two occasions U can reach. The row
     is still one row — it is the routes that are plural, not the list."""
     w = family_world
     rows = [
-        l for l in client.get("/lists?filter=shared", headers=_auth(w.u)).json()
-        if l["name"] == "P's List"
+        lst
+        for lst in client.get("/lists?filter=shared", headers=_auth(w.u)).json()
+        if lst["name"] == "P's List"
     ]
     assert len(rows) == 1
     assert len(rows[0]["shared_via"]) == 3
 
 
-def test_filter_shared_reports_both_occasions_each_with_its_own_family(
-    client, family_world, db
-):
+def test_filter_shared_reports_both_occasions_each_with_its_own_family(client, family_world, db):
     """P's List is shared to an occasion in each of U's families. Both routes
     come back, and each names the family behind its own occasion."""
     w = family_world
@@ -291,8 +297,9 @@ def test_filter_shared_reports_both_occasions_each_with_its_own_family(
     db.flush()
 
     rows = [
-        l for l in client.get("/lists?filter=shared", headers=_auth(w.u)).json()
-        if l["name"] == "P's List"
+        lst
+        for lst in client.get("/lists?filter=shared", headers=_auth(w.u)).json()
+        if lst["name"] == "P's List"
     ]
     assert len(rows) == 1
     assert rows[0]["shared_via"] == [
@@ -325,18 +332,14 @@ def test_filter_shared_direct_only_list_reports_one_direct_route(
     ]
 
 
-def test_filter_shared_excludes_own_list_shared_to_own_occasion(
-    client, family_world, db
-):
+def test_filter_shared_excludes_own_list_shared_to_own_occasion(client, family_world, db):
     """U shares their own list to an occasion U can reach: still not shared
     *with* U."""
     w = family_world
     db.add(ListOccasionShare(list_id=w.l_u.id, occasion_id=w.o1.id))
     db.flush()
 
-    names = {
-        l["name"] for l in client.get("/lists?filter=shared", headers=_auth(w.u)).json()
-    }
+    names = {lst["name"] for lst in client.get("/lists?filter=shared", headers=_auth(w.u)).json()}
     assert "U's List" not in names
 
 
@@ -345,7 +348,7 @@ def test_filter_shared_archived_returns_archived_only(client, family_world):
     resp = client.get("/lists?filter=shared&archived=true", headers=_auth(w.u))
     assert resp.status_code == 200
     data = resp.json()
-    assert {l["name"] for l in data} == {"P's Archived"}
+    assert {lst["name"] for lst in data} == {"P's Archived"}
     assert data[0]["shared_via"] == [
         {
             "kind": "occasion",
@@ -355,24 +358,16 @@ def test_filter_shared_archived_returns_archived_only(client, family_world):
     ]
 
 
-def test_filter_shared_drops_a_list_whose_occasion_share_was_revoked(
-    client, family_world, db
-):
+def test_filter_shared_drops_a_list_whose_occasion_share_was_revoked(client, family_world, db):
     w = family_world
-    db.query(ListOccasionShare).filter(
-        ListOccasionShare.list_id == w.l_q.id
-    ).delete()
+    db.query(ListOccasionShare).filter(ListOccasionShare.list_id == w.l_q.id).delete()
     db.flush()
 
-    names = {
-        l["name"] for l in client.get("/lists?filter=shared", headers=_auth(w.u)).json()
-    }
+    names = {lst["name"] for lst in client.get("/lists?filter=shared", headers=_auth(w.u)).json()}
     assert "Q's List" not in names
 
 
-def test_filter_shared_keeps_a_list_whose_occasion_was_archived(
-    client, family_world, db
-):
+def test_filter_shared_keeps_a_list_whose_occasion_was_archived(client, family_world, db):
     """Archiving blocks new shares and nothing else, so the list stays in the
     shared scope, still labelled with the occasion it arrived through."""
     w = family_world
@@ -380,8 +375,9 @@ def test_filter_shared_keeps_a_list_whose_occasion_was_archived(
     db.flush()
 
     row = next(
-        l for l in client.get("/lists?filter=shared", headers=_auth(w.u)).json()
-        if l["name"] == "Q's List"
+        lst
+        for lst in client.get("/lists?filter=shared", headers=_auth(w.u)).json()
+        if lst["name"] == "Q's List"
     )
     assert [r["occasion"]["id"] for r in row["shared_via"]] == [w.o2.id]
 
@@ -389,8 +385,8 @@ def test_filter_shared_keeps_a_list_whose_occasion_was_archived(
 def test_filter_shared_orders_most_recently_updated_first(client, family_world):
     w = family_world
     data = client.get("/lists?filter=shared", headers=_auth(w.u)).json()
-    assert [l["updated_at"] for l in data] == sorted(
-        (l["updated_at"] for l in data), reverse=True
+    assert [lst["updated_at"] for lst in data] == sorted(
+        (lst["updated_at"] for lst in data), reverse=True
     )
 
 
@@ -434,9 +430,7 @@ def test_create_list_with_recipient(client, member_user, member_headers):
 
 
 def test_create_list_without_recipient_leaves_it_null(client, member_headers):
-    response = client.post(
-        "/lists", headers=member_headers, json={"name": "My own list"}
-    )
+    response = client.post("/lists", headers=member_headers, json={"name": "My own list"})
     assert response.status_code == 201
     data = response.json()
     assert data["recipient_name"] is None
@@ -484,9 +478,7 @@ def test_update_list_clears_recipient(client, member_headers, sample_list, db):
     assert response.json()["recipient_name"] is None
 
 
-def test_update_list_name_only_leaves_recipient_untouched(
-    client, member_headers, sample_list, db
-):
+def test_update_list_name_only_leaves_recipient_untouched(client, member_headers, sample_list, db):
     sample_list.recipient_name = "Beth"
     db.flush()
 
@@ -499,9 +491,7 @@ def test_update_list_name_only_leaves_recipient_untouched(
     assert data["recipient_name"] == "Beth"
 
 
-def test_list_folder_endpoint_returns_recipient_fields(
-    client, member_headers, sample_list, db
-):
+def test_list_folder_endpoint_returns_recipient_fields(client, member_headers, sample_list, db):
     # compute_counts builds an explicit dict; a missing key silently nulls the field.
     sample_list.recipient_name = "Beth"
     db.flush()
@@ -513,9 +503,7 @@ def test_list_folder_endpoint_returns_recipient_fields(
     assert "recipient_has_account" not in row
 
 
-def test_owner_detail_returns_recipient_fields(
-    client, member_headers, sample_list, db
-):
+def test_owner_detail_returns_recipient_fields(client, member_headers, sample_list, db):
     sample_list.recipient_name = "Beth"
     db.flush()
 
@@ -526,9 +514,7 @@ def test_owner_detail_returns_recipient_fields(
     assert "recipient_has_account" not in data
 
 
-def test_viewer_detail_returns_recipient_fields(
-    client, admin_headers, shared_list, db
-):
+def test_viewer_detail_returns_recipient_fields(client, admin_headers, shared_list, db):
     shared_list.recipient_name = "Beth"
     db.flush()
 
@@ -570,23 +556,17 @@ def test_create_list_with_account_person(client, member_headers, account_people)
     assert data["account_person_name"] == "Gran"
 
 
-def test_create_list_with_neither_person_nor_recipient(
-    client, member_headers, account_people
-):
+def test_create_list_with_neither_person_nor_recipient(client, member_headers, account_people):
     # §4.2: a shared account may own a household list — "ideas for the kitchen"
     # is for neither person, and the API does not demand an answer.
-    response = client.post(
-        "/lists", headers=member_headers, json={"name": "Ideas for the Kitchen"}
-    )
+    response = client.post("/lists", headers=member_headers, json={"name": "Ideas for the Kitchen"})
     assert response.status_code == 201
     data = response.json()
     assert data["account_person_id"] is None
     assert data["recipient_name"] is None
 
 
-def test_create_list_with_person_and_recipient_is_400(
-    client, member_headers, account_people
-):
+def test_create_list_with_person_and_recipient_is_400(client, member_headers, account_people):
     response = client.post(
         "/lists",
         headers=member_headers,
@@ -599,9 +579,7 @@ def test_create_list_with_person_and_recipient_is_400(
     assert response.status_code == 400
 
 
-def test_create_list_with_another_accounts_person_is_404(
-    client, admin_headers, account_people
-):
+def test_create_list_with_another_accounts_person_is_404(client, admin_headers, account_people):
     response = client.post(
         "/lists",
         headers=admin_headers,
@@ -610,9 +588,7 @@ def test_create_list_with_another_accounts_person_is_404(
     assert response.status_code == 404
 
 
-def test_update_list_sets_account_person(
-    client, member_headers, sample_list, account_people
-):
+def test_update_list_sets_account_person(client, member_headers, sample_list, account_people):
     grandpa = account_people[1]
     response = client.put(
         f"/lists/{sample_list.id}",
@@ -752,9 +728,7 @@ def test_viewer_detail_returns_account_person_fields(
     assert data["account_person_name"] == "Gran"
 
 
-def test_list_without_a_person_reports_both_fields_null(
-    client, member_headers, sample_list
-):
+def test_list_without_a_person_reports_both_fields_null(client, member_headers, sample_list):
     data = client.get(f"/lists/{sample_list.id}", headers=member_headers).json()
     assert data["account_person_id"] is None
     assert data["account_person_name"] is None
@@ -773,7 +747,7 @@ def shopping_world(db, family_world):
     """`family_world`, with claims on it: U has one gift still to buy on L_p and
     one on L_q, has already bought a second on L_p, and Q has claimed a third
     that is none of U's business."""
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from app.models.claim import Claim
     from app.models.gift import Gift
@@ -789,7 +763,7 @@ def shopping_world(db, family_world):
     db.add_all([to_buy, bought, qs, spare, on_l_q])
     db.flush()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     db.add_all(
         [
             Claim(gift_id=to_buy.id, user_id=w.u.id, claimed_at=now),
@@ -818,7 +792,7 @@ def test_shared_row_counts_the_callers_own_unpurchased_claims(client, shopping_w
 
 def test_a_purchased_claim_is_not_still_to_buy(client, db, shopping_world):
     """Ticking a gift bought is what clears it off the badge."""
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from app.models.claim import Claim
     from app.models.gift import Gift
@@ -827,11 +801,10 @@ def test_a_purchased_claim_is_not_still_to_buy(client, db, shopping_world):
     still_to_buy = (
         db.query(Claim)
         .join(Gift, Gift.id == Claim.gift_id)
-        .filter(Gift.list_id == w.l_p.id, Claim.user_id == w.u.id,
-                Claim.purchased_at.is_(None))
+        .filter(Gift.list_id == w.l_p.id, Claim.user_id == w.u.id, Claim.purchased_at.is_(None))
         .one()
     )
-    still_to_buy.purchased_at = datetime.now(timezone.utc)
+    still_to_buy.purchased_at = datetime.now(UTC)
     db.flush()
 
     response = client.get("/lists?filter=shared", headers=_auth(w.u))
@@ -865,9 +838,7 @@ def test_a_shared_row_with_no_claims_of_mine_reports_zero(client, shopping_world
     assert _row(response, w.l_p_arch.id)["my_unpurchased_claim_count"] == 0
 
 
-def test_the_unfiltered_scope_carries_the_count_on_shared_rows_only(
-    client, shopping_world
-):
+def test_the_unfiltered_scope_carries_the_count_on_shared_rows_only(client, shopping_world):
     """`GET /lists` mixes owned and shared rows. U owns L_u, which must not
     carry the field at all — the same rule `claimed_count` broke (ADR 0003)."""
     w = shopping_world
@@ -884,7 +855,7 @@ def test_the_count_costs_no_query_per_row(client, db, shopping_world):
     rows. The added lists carry claimed gifts of their own, so this pins the
     batching of `Gift.claim` as well as of `GiftList.gifts` — a count queried
     per gift would slip past rows that had none."""
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from sqlalchemy import event
 
@@ -914,7 +885,7 @@ def test_the_count_costs_no_query_per_row(client, db, shopping_world):
 
     # Six more lists in the same scope, each shared to an occasion U can reach
     # and each carrying two gifts U has claimed and not yet bought.
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     for n in range(6):
         extra = GiftList(name=f"Extra {n}", owner_id=w.p.id)
         db.add(extra)
@@ -943,7 +914,7 @@ def test_the_badge_reaches_a_claim_on_a_directly_shared_list(client, db, family_
     Deliberately not `shopping_world`'s L_p, which is *also* occasion-shared and
     so would pass on the occasion path alone.
     """
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from app.models.claim import Claim
     from app.models.gift import Gift
@@ -962,7 +933,7 @@ def test_the_badge_reaches_a_claim_on_a_directly_shared_list(client, db, family_
             gift_id=gift.id,
             user_id=w.u.id,
             occasion_id=None,  # no occasion: this is the gap the badge covers
-            claimed_at=datetime.now(timezone.utc),
+            claimed_at=datetime.now(UTC),
         )
     )
     db.flush()
@@ -970,9 +941,9 @@ def test_the_badge_reaches_a_claim_on_a_directly_shared_list(client, db, family_
     response = client.get("/lists?filter=shared", headers=_auth(w.u))
     assert response.status_code == 200
     row = _row(response, direct_only.id)
-    assert [r["kind"] for r in row["shared_via"]] == [
-        "direct"
-    ], "this list is reachable no other way"
+    assert [r["kind"] for r in row["shared_via"]] == ["direct"], (
+        "this list is reachable no other way"
+    )
     assert row["my_unpurchased_claim_count"] == 1
 
 
@@ -981,8 +952,9 @@ def test_filter_shared_reports_both_routes_for_a_both_ways_list(client, family_w
     reported — the discard is the regression this project exists to fix."""
     w = family_world
     rows = [
-        l for l in client.get("/lists?filter=shared", headers=_auth(w.u)).json()
-        if l["name"] == "P's List"
+        lst
+        for lst in client.get("/lists?filter=shared", headers=_auth(w.u)).json()
+        if lst["name"] == "P's List"
     ]
     assert len(rows) == 1
     assert rows[0]["shared_via"] == [
@@ -1000,23 +972,24 @@ def test_filter_shared_reports_both_routes_for_a_both_ways_list(client, family_w
     ]
 
 
-def test_filter_shared_orders_routes_direct_first_then_by_occasion_id(
-    client, family_world
-):
+def test_filter_shared_orders_routes_direct_first_then_by_occasion_id(client, family_world):
     """A literal, and the same literal twice: the order exists so a response is
     byte-stable across requests, not so the client can read `routes[0]`."""
     w = family_world
 
     def routes():
         return next(
-            l for l in client.get("/lists?filter=shared", headers=_auth(w.u)).json()
-            if l["name"] == "P's List"
+            lst
+            for lst in client.get("/lists?filter=shared", headers=_auth(w.u)).json()
+            if lst["name"] == "P's List"
         )["shared_via"]
 
     first = routes()
-    assert [
-        (r["kind"], r.get("occasion", {}).get("id")) for r in first
-    ] == [("direct", None), ("occasion", w.o1.id), ("occasion", w.o2.id)]
+    assert [(r["kind"], r.get("occasion", {}).get("id")) for r in first] == [
+        ("direct", None),
+        ("occasion", w.o1.id),
+        ("occasion", w.o2.id),
+    ]
     assert routes() == first
 
 
@@ -1025,14 +998,12 @@ def test_unfiltered_lists_includes_an_occasion_only_shared_list(client, family_w
     included. It matched owner-OR-`ListShare` only, so it disagreed with the
     codebase's one visibility predicate (`CONTEXT.md` invariant 2)."""
     w = family_world
-    names = {l["name"] for l in client.get("/lists", headers=_auth(w.u)).json()}
+    names = {lst["name"] for lst in client.get("/lists", headers=_auth(w.u)).json()}
     assert "Q's List" in names, "reaches U only through F2's occasion"
     assert names == {"U's List", "P's List", "Q's List"}
 
 
-def test_the_same_list_carries_the_same_routes_on_every_surface(
-    client, family_world, db
-):
+def test_the_same_list_carries_the_same_routes_on_every_surface(client, family_world, db):
     """`/lists`, a folder page and an occasion page all return list rows, and
     they must agree about how a list arrived — NEU-1286's "same attribution on
     /lists and on a folder page" is exactly this."""
@@ -1048,12 +1019,8 @@ def test_the_same_list_carries_the_same_routes_on_every_surface(
 
     headers = _auth(w.u)
     on_lists = routes_from(client.get("/lists?filter=shared", headers=headers).json())
-    on_folder = routes_from(
-        client.get(f"/folders/{folder.id}", headers=headers).json()["lists"]
-    )
-    on_occasion = routes_from(
-        client.get(f"/occasions/{w.o1.id}/lists", headers=headers).json()
-    )
+    on_folder = routes_from(client.get(f"/folders/{folder.id}", headers=headers).json()["lists"])
+    on_occasion = routes_from(client.get(f"/occasions/{w.o1.id}/lists", headers=headers).json())
 
     assert len(on_lists) == 3
     assert on_folder == on_lists
@@ -1077,9 +1044,7 @@ def test_a_folder_drops_a_list_whose_share_was_revoked(client, family_world, db)
     db.flush()
 
     # Q's List reached U only through F2's occasion. Withdraw it.
-    db.query(ListOccasionShare).filter(
-        ListOccasionShare.list_id == w.l_q.id
-    ).delete()
+    db.query(ListOccasionShare).filter(ListOccasionShare.list_id == w.l_q.id).delete()
     db.flush()
 
     rows = client.get(f"/folders/{folder.id}", headers=_auth(w.u)).json()["lists"]

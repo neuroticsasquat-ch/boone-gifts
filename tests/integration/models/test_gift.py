@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from app.models.claim import Claim
@@ -75,11 +75,7 @@ def test_claim_gift(db):
 
     assert gift.claim is None
 
-    db.add(
-        Claim(
-            gift_id=gift.id, user_id=claimer.id, claimed_at=datetime.now(timezone.utc)
-        )
-    )
+    db.add(Claim(gift_id=gift.id, user_id=claimer.id, claimed_at=datetime.now(UTC)))
     db.flush()
     db.refresh(gift)
 

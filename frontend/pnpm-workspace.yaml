@@ -1,0 +1,9 @@
+# Dependencies allowed to run install scripts. pnpm fails the install on any it
+# hasn't been told about, so each one is listed. esbuild and workerd fetch or check
+# a platform binary, which npm used to run unasked. msw's script copies its
+# browser service worker into a public dir; this app mocks only in Node (msw/node
+# in the tests), so it isn't needed.
+allowBuilds:
+  esbuild: true
+  workerd: true
+  msw: false

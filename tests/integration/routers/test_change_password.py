@@ -36,9 +36,7 @@ def test_change_password_sets_refresh_cookie(client, member_user, member_headers
     assert "boone_refresh_token" in response.cookies
 
 
-def test_change_password_lets_user_log_in_with_new_password(
-    client, member_user, member_headers
-):
+def test_change_password_lets_user_log_in_with_new_password(client, member_user, member_headers):
     client.post(
         "/auth/change-password",
         headers=member_headers,
@@ -52,9 +50,7 @@ def test_change_password_lets_user_log_in_with_new_password(
     assert login.status_code == 200
 
 
-def test_change_password_rejects_old_password_on_login(
-    client, member_user, member_headers
-):
+def test_change_password_rejects_old_password_on_login(client, member_user, member_headers):
     client.post(
         "/auth/change-password",
         headers=member_headers,
@@ -68,9 +64,7 @@ def test_change_password_rejects_old_password_on_login(
     assert login.status_code == 401
 
 
-def test_change_password_invalidates_old_refresh_tokens(
-    client, member_user, member_headers
-):
+def test_change_password_invalidates_old_refresh_tokens(client, member_user, member_headers):
     login = client.post(
         "/auth/login",
         json={"email": "member@test.com", "password": "member123"},
@@ -89,9 +83,7 @@ def test_change_password_invalidates_old_refresh_tokens(
     assert refresh.status_code == 401
 
 
-def test_returned_access_token_works_immediately(
-    client, member_user, member_headers
-):
+def test_returned_access_token_works_immediately(client, member_user, member_headers):
     response = client.post(
         "/auth/change-password",
         headers=member_headers,
@@ -100,7 +92,5 @@ def test_returned_access_token_works_immediately(
     assert response.status_code == 200
     new_token = response.json()["access_token"]
 
-    me_response = client.get(
-        "/lists", headers={"Authorization": f"Bearer {new_token}"}
-    )
+    me_response = client.get("/lists", headers={"Authorization": f"Bearer {new_token}"})
     assert me_response.status_code == 200

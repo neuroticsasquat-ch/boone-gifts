@@ -5,17 +5,18 @@ Revises: d4c8a1f92b60
 Create Date: 2026-09-09 12:00:00.000000
 
 """
-from typing import Sequence, Union
 
-from alembic import op
+from collections.abc import Sequence
+
 import sqlalchemy as sa
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = 'c1f9a7d4e260'
-down_revision: Union[str, Sequence[str], None] = 'd4c8a1f92b60'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+revision: str = "c1f9a7d4e260"
+down_revision: str | Sequence[str] | None = "d4c8a1f92b60"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -35,23 +36,30 @@ def upgrade() -> None:
     collides in a unique index.
     """
     op.create_table(
-        'budgets',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('user_id', sa.Integer(), nullable=False),
-        sa.Column('occasion_id', sa.Integer(), nullable=True),
-        sa.Column('folder_id', sa.Integer(), nullable=True),
-        sa.Column('amount', sa.Numeric(precision=10, scale=2), nullable=False),
-        sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-        sa.ForeignKeyConstraint(['occasion_id'], ['occasions.id'], ),
-        sa.ForeignKeyConstraint(['folder_id'], ['folders.id'], ),
-        sa.PrimaryKeyConstraint('id'),
-        sa.UniqueConstraint('user_id', 'occasion_id', name='uq_budgets_user_occasion'),
-        sa.UniqueConstraint('user_id', 'folder_id', name='uq_budgets_user_folder'),
+        "budgets",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("user_id", sa.Integer(), nullable=False),
+        sa.Column("occasion_id", sa.Integer(), nullable=True),
+        sa.Column("folder_id", sa.Integer(), nullable=True),
+        sa.Column("amount", sa.Numeric(precision=10, scale=2), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["user_id"],
+            ["users.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["occasion_id"],
+            ["occasions.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["folder_id"],
+            ["folders.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("user_id", "occasion_id", name="uq_budgets_user_occasion"),
+        sa.UniqueConstraint("user_id", "folder_id", name="uq_budgets_user_folder"),
     )
-    with op.batch_alter_table('budgets', schema=None) as batch_op:
-        batch_op.create_index(
-            batch_op.f('ix_budgets_user_id'), ['user_id'], unique=False
-        )
+    with op.batch_alter_table("budgets", schema=None) as batch_op:
+        batch_op.create_index(batch_op.f("ix_budgets_user_id"), ["user_id"], unique=False)
 
 
 def downgrade() -> None:
@@ -59,6 +67,6 @@ def downgrade() -> None:
 
     Every budget is lost — there is nowhere else in the schema to keep one.
     """
-    with op.batch_alter_table('budgets', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_budgets_user_id'))
-    op.drop_table('budgets')
+    with op.batch_alter_table("budgets", schema=None) as batch_op:
+        batch_op.drop_index(batch_op.f("ix_budgets_user_id"))
+    op.drop_table("budgets")

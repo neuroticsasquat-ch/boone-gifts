@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import jwt
@@ -63,7 +63,7 @@ def _make_family_invite(
     invite.token = token
     invite.accepted_at = accepted_at
     invite.declined_at = declined_at
-    invite.expires_at = datetime.now(timezone.utc) + timedelta(days=expires_in_days)
+    invite.expires_at = datetime.now(UTC) + timedelta(days=expires_in_days)
     return invite
 
 
@@ -78,7 +78,7 @@ def _make_refresh_token(user_id: int = 1) -> str:
     payload = {
         "sub": str(user_id),
         "type": "refresh",
-        "exp": datetime(2099, 1, 1, tzinfo=timezone.utc),
+        "exp": datetime(2099, 1, 1, tzinfo=UTC),
     }
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
@@ -88,7 +88,7 @@ def _make_access_token(user_id: int = 1) -> str:
         "sub": str(user_id),
         "email": "user@test.com",
         "role": "member",
-        "exp": datetime(2099, 1, 1, tzinfo=timezone.utc),
+        "exp": datetime(2099, 1, 1, tzinfo=UTC),
     }
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
@@ -234,9 +234,7 @@ def test_register_family_invite_creates_member_and_membership(
         role="member",
         password="password123",
     )
-    mock_create_member.assert_called_once_with(
-        db, family_id=3, user_id=42, role="organizer"
-    )
+    mock_create_member.assert_called_once_with(db, family_id=3, user_id=42, role="organizer")
     assert invite.accepted_at is not None
     assert "access_token" in result
     assert "refresh_token" in result
@@ -268,8 +266,8 @@ def test_register_family_invite_existing_account_rejected(
 @pytest.mark.parametrize(
     "kwargs",
     [
-        {"accepted_at": datetime.now(timezone.utc)},
-        {"declined_at": datetime.now(timezone.utc)},
+        {"accepted_at": datetime.now(UTC)},
+        {"declined_at": datetime.now(UTC)},
         {"expires_in_days": -1},
     ],
 )
@@ -390,8 +388,8 @@ def test_invite_info_family_token(mock_find_admin, mock_get_family_invite, mock_
 @pytest.mark.parametrize(
     "kwargs",
     [
-        {"accepted_at": datetime.now(timezone.utc)},
-        {"declined_at": datetime.now(timezone.utc)},
+        {"accepted_at": datetime.now(UTC)},
+        {"declined_at": datetime.now(UTC)},
         {"expires_in_days": -1},
     ],
 )
@@ -416,21 +414,14 @@ def test_invite_info_unknown_token(mock_find_admin, mock_get_family_invite):
 def test_family_invite_registerable_truth_table():
     assert service._family_invite_registerable(_make_family_invite()) is True
     assert (
-        service._family_invite_registerable(
-            _make_family_invite(accepted_at=datetime.now(timezone.utc))
-        )
+        service._family_invite_registerable(_make_family_invite(accepted_at=datetime.now(UTC)))
         is False
     )
     assert (
-        service._family_invite_registerable(
-            _make_family_invite(declined_at=datetime.now(timezone.utc))
-        )
+        service._family_invite_registerable(_make_family_invite(declined_at=datetime.now(UTC)))
         is False
     )
-    assert (
-        service._family_invite_registerable(_make_family_invite(expires_in_days=-1))
-        is False
-    )
+    assert service._family_invite_registerable(_make_family_invite(expires_in_days=-1)) is False
 
 
 # --- create_access_token claims ---

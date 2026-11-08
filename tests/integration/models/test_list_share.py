@@ -1,6 +1,6 @@
-import sqlalchemy
-
 import pytest
+import sqlalchemy
+import sqlalchemy.exc
 
 from app.models.gift_list import GiftList
 from app.models.list_share import ListShare

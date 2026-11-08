@@ -32,8 +32,7 @@ def conn(tmp_path):
         ],
     )
     db.execute(
-        "INSERT INTO account_people (id, user_id, name, position)"
-        " VALUES (7, 2, 'Little Timmy', 0)"
+        "INSERT INTO account_people (id, user_id, name, position) VALUES (7, 2, 'Little Timmy', 0)"
     )
     db.executemany(
         "INSERT INTO lists (id, name, owner_id, account_person_id, recipient_name,"
@@ -56,8 +55,7 @@ def conn(tmp_path):
         (EXPIRES,),
     )
     db.execute(
-        "INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)"
-        " VALUES (2, 'abc', ?)",
+        "INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES (2, 'abc', ?)",
         (EXPIRES,),
     )
     db.commit()
@@ -66,9 +64,7 @@ def conn(tmp_path):
 
 
 def _users(conn):
-    return conn.execute(
-        "SELECT id, email, name, password_hash FROM users ORDER BY id"
-    ).fetchall()
+    return conn.execute("SELECT id, email, name, password_hash FROM users ORDER BY id").fetchall()
 
 
 def test_members_lose_email_and_name(conn):

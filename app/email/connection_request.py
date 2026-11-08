@@ -3,9 +3,7 @@ from app.email.templates import render_email
 _SUBJECT_TEMPLATE = "{sender_name} wants to connect with you on Boone Gifts"
 
 
-def render_connection_request_email(
-    *, sender_name: str, frontend_url: str
-) -> tuple[str, str, str]:
+def render_connection_request_email(*, sender_name: str, frontend_url: str) -> tuple[str, str, str]:
     base = frontend_url.rstrip("/")
     link = f"{base}/connections"
 

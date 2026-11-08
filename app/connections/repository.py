@@ -1,11 +1,11 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from app.models.connection import Connection
 from app.models.folder import Folder
 from app.models.folder_item import FolderItem
-from app.models.connection import Connection
 from app.models.gift_list import GiftList
 from app.models.list_share import ListShare
 from app.models.user import User
@@ -19,16 +19,12 @@ def find_user_by_email(db: Session, email: str) -> User | None:
     return db.execute(select(User).where(User.email == email)).scalar_one_or_none()
 
 
-def find_connection_between(
-    db: Session, user_a_id: int, user_b_id: int
-) -> Connection | None:
+def find_connection_between(db: Session, user_a_id: int, user_b_id: int) -> Connection | None:
     return db.execute(
         select(Connection).where(
             or_(
-                (Connection.requester_id == user_a_id)
-                & (Connection.addressee_id == user_b_id),
-                (Connection.requester_id == user_b_id)
-                & (Connection.addressee_id == user_a_id),
+                (Connection.requester_id == user_a_id) & (Connection.addressee_id == user_b_id),
+                (Connection.requester_id == user_b_id) & (Connection.addressee_id == user_a_id),
             )
         )
     ).scalar_one_or_none()
@@ -41,10 +37,8 @@ def find_accepted_connection_between(
         select(Connection).where(
             Connection.status == "accepted",
             or_(
-                (Connection.requester_id == user_a_id)
-                & (Connection.addressee_id == user_b_id),
-                (Connection.requester_id == user_b_id)
-                & (Connection.addressee_id == user_a_id),
+                (Connection.requester_id == user_a_id) & (Connection.addressee_id == user_b_id),
+                (Connection.requester_id == user_b_id) & (Connection.addressee_id == user_a_id),
             ),
         )
     ).scalar_one_or_none()
@@ -92,7 +86,7 @@ def create_connection(db: Session, requester_id: int, addressee_id: int) -> Conn
 
 def update_connection_accepted(db: Session, connection: Connection) -> Connection:
     connection.status = "accepted"
-    connection.accepted_at = datetime.now(timezone.utc)
+    connection.accepted_at = datetime.now(UTC)
     db.flush()
     return connection
 
@@ -110,10 +104,8 @@ def delete_shares_between(db: Session, user_a_id: int, user_b_id: int) -> None:
         db.execute(
             select(ListShare).where(
                 or_(
-                    (ListShare.list_id.in_(list_ids_a))
-                    & (ListShare.user_id == user_b_id),
-                    (ListShare.list_id.in_(list_ids_b))
-                    & (ListShare.user_id == user_a_id),
+                    (ListShare.list_id.in_(list_ids_a)) & (ListShare.user_id == user_b_id),
+                    (ListShare.list_id.in_(list_ids_b)) & (ListShare.user_id == user_a_id),
                 )
             )
         )
@@ -124,9 +116,7 @@ def delete_shares_between(db: Session, user_a_id: int, user_b_id: int) -> None:
         db.delete(share)
 
 
-def delete_folder_items_between(
-    db: Session, user_a_id: int, user_b_id: int
-) -> None:
+def delete_folder_items_between(db: Session, user_a_id: int, user_b_id: int) -> None:
     list_ids_a = select(GiftList.id).where(GiftList.owner_id == user_a_id)
     list_ids_b = select(GiftList.id).where(GiftList.owner_id == user_b_id)
     folder_ids_a = select(Folder.id).where(Folder.owner_id == user_a_id)
@@ -136,10 +126,8 @@ def delete_folder_items_between(
         db.execute(
             select(FolderItem).where(
                 or_(
-                    (FolderItem.folder_id.in_(folder_ids_a))
-                    & (FolderItem.list_id.in_(list_ids_b)),
-                    (FolderItem.folder_id.in_(folder_ids_b))
-                    & (FolderItem.list_id.in_(list_ids_a)),
+                    (FolderItem.folder_id.in_(folder_ids_a)) & (FolderItem.list_id.in_(list_ids_b)),
+                    (FolderItem.folder_id.in_(folder_ids_b)) & (FolderItem.list_id.in_(list_ids_a)),
                 )
             )
         )

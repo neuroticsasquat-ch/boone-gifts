@@ -15,6 +15,7 @@ import shutil
 
 import pytest
 from sqlalchemy import create_engine, event, text
+from sqlalchemy.exc import IntegrityError
 
 from tests.integration.migration_support import alembic as _alembic
 from tests.integration.migration_support import build_template
@@ -44,10 +45,7 @@ def _seed(conn):
         text("INSERT INTO folders (id, owner_id, name, is_archived) VALUES (1, 1, 'Gran', 0)")
     )
     conn.execute(
-        text(
-            "INSERT INTO account_people (id, user_id, name, position) "
-            "VALUES (1, 2, 'Gran', 0)"
-        )
+        text("INSERT INTO account_people (id, user_id, name, position) VALUES (1, 2, 'Gran', 0)")
     )
 
 
@@ -82,9 +80,7 @@ def _insert(engine, **columns) -> None:
     names = ", ".join(columns)
     values = ", ".join(f":{name}" for name in columns)
     with engine.begin() as conn:
-        conn.execute(
-            text(f"INSERT INTO giftee_budgets ({names}) VALUES ({values})"), columns
-        )
+        conn.execute(text(f"INSERT INTO giftee_budgets ({names}) VALUES ({values})"), columns)
 
 
 def test_upgrade_creates_the_table(seeded):
@@ -92,9 +88,7 @@ def test_upgrade_creates_the_table(seeded):
     _alembic("upgrade", REVISION, db_path)
 
     with engine.connect() as conn:
-        columns = {
-            row[1] for row in conn.execute(text("PRAGMA table_info(giftee_budgets)"))
-        }
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(giftee_budgets)"))}
     assert columns == {
         "id",
         "user_id",
@@ -113,7 +107,7 @@ def test_one_row_per_user_occasion_and_key(seeded):
     _alembic("upgrade", REVISION, db_path)
     _insert(engine, user_id=1, occasion_id=1, giftee_key="owner:2")
 
-    with pytest.raises(Exception):
+    with pytest.raises(IntegrityError):
         _insert(engine, user_id=1, occasion_id=1, giftee_key="owner:2", amount=150)
 
 
@@ -122,7 +116,7 @@ def test_one_row_per_user_folder_and_key(seeded):
     _alembic("upgrade", REVISION, db_path)
     _insert(engine, user_id=1, folder_id=1, giftee_key="owner:2")
 
-    with pytest.raises(Exception):
+    with pytest.raises(IntegrityError):
         _insert(engine, user_id=1, folder_id=1, giftee_key="owner:2", amount=150)
 
 
@@ -149,9 +143,9 @@ def test_the_foreign_keys_are_enforced(seeded):
     engine, db_path = seeded
     _alembic("upgrade", REVISION, db_path)
 
-    with pytest.raises(Exception):
+    with pytest.raises(IntegrityError):
         _insert(engine, user_id=1, occasion_id=1, giftee_key="person:999", account_person_id=999)
-    with pytest.raises(Exception):
+    with pytest.raises(IntegrityError):
         _insert(engine, user_id=1, occasion_id=1, giftee_key="owner:999", owner_id=999)
 
 

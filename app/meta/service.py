@@ -1,3 +1,4 @@
+import contextlib
 import ipaddress
 import logging
 import socket
@@ -82,9 +83,7 @@ class _MetaParser(HTMLParser):
         description = self.og.get("og:description") or self.meta_name.get("description")
         price = self.og.get("product:price:amount") or self.og.get("og:price:amount")
         image = self.og.get("og:image")
-        return UrlMetaResponse(
-            title=title, description=description, price=price, image=image
-        )
+        return UrlMetaResponse(title=title, description=description, price=price, image=image)
 
 
 def _resolve_and_validate_url(url: str) -> None:
@@ -96,14 +95,12 @@ def _resolve_and_validate_url(url: str) -> None:
     try:
         addr_info = socket.getaddrinfo(hostname, None)
     except socket.gaierror:
-        raise BadRequestError("Could not resolve hostname.")
+        raise BadRequestError("Could not resolve hostname.") from None
     for _, _, _, _, sockaddr in addr_info:
         ip = ipaddress.ip_address(sockaddr[0])
         for network in _BLOCKED_NETWORKS:
             if ip in network:
-                raise BadRequestError(
-                    "URLs pointing to private networks are not allowed."
-                )
+                raise BadRequestError("URLs pointing to private networks are not allowed.")
 
 
 def _fetch_url(url: str) -> httpx.Response:
@@ -123,17 +120,17 @@ def _fetch_url(url: str) -> httpx.Response:
 def _parse_html(html: str) -> UrlMetaResponse:
     """Parse HTML and extract meta tag values."""
     parser = _MetaParser()
-    try:
+    with contextlib.suppress(_StopParsing):
         parser.feed(html)
-    except _StopParsing:
-        pass
     return parser.extract()
 
 
-_USELESS_TITLES = frozenset({
-    "Amazon.com",
-    "Robot or human?",
-})
+_USELESS_TITLES = frozenset(
+    {
+        "Amazon.com",
+        "Robot or human?",
+    }
+)
 
 
 def _result_is_useful(result: UrlMetaResponse) -> bool:

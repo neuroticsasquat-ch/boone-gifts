@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -19,11 +19,11 @@ def _make_invite(
     invite.id = id
     invite.email = email
     invite.role = role
-    invite.expires_at = datetime.now(timezone.utc) + timedelta(days=expires_in_days)
+    invite.expires_at = datetime.now(UTC) + timedelta(days=expires_in_days)
     invite.invited_by_id = invited_by_id
     invite.token = "abc-123"
     invite.used_at = None
-    invite.created_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    invite.created_at = datetime(2026, 1, 1, tzinfo=UTC)
     return invite
 
 
@@ -47,9 +47,7 @@ def test_create_invite(mock_create):
         invited_by_id=1,
     )
 
-    mock_create.assert_called_once_with(
-        db, "invitee@test.com", "member", 7, 1
-    )
+    mock_create.assert_called_once_with(db, "invitee@test.com", "member", 7, 1)
     assert result.email == "invitee@test.com"
     assert result.role == "member"
     assert result.invited_by_id == 1
@@ -69,10 +67,8 @@ def test_create_invite_custom_expiration(mock_create):
         invited_by_id=2,
     )
 
-    mock_create.assert_called_once_with(
-        db, "invitee@test.com", "admin", 14, 2
-    )
-    assert result.expires_at > datetime.now(timezone.utc) + timedelta(days=13)
+    mock_create.assert_called_once_with(db, "invitee@test.com", "admin", 14, 2)
+    assert result.expires_at > datetime.now(UTC) + timedelta(days=13)
 
 
 # --- list_invites ---

@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import StrEnum
 
 from pydantic import BaseModel, computed_field
@@ -34,7 +34,7 @@ class InviteRead(BaseModel):
         if self.used_at is not None:
             return InviteStatus.used
         # SQLite returns naive datetimes; compare without tzinfo to handle both cases.
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expires = self.expires_at
         if expires.tzinfo is None:
             now = now.replace(tzinfo=None)

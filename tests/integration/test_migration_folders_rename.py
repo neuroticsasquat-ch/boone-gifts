@@ -4,6 +4,7 @@ Runs the real Alembic migration against a throwaway SQLite file: seeds the
 schema at the previous head with occasions and their items, upgrades, and
 checks that every row survived under the new names.
 """
+
 import shutil
 
 import pytest
@@ -75,9 +76,7 @@ def _tables(engine):
     with engine.connect() as conn:
         return {
             row[0]
-            for row in conn.execute(
-                text("SELECT name FROM sqlite_master WHERE type='table'")
-            )
+            for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))
         }
 
 
@@ -143,24 +142,20 @@ def test_no_schema_object_still_says_occasion(migrated):
     # The whole point of the revision is to vacate the name for M3's new
     # `occasions` table, so nothing may still be holding it.
     with migrated.connect() as conn:
-        sql = " ".join(
-            row[0] or ""
-            for row in conn.execute(text("SELECT sql FROM sqlite_master"))
-        )
+        sql = " ".join(row[0] or "" for row in conn.execute(text("SELECT sql FROM sqlite_master")))
     assert "occasion" not in sql.lower()
 
 
 def test_the_unique_constraint_still_bites(migrated):
-    with migrated.begin() as conn:
-        # SQLite names the columns rather than the constraint in the error text.
-        with pytest.raises(
+    # SQLite names the columns rather than the constraint in the error text.
+    with (
+        migrated.begin() as conn,
+        pytest.raises(
             IntegrityError,
-            match="UNIQUE constraint failed: folder_items.folder_id, "
-            "folder_items.list_id",
-        ):
-            conn.execute(
-                text("INSERT INTO folder_items (folder_id, list_id) VALUES (1, 1)")
-            )
+            match=r"UNIQUE constraint failed: folder_items\.folder_id, folder_items\.list_id",
+        ),
+    ):
+        conn.execute(text("INSERT INTO folder_items (folder_id, list_id) VALUES (1, 1)"))
 
 
 def test_downgrade_restores_the_old_names_and_rows(migrated, db_path):

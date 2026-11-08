@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -34,16 +34,14 @@ def find_invite_by_token(db: Session, token: str) -> Invite | None:
 
 
 def mark_invite_used(db: Session, invite: Invite) -> None:
-    invite.used_at = datetime.now(timezone.utc)
+    invite.used_at = datetime.now(UTC)
     db.flush()
 
 
 def create_password_reset_token(
     db: Session, user_id: int, token_hash: str, expires_at: datetime
 ) -> PasswordResetToken:
-    token = PasswordResetToken(
-        user_id=user_id, token_hash=token_hash, expires_at=expires_at
-    )
+    token = PasswordResetToken(user_id=user_id, token_hash=token_hash, expires_at=expires_at)
     db.add(token)
     db.flush()
     return token
@@ -56,7 +54,7 @@ def find_password_reset_token(db: Session, token_hash: str) -> PasswordResetToke
 
 
 def mark_password_reset_token_used(db: Session, token: PasswordResetToken) -> None:
-    token.used_at = datetime.now(timezone.utc)
+    token.used_at = datetime.now(UTC)
     db.flush()
 
 
@@ -65,5 +63,5 @@ def update_user_password(db: Session, user: User, new_password: str) -> None:
     # +1s buffer so tokens issued in the same wall-clock second as the reset
     # (JWT iat is integer seconds) are reliably invalidated by the iat-vs-
     # password_changed_at check in dependencies.get_current_user / auth.refresh.
-    user.password_changed_at = datetime.now(timezone.utc) + timedelta(seconds=1)
+    user.password_changed_at = datetime.now(UTC) + timedelta(seconds=1)
     db.flush()

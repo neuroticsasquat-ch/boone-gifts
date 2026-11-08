@@ -1,30 +1,30 @@
 import sentry_sdk
-from sentry_sdk.integrations.fastapi import FastApiIntegration
-from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy import text
 
-from app.config import settings
-from app.database import engine
-from app.rate_limit import limiter, rate_limit_exceeded_handler
 from app.account import router as account
 from app.auth import router as auth
-from app.debug import router as debug
-from app.users import router as users
-from app.invites import router as invites
-from app.lists import router as lists
-from app.gifts import router as gifts
 from app.claims import router as claims
-from app.shares import router as shares
-from app.list_occasions import router as list_occasions
+from app.config import settings
 from app.connections import router as connections
-from app.folders import router as folders_
-from app.meta import router as meta
+from app.database import engine
+from app.debug import router as debug
 from app.families import router as families
 from app.family_invites import router as family_invites
+from app.folders import router as folders_
+from app.gifts import router as gifts
+from app.invites import router as invites
+from app.list_occasions import router as list_occasions
+from app.lists import router as lists
+from app.meta import router as meta
 from app.occasions import router as occasions
+from app.rate_limit import limiter, rate_limit_exceeded_handler
+from app.shares import router as shares
+from app.users import router as users
 
 
 def create_app() -> FastAPI:
@@ -44,7 +44,8 @@ def create_app() -> FastAPI:
     application = FastAPI(title="Boone Gifts API")
 
     application.state.limiter = limiter
-    application.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+    # Starlette types the handler as taking any Exception; slowapi's takes its own subclass.
+    application.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)  # pyright: ignore[reportArgumentType]
 
     application.add_middleware(
         CORSMiddleware,

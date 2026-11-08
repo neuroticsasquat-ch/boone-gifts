@@ -1,6 +1,6 @@
 from datetime import datetime
-from types import SimpleNamespace
 from decimal import Decimal
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -160,9 +160,7 @@ def test_claim_gift_success(mock_get, mock_claim, mock_get_list, _standing, _res
 def test_claim_gift_by_owner(mock_get):
     db = MagicMock()
     with pytest.raises(ForbiddenError):
-        service.claim_gift(
-            db, gift_id=1, list_id=10, owner_id=5, user=SimpleNamespace(id=5)
-        )
+        service.claim_gift(db, gift_id=1, list_id=10, owner_id=5, user=SimpleNamespace(id=5))
 
     mock_get.assert_not_called()
 
@@ -172,9 +170,7 @@ def test_claim_gift_by_owner(mock_get):
 @patch(f"{LIST_REPO}.get_list_by_id")
 @patch(f"{CLAIMS_REPO}.create_claim", return_value=None)
 @patch(f"{REPO}.get_gift_by_id")
-def test_claim_gift_already_claimed(
-    mock_get, mock_claim, mock_get_list, _standing, _resolve
-):
+def test_claim_gift_already_claimed(mock_get, mock_claim, mock_get_list, _standing, _resolve):
     """The repository loses the race and says so by returning None."""
     db = MagicMock()
     mock_get.return_value = _make_gift(id=1, list_id=10)
@@ -223,8 +219,13 @@ def test_the_resolved_filing_is_what_gets_written(
     mock_get_list.return_value = gift_list
 
     service.claim_gift(
-        db, gift_id=1, list_id=10, owner_id=5, user=CLAIMER,
-        occasion_id=7, occasion_provided=True,
+        db,
+        gift_id=1,
+        list_id=10,
+        owner_id=5,
+        user=CLAIMER,
+        occasion_id=7,
+        occasion_provided=True,
     )
 
     mock_resolve.assert_called_once_with(db, gift_list, CLAIMER, 7, True)
@@ -327,16 +328,12 @@ def test_purchase_records_the_amount(mock_get, mock_get_claim, mock_update):
 @patch(f"{CLAIMS_REPO}.update_claim")
 @patch(f"{CLAIMS_REPO}.get_claim_for_gift")
 @patch(f"{REPO}.get_gift_by_id")
-def test_purchase_without_an_amount_leaves_it_alone(
-    mock_get, mock_get_claim, mock_update
-):
+def test_purchase_without_an_amount_leaves_it_alone(mock_get, mock_get_claim, mock_update):
     """Skipping the amount is one click, and re-ticking must not wipe what was
     recorded the first time round."""
     db = MagicMock()
     mock_get.return_value = _make_gift(id=1, list_id=10)
-    mock_get_claim.return_value = _make_claim(
-        gift_id=1, user_id=99, amount_paid=Decimal("42.00")
-    )
+    mock_get_claim.return_value = _make_claim(gift_id=1, user_id=99, amount_paid=Decimal("42.00"))
 
     service.purchase_gift(db, gift_id=1, list_id=10, user_id=99, updates={})
 
@@ -346,18 +343,12 @@ def test_purchase_without_an_amount_leaves_it_alone(
 @patch(f"{CLAIMS_REPO}.update_claim")
 @patch(f"{CLAIMS_REPO}.get_claim_for_gift")
 @patch(f"{REPO}.get_gift_by_id")
-def test_purchase_with_an_explicit_null_clears_the_amount(
-    mock_get, mock_get_claim, mock_update
-):
+def test_purchase_with_an_explicit_null_clears_the_amount(mock_get, mock_get_claim, mock_update):
     db = MagicMock()
     mock_get.return_value = _make_gift(id=1, list_id=10)
-    mock_get_claim.return_value = _make_claim(
-        gift_id=1, user_id=99, amount_paid=Decimal("42.00")
-    )
+    mock_get_claim.return_value = _make_claim(gift_id=1, user_id=99, amount_paid=Decimal("42.00"))
 
-    service.purchase_gift(
-        db, gift_id=1, list_id=10, user_id=99, updates={"amount_paid": None}
-    )
+    service.purchase_gift(db, gift_id=1, list_id=10, user_id=99, updates={"amount_paid": None})
 
     assert mock_update.call_args.args[2]["amount_paid"] is None
 

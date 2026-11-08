@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from app.schemas.family_invite import (
     FamilyInviteRead,
@@ -15,25 +15,25 @@ def _base_read_kwargs(**overrides):
         role="member",
         token="tok-1",
         invited_by_id=2,
-        expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+        expires_at=datetime.now(UTC) + timedelta(days=7),
         accepted_at=None,
         declined_at=None,
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
     kwargs.update(overrides)
     return kwargs
 
 
 def test_status_declined_when_declined_at_set():
-    read = FamilyInviteRead(**_base_read_kwargs(declined_at=datetime.now(timezone.utc)))
+    read = FamilyInviteRead(**_base_read_kwargs(declined_at=datetime.now(UTC)))
     assert read.status == FamilyInviteStatus.declined
 
 
 def test_status_accepted_takes_precedence_over_declined():
     read = FamilyInviteRead(
         **_base_read_kwargs(
-            accepted_at=datetime.now(timezone.utc),
-            declined_at=datetime.now(timezone.utc),
+            accepted_at=datetime.now(UTC),
+            declined_at=datetime.now(UTC),
         )
     )
     assert read.status == FamilyInviteStatus.accepted
@@ -51,8 +51,8 @@ def test_incoming_family_invite_read_nested_shape():
         role="member",
         family={"id": 9, "name": "Boone Family"},
         invited_by={"id": 2, "name": "Alice"},
-        expires_at=datetime.now(timezone.utc) + timedelta(days=3),
-        created_at=datetime.now(timezone.utc),
+        expires_at=datetime.now(UTC) + timedelta(days=3),
+        created_at=datetime.now(UTC),
     )
     assert read.family.name == "Boone Family"
     assert read.invited_by.name == "Alice"

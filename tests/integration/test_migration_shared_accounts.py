@@ -6,6 +6,7 @@ rows come through untouched and that `lists.account_person_id` carries a
 *genuine* foreign key — it is added with raw DDL, because alembic renders a
 column with a ForeignKey as an ALTER TABLE ADD CONSTRAINT that SQLite rejects.
 """
+
 import shutil
 from pathlib import Path
 
@@ -70,7 +71,11 @@ def test_upgrade_adds_the_schema(db_path):
 
     assert "account_people" in inspector.get_table_names()
     assert {c["name"] for c in inspector.get_columns("account_people")} == {
-        "id", "user_id", "name", "position", "created_at"
+        "id",
+        "user_id",
+        "name",
+        "position",
+        "created_at",
     }
     assert [c["column_names"] for c in inspector.get_unique_constraints("account_people")] == [
         ["user_id", "name"]
@@ -85,11 +90,7 @@ def test_upgrade_adds_the_schema(db_path):
 def test_upgrade_leaves_existing_rows_alone(db_path):
     _alembic("upgrade", REVISION, db_path)
     with _engine(db_path).connect() as conn:
-        row = conn.execute(
-            text(
-                "SELECT is_shared_account FROM users WHERE id = 1"
-            )
-        ).one()
+        row = conn.execute(text("SELECT is_shared_account FROM users WHERE id = 1")).one()
         assert row[0] == 0
         gift_list = conn.execute(
             text(
@@ -111,14 +112,13 @@ def test_account_person_id_is_a_real_foreign_key(db_path):
         for fk in inspect(engine).get_foreign_keys("lists")
     )
 
-    with pytest.raises(IntegrityError):
-        with engine.begin() as conn:
-            conn.execute(
-                text(
-                    "INSERT INTO lists (id, name, owner_id, is_archived, "
-                    "account_person_id) VALUES (2, 'Ghost', 1, 0, 999)"
-                )
+    with pytest.raises(IntegrityError), engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO lists (id, name, owner_id, is_archived, "
+                "account_person_id) VALUES (2, 'Ghost', 1, 0, 999)"
             )
+        )
 
 
 def test_foreign_key_refuses_to_orphan_a_label(db_path):
@@ -127,17 +127,19 @@ def test_foreign_key_refuses_to_orphan_a_label(db_path):
     with engine.begin() as conn:
         conn.execute(
             text(
-                "INSERT INTO account_people (id, user_id, name, position) "
-                "VALUES (1, 1, 'Gran', 0)"
+                "INSERT INTO account_people (id, user_id, name, position) VALUES (1, 1, 'Gran', 0)"
             )
         )
-        conn.execute(text("UPDATE lists SET recipient_name = NULL, "
-                          "recipient_has_account = NULL, account_person_id = 1 "
-                          "WHERE id = 1"))
+        conn.execute(
+            text(
+                "UPDATE lists SET recipient_name = NULL, "
+                "recipient_has_account = NULL, account_person_id = 1 "
+                "WHERE id = 1"
+            )
+        )
 
-    with pytest.raises(IntegrityError):
-        with engine.begin() as conn:
-            conn.execute(text("DELETE FROM account_people WHERE id = 1"))
+    with pytest.raises(IntegrityError), engine.begin() as conn:
+        conn.execute(text("DELETE FROM account_people WHERE id = 1"))
 
 
 def test_downgrade_round_trips(db_path):

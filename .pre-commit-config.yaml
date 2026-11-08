@@ -1,19 +1,65 @@
 minimum_pre_commit_version: "3.5.0"
 
-# Every hook calls a Taskfile target, and the target runs inside the dev container
-# (tbc-localdev-infra/CONVENTIONS.md). The Taskfile is the only place the toolchain
-# is invoked, so the hooks and `task <x>` can't drift apart. The container must be
-# up (`task up`) and rebuilt after a dependency change (`task build`).
+# Every hook calls a Taskfile target, and the target runs inside a dev container
+# (tbc-localdev-infra/CONVENTIONS.md): the backend hooks in boone-gifts-backend, the
+# fe:* ones in boone-gifts-frontend. The Taskfile is the only place the toolchain is
+# invoked, so the hooks and `task <x>` can't drift apart. The containers must be up
+# (`task up`) and rebuilt after a dependency change (`task build`).
 #
-# Only what CI enforces runs here. ruff and pyright are not clean on the existing
-# code yet (`task lint`, `task format:check`, `task typecheck`); add them as lint,
-# format and typecheck hooks, in this same form, once they are.
+# Mirrors .github/workflows/ci.yml, except the Alembic checks and the frontend
+# build, which only CI runs. The frontend has no formatter, so no format hook.
 repos:
   - repo: local
     hooks:
+      - id: lint
+        name: ruff check (backend container)
+        entry: task lint
+        language: system
+        pass_filenames: false
+        files: \.py$|^pyproject\.toml$
+        exclude: ^frontend/
+
+      - id: format
+        name: ruff format --check (backend container)
+        entry: task format:check
+        language: system
+        pass_filenames: false
+        files: \.py$|^pyproject\.toml$
+        exclude: ^frontend/
+
+      - id: typecheck
+        name: pyright (backend container)
+        entry: task typecheck
+        language: system
+        pass_filenames: false
+        files: \.py$|^pyproject\.toml$|^uv\.lock$
+        exclude: ^frontend/
+
       - id: test
-        name: test (container)
+        name: pytest (backend container)
         entry: task test
         language: system
         pass_filenames: false
         files: \.py$|^pyproject\.toml$|^uv\.lock$
+        exclude: ^frontend/
+
+      - id: fe-lint
+        name: oxlint (frontend container)
+        entry: task fe:lint
+        language: system
+        pass_filenames: false
+        files: ^frontend/.*\.(ts|tsx|js|mjs|json)$
+
+      - id: fe-typecheck
+        name: tsc -b (frontend container)
+        entry: task fe:typecheck
+        language: system
+        pass_filenames: false
+        files: ^frontend/.*\.(ts|tsx|js|mjs|json)$
+
+      - id: fe-test
+        name: vitest (frontend container)
+        entry: task fe:test
+        language: system
+        pass_filenames: false
+        files: ^frontend/.*\.(ts|tsx|js|mjs|json)$

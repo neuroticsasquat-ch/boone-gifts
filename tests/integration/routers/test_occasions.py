@@ -4,11 +4,13 @@ This is the first time role gates something a member can *see*, so the member
 and organizer paths are covered explicitly on every endpoint: any member reads
 and creates, only an organizer renames or archives.
 """
-from datetime import datetime, timedelta, timezone
+
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
 import sqlalchemy
+import sqlalchemy.event
 
 from app.dependencies import create_access_token
 from app.models.claim import Claim
@@ -70,9 +72,7 @@ def outsider_headers(outsider):
     return {"Authorization": f"Bearer {create_access_token(outsider)}"}
 
 
-def _seed_occasion(
-    db, family, creator, name="Christmas 2026", is_archived=False, created_at=None
-):
+def _seed_occasion(db, family, creator, name="Christmas 2026", is_archived=False, created_at=None):
     occasion = Occasion(
         family_id=family.id,
         name=name,
@@ -108,9 +108,7 @@ def test_organizer_creates_an_occasion(client, family, organizer_headers):
     assert body["has_other_active"] is False
 
 
-def test_a_plain_member_may_create_an_occasion(
-    client, family, plain_member, plain_member_headers
-):
+def test_a_plain_member_may_create_an_occasion(client, family, plain_member, plain_member_headers):
     """Any member creates, so nobody waits on an absent organizer — a family
     with no active occasion cannot be shared to at all (ADR 0002)."""
     response = client.post(
@@ -174,9 +172,7 @@ def test_creating_for_an_unknown_family_is_404(client, organizer_headers):
 
 
 def test_creating_requires_authentication(client, family):
-    response = client.post(
-        f"/families/{family.id}/occasions", json={"name": "Christmas 2026"}
-    )
+    response = client.post(f"/families/{family.id}/occasions", json={"name": "Christmas 2026"})
 
     assert response.status_code == 401
 
@@ -192,17 +188,13 @@ def test_listing_returns_active_occasions_by_default(
     _seed_occasion(db, family, member_user, name="Christmas 2026")
     _seed_occasion(db, family, member_user, name="Christmas 2025", is_archived=True)
 
-    response = client.get(
-        f"/families/{family.id}/occasions", headers=organizer_headers
-    )
+    response = client.get(f"/families/{family.id}/occasions", headers=organizer_headers)
 
     assert response.status_code == 200
     assert [row["name"] for row in response.json()] == ["Christmas 2026"]
 
 
-def test_listing_can_ask_for_the_archived_ones(
-    client, db, family, member_user, organizer_headers
-):
+def test_listing_can_ask_for_the_archived_ones(client, db, family, member_user, organizer_headers):
     _seed_occasion(db, family, member_user, name="Christmas 2026")
     _seed_occasion(db, family, member_user, name="Christmas 2025", is_archived=True)
 
@@ -218,9 +210,7 @@ def test_a_plain_member_may_list_occasions(
 ):
     _seed_occasion(db, family, member_user)
 
-    response = client.get(
-        f"/families/{family.id}/occasions", headers=plain_member_headers
-    )
+    response = client.get(f"/families/{family.id}/occasions", headers=plain_member_headers)
 
     assert response.status_code == 200
     assert len(response.json()) == 1
@@ -232,24 +222,18 @@ def test_listing_excludes_another_familys_occasions(
     other = Family(name="Extended Family", created_by_id=member_user.id)
     db.add(other)
     db.flush()
-    db.add(
-        FamilyMember(family_id=other.id, user_id=member_user.id, role="organizer")
-    )
+    db.add(FamilyMember(family_id=other.id, user_id=member_user.id, role="organizer"))
     db.flush()
     _seed_occasion(db, family, member_user, name="Boone Christmas")
     _seed_occasion(db, other, member_user, name="Extended Christmas")
 
-    response = client.get(
-        f"/families/{family.id}/occasions", headers=organizer_headers
-    )
+    response = client.get(f"/families/{family.id}/occasions", headers=organizer_headers)
 
     assert [row["name"] for row in response.json()] == ["Boone Christmas"]
 
 
 def test_an_outsider_cannot_list_occasions(client, family, outsider_headers):
-    response = client.get(
-        f"/families/{family.id}/occasions", headers=outsider_headers
-    )
+    response = client.get(f"/families/{family.id}/occasions", headers=outsider_headers)
 
     assert response.status_code == 403
 
@@ -365,16 +349,12 @@ def test_the_family_occasions_list_does_not_name_the_family(
     """The route already names the family, so the index's rows stay as they were."""
     _seed_occasion(db, family, member_user)
 
-    body = client.get(
-        f"/families/{family.id}/occasions", headers=organizer_headers
-    ).json()
+    body = client.get(f"/families/{family.id}/occasions", headers=organizer_headers).json()
 
     assert set(body[0]) == set(OccasionRead.model_fields)
 
 
-def test_an_outsider_cannot_read_an_occasion(
-    client, db, family, member_user, outsider_headers
-):
+def test_an_outsider_cannot_read_an_occasion(client, db, family, member_user, outsider_headers):
     occasion = _seed_occasion(db, family, member_user)
 
     response = client.get(f"/occasions/{occasion.id}", headers=outsider_headers)
@@ -393,9 +373,7 @@ def test_reading_an_unknown_occasion_is_404(client, organizer_headers):
 # ---------------------------------------------------------------------------
 
 
-def test_an_organizer_renames_an_occasion(
-    client, db, family, member_user, organizer_headers
-):
+def test_an_organizer_renames_an_occasion(client, db, family, member_user, organizer_headers):
     occasion = _seed_occasion(db, family, member_user)
 
     response = client.put(
@@ -408,9 +386,7 @@ def test_an_organizer_renames_an_occasion(
     assert response.json()["name"] == "Christmas 2027"
 
 
-def test_an_organizer_archives_an_occasion(
-    client, db, family, member_user, organizer_headers
-):
+def test_an_organizer_archives_an_occasion(client, db, family, member_user, organizer_headers):
     occasion = _seed_occasion(db, family, member_user)
 
     response = client.put(
@@ -423,9 +399,7 @@ def test_an_organizer_archives_an_occasion(
     assert response.json()["is_archived"] is True
 
 
-def test_an_organizer_unarchives_an_occasion(
-    client, db, family, member_user, organizer_headers
-):
+def test_an_organizer_unarchives_an_occasion(client, db, family, member_user, organizer_headers):
     occasion = _seed_occasion(db, family, member_user, is_archived=True)
 
     response = client.put(
@@ -487,9 +461,7 @@ def test_a_plain_member_cannot_archive_an_occasion(
     assert occasion.is_archived is False
 
 
-def test_an_outsider_cannot_update_an_occasion(
-    client, db, family, member_user, outsider_headers
-):
+def test_an_outsider_cannot_update_an_occasion(client, db, family, member_user, outsider_headers):
     occasion = _seed_occasion(db, family, member_user)
 
     response = client.put(
@@ -502,16 +474,12 @@ def test_an_outsider_cannot_update_an_occasion(
 
 
 def test_updating_an_unknown_occasion_is_404(client, organizer_headers):
-    response = client.put(
-        "/occasions/99999", json={"name": "Nowhere"}, headers=organizer_headers
-    )
+    response = client.put("/occasions/99999", json={"name": "Nowhere"}, headers=organizer_headers)
 
     assert response.status_code == 404
 
 
-def test_an_explicit_null_name_is_refused(
-    client, db, family, member_user, organizer_headers
-):
+def test_an_explicit_null_name_is_refused(client, db, family, member_user, organizer_headers):
     """`exclude_unset` keeps an explicit null, which would otherwise write NULL
     into a NOT NULL column and 500."""
     occasion = _seed_occasion(db, family, member_user)
@@ -541,14 +509,10 @@ def test_an_explicit_null_is_archived_is_refused(
     assert occasion.is_archived is False
 
 
-def test_an_empty_update_is_a_no_op(
-    client, db, family, member_user, organizer_headers
-):
+def test_an_empty_update_is_a_no_op(client, db, family, member_user, organizer_headers):
     occasion = _seed_occasion(db, family, member_user)
 
-    response = client.put(
-        f"/occasions/{occasion.id}", json={}, headers=organizer_headers
-    )
+    response = client.put(f"/occasions/{occasion.id}", json={}, headers=organizer_headers)
 
     assert response.status_code == 200
     assert response.json()["name"] == "Christmas 2026"
@@ -562,9 +526,7 @@ def test_an_empty_update_is_a_no_op(
         ("put", "/occasions/{occasion_id}"),
     ],
 )
-def test_every_endpoint_requires_authentication(
-    client, db, family, member_user, method, path
-):
+def test_every_endpoint_requires_authentication(client, db, family, member_user, method, path):
     occasion = _seed_occasion(db, family, member_user)
     url = path.format(family_id=family.id, occasion_id=occasion.id)
 
@@ -585,9 +547,7 @@ def test_deleting_a_family_that_has_occasions_succeeds(
 
     assert response.status_code == 204
     assert (
-        db.execute(
-            sqlalchemy.select(Occasion).where(Occasion.family_id == family.id)
-        ).first()
+        db.execute(sqlalchemy.select(Occasion).where(Occasion.family_id == family.id)).first()
         is None
     )
 
@@ -613,9 +573,7 @@ def test_lists_returns_the_lists_shared_to_the_occasion(
     db.add(ListOccasionShare(list_id=shared.id, occasion_id=occasion.id))
     db.flush()
 
-    response = client.get(
-        f"/occasions/{occasion.id}/lists", headers=plain_member_headers
-    )
+    response = client.get(f"/occasions/{occasion.id}/lists", headers=plain_member_headers)
 
     assert response.status_code == 200
     names = {row["name"] for row in response.json()}
@@ -623,9 +581,7 @@ def test_lists_returns_the_lists_shared_to_the_occasion(
     assert unshared.name not in names
 
 
-def test_lists_includes_the_callers_own_list(
-    client, db, family, member_user, member_headers
-):
+def test_lists_includes_the_callers_own_list(client, db, family, member_user, member_headers):
     """The viewer owns it, so `can_view_list` passes and it belongs on the page
     like any other list shared to the occasion."""
     occasion = _seed_occasion(db, family, member_user)
@@ -652,9 +608,7 @@ def test_lists_serves_a_list_owned_by_a_co_member(
     db.add(ListOccasionShare(list_id=cousins_list.id, occasion_id=occasion.id))
     db.flush()
 
-    response = client.get(
-        f"/occasions/{occasion.id}/lists", headers=plain_member_headers
-    )
+    response = client.get(f"/occasions/{occasion.id}/lists", headers=plain_member_headers)
 
     assert {row["name"] for row in response.json()} == {"Cousin's List"}
 
@@ -668,9 +622,7 @@ def test_lists_still_served_for_an_archived_occasion(
     db.add(ListOccasionShare(list_id=shared.id, occasion_id=occasion.id))
     db.flush()
 
-    response = client.get(
-        f"/occasions/{occasion.id}/lists", headers=plain_member_headers
-    )
+    response = client.get(f"/occasions/{occasion.id}/lists", headers=plain_member_headers)
 
     assert {row["name"] for row in response.json()} == {"Organizer's List"}
 
@@ -678,9 +630,7 @@ def test_lists_still_served_for_an_archived_occasion(
 def test_lists_forbidden_for_a_non_member(client, db, family, member_user, outsider_headers):
     occasion = _seed_occasion(db, family, member_user)
 
-    response = client.get(
-        f"/occasions/{occasion.id}/lists", headers=outsider_headers
-    )
+    response = client.get(f"/occasions/{occasion.id}/lists", headers=outsider_headers)
 
     assert response.status_code == 403
 
@@ -721,7 +671,7 @@ def _seed_claim(
         gift_id=gift.id,
         user_id=claimer.id,
         occasion_id=occasion.id if occasion is not None else None,
-        claimed_at=claimed_at or datetime.now(timezone.utc),
+        claimed_at=claimed_at or datetime.now(UTC),
         purchased_at=purchased_at,
         amount_paid=amount_paid,
     )
@@ -743,9 +693,7 @@ def test_shopping_never_returns_another_members_claims(
     _seed_claim(db, gift_list, plain_member, "Mine", occasion=occasion)
     _seed_claim(db, gift_list, member_user, "Not mine", occasion=occasion)
 
-    response = client.get(
-        f"/occasions/{occasion.id}/shopping", headers=plain_member_headers
-    )
+    response = client.get(f"/occasions/{occasion.id}/shopping", headers=plain_member_headers)
 
     assert response.status_code == 200
     assert [row["name"] for row in response.json()["items"]] == ["Mine"]
@@ -761,9 +709,7 @@ def test_shopping_returns_only_claims_filed_under_this_occasion(
     _seed_claim(db, gift_list, plain_member, "Filed elsewhere", occasion=other)
     _seed_claim(db, gift_list, plain_member, "Filed nowhere")
 
-    response = client.get(
-        f"/occasions/{occasion.id}/shopping", headers=plain_member_headers
-    )
+    response = client.get(f"/occasions/{occasion.id}/shopping", headers=plain_member_headers)
 
     assert [row["name"] for row in response.json()["items"]] == ["Filed here"]
 
@@ -781,7 +727,7 @@ def test_shopping_carries_the_whole_line(
         plain_member,
         "Cast iron skillet",
         occasion=occasion,
-        purchased_at=datetime(2026, 5, 24, 12, 0, tzinfo=timezone.utc),
+        purchased_at=datetime(2026, 5, 24, 12, 0, tzinfo=UTC),
         amount_paid=Decimal("31.50"),
         price=Decimal("39.00"),
     )
@@ -790,9 +736,9 @@ def test_shopping_carries_the_whole_line(
     gift.url = "https://example.com/skillet"
     db.flush()
 
-    row = client.get(
-        f"/occasions/{occasion.id}/shopping", headers=plain_member_headers
-    ).json()["items"][0]
+    row = client.get(f"/occasions/{occasion.id}/shopping", headers=plain_member_headers).json()[
+        "items"
+    ][0]
 
     assert row["claim_id"] == claim.id
     assert row["gift_id"] == gift.id
@@ -836,9 +782,7 @@ def test_shopping_still_served_for_an_archived_occasion(
     gift_list = _seed_list(db, member_user, "Gran's List")
     _seed_claim(db, gift_list, plain_member, "Bought in January", occasion=occasion)
 
-    response = client.get(
-        f"/occasions/{occasion.id}/shopping", headers=plain_member_headers
-    )
+    response = client.get(f"/occasions/{occasion.id}/shopping", headers=plain_member_headers)
 
     assert response.status_code == 200
     assert [row["name"] for row in response.json()["items"]] == ["Bought in January"]
@@ -858,9 +802,7 @@ def test_shopping_survives_the_share_being_revoked(
     db.delete(share)
     db.flush()
 
-    response = client.get(
-        f"/occasions/{occasion.id}/shopping", headers=plain_member_headers
-    )
+    response = client.get(f"/occasions/{occasion.id}/shopping", headers=plain_member_headers)
 
     assert [row["name"] for row in response.json()["items"]] == ["Still mine"]
 
@@ -870,29 +812,21 @@ def test_shopping_is_empty_when_nothing_is_filed(
 ):
     occasion = _seed_occasion(db, family, member_user)
 
-    response = client.get(
-        f"/occasions/{occasion.id}/shopping", headers=plain_member_headers
-    )
+    response = client.get(f"/occasions/{occasion.id}/shopping", headers=plain_member_headers)
 
     assert response.status_code == 200
     assert response.json()["items"] == []
 
 
-def test_shopping_forbidden_for_a_non_member(
-    client, db, family, member_user, outsider_headers
-):
+def test_shopping_forbidden_for_a_non_member(client, db, family, member_user, outsider_headers):
     occasion = _seed_occasion(db, family, member_user)
 
-    response = client.get(
-        f"/occasions/{occasion.id}/shopping", headers=outsider_headers
-    )
+    response = client.get(f"/occasions/{occasion.id}/shopping", headers=outsider_headers)
 
     assert response.status_code == 403
 
 
-def test_shopping_not_found_for_an_occasion_that_does_not_exist(
-    client, member_headers
-):
+def test_shopping_not_found_for_an_occasion_that_does_not_exist(client, member_headers):
     response = client.get("/occasions/999999/shopping", headers=member_headers)
 
     assert response.status_code == 404
@@ -1052,9 +986,7 @@ def test_the_index_spans_every_family_and_keeps_the_empty_occasions(
     second = Family(name="Extended Family", created_by_id=member_user.id)
     db.add(second)
     db.flush()
-    db.add(
-        FamilyMember(family_id=second.id, user_id=member_user.id, role="member")
-    )
+    db.add(FamilyMember(family_id=second.id, user_id=member_user.id, role="member"))
     db.flush()
 
     boone = _seed_occasion(db, family, member_user, name="Boone Christmas")
@@ -1092,9 +1024,7 @@ def test_a_share_into_the_occasion_moves_the_clock(
     """A share is the one activity by another person the clock may read: the
     list it carries is already visible to every member, so it announces
     nothing they could not see by looking."""
-    occasion = _seed_occasion(
-        db, family, member_user, created_at=datetime(2026, 3, 1, 9, 30, 0)
-    )
+    occasion = _seed_occasion(db, family, member_user, created_at=datetime(2026, 3, 1, 9, 30, 0))
     their_list = _seed_list(db, co_member, "Co Member's Wishlist")
     share = ListOccasionShare(list_id=their_list.id, occasion_id=occasion.id)
     share.created_at = LATER
@@ -1106,9 +1036,7 @@ def test_a_share_into_the_occasion_moves_the_clock(
     assert row["last_activity_at"] == LATER.isoformat()
 
 
-def test_rows_are_ordered_by_the_clock_then_by_id(
-    client, db, family, member_user, member_headers
-):
+def test_rows_are_ordered_by_the_clock_then_by_id(client, db, family, member_user, member_headers):
     occasion = _seed_occasion  # local alias keeps the seeding lines readable
     quiet = occasion(db, family, member_user, created_at=datetime(2026, 1, 1))
     busy = occasion(db, family, member_user, created_at=datetime(2026, 6, 1))
@@ -1141,17 +1069,11 @@ def test_archived_is_an_exact_match_in_all_three_forms(
     """`archived=true` is the archived ones *only*, never a union — one
     parameter name meaning one thing across both occasion index endpoints."""
     active = _seed_occasion(db, family, member_user, name="Active")
-    archived = _seed_occasion(
-        db, family, member_user, name="Archived", is_archived=True
-    )
+    archived = _seed_occasion(db, family, member_user, name="Archived", is_archived=True)
 
     assert [row["id"] for row in _index(client, member_headers)] == [active.id]
-    assert [
-        row["id"] for row in _index(client, member_headers, archived="false")
-    ] == [active.id]
-    assert [
-        row["id"] for row in _index(client, member_headers, archived="true")
-    ] == [archived.id]
+    assert [row["id"] for row in _index(client, member_headers, archived="false")] == [active.id]
+    assert [row["id"] for row in _index(client, member_headers, archived="true")] == [archived.id]
 
 
 def test_a_caller_in_no_families_gets_an_empty_list(client, outsider_headers):
@@ -1177,9 +1099,7 @@ def test_list_count_matches_the_lists_endpoint(
     db.flush()
 
     from_index = _row(_index(client, plain_member_headers), occasion)["list_count"]
-    from_endpoint = client.get(
-        f"/occasions/{occasion.id}/lists", headers=plain_member_headers
-    )
+    from_endpoint = client.get(f"/occasions/{occasion.id}/lists", headers=plain_member_headers)
 
     assert from_endpoint.status_code == 200
     assert from_index == len(from_endpoint.json()) == 3
@@ -1260,7 +1180,7 @@ def _ago(days: int) -> datetime:
     """Aware UTC. SQLAlchemy's SQLite `DATETIME` strips the tzinfo on the way
     in, so this lands as the naive UTC string the column already holds — the
     same shape `server_default=func.now()` writes."""
-    return datetime.now(timezone.utc) - timedelta(days=days)
+    return datetime.now(UTC) - timedelta(days=days)
 
 
 def _stale_occasion(
@@ -1291,9 +1211,7 @@ def _prompts(client, headers):
 
 
 def _dismiss(client, headers, occasion):
-    return client.post(
-        f"/occasions/{occasion.id}/archive-prompt/dismiss", headers=headers
-    )
+    return client.post(f"/occasions/{occasion.id}/archive-prompt/dismiss", headers=headers)
 
 
 def _seed_prompt(db, user, occasion, dismissed_until):
@@ -1331,8 +1249,8 @@ def test_another_users_claim_never_changes_what_i_am_nudged_about(
         co_member,
         "Wool socks",
         occasion=occasion,
-        claimed_at=datetime.now(timezone.utc),
-        purchased_at=datetime.now(timezone.utc),
+        claimed_at=datetime.now(UTC),
+        purchased_at=datetime.now(UTC),
         amount_paid=Decimal("20.00"),
     )
 
@@ -1362,8 +1280,8 @@ def test_my_own_claim_does_not_change_it_either(
         member_user,
         "A gift for them",
         occasion=occasion,
-        claimed_at=datetime.now(timezone.utc),
-        purchased_at=datetime.now(timezone.utc),
+        claimed_at=datetime.now(UTC),
+        purchased_at=datetime.now(UTC),
         amount_paid=Decimal("15.00"),
     )
 
@@ -1384,7 +1302,7 @@ def test_two_eligible_members_see_the_same_staleness(
         member_user,
         "Something",
         occasion=occasion,
-        claimed_at=datetime.now(timezone.utc),
+        claimed_at=datetime.now(UTC),
     )
 
     organizer_rows = [row["id"] for row in _prompts(client, member_headers)]
@@ -1441,9 +1359,7 @@ def test_a_creator_who_has_left_the_family_is_not_nudged(
     assert _prompts(client, plain_member_headers) == []
 
 
-def test_an_archived_occasion_is_never_nudged(
-    client, db, family, member_user, member_headers
-):
+def test_an_archived_occasion_is_never_nudged(client, db, family, member_user, member_headers):
     """The nudge asks a question that has already been answered."""
     _stale_occasion(db, family, member_user, is_archived=True)
 
@@ -1459,12 +1375,8 @@ def test_an_outsider_is_nudged_about_nothing(client, outsider_headers):
 
 
 def test_the_sixty_day_boundary(client, db, family, member_user, member_headers):
-    fresh = _stale_occasion(
-        db, family, member_user, name="Still warm", days=IDLE_DAYS - 1
-    )
-    stale = _stale_occasion(
-        db, family, member_user, name="Gone quiet", days=IDLE_DAYS + 1
-    )
+    fresh = _stale_occasion(db, family, member_user, name="Still warm", days=IDLE_DAYS - 1)
+    stale = _stale_occasion(db, family, member_user, name="Gone quiet", days=IDLE_DAYS + 1)
 
     ids = [row["id"] for row in _prompts(client, member_headers)]
 
@@ -1555,9 +1467,7 @@ def test_dismissing_suppresses_it_for_that_caller_only(
     assert [row["id"] for row in _prompts(client, member_headers)] == [occasion.id]
 
 
-def test_a_lapsed_dismissal_stops_suppressing(
-    client, db, family, member_user, member_headers
-):
+def test_a_lapsed_dismissal_stops_suppressing(client, db, family, member_user, member_headers):
     """The date expires and the nudge returns. There is no dismissal-on-activity
     reset: activity is what happens on an occasion somebody is deliberately
     keeping open."""
@@ -1573,7 +1483,7 @@ def test_a_live_dismissal_suppresses(client, db, family, member_user, member_hea
         db,
         member_user,
         occasion,
-        dismissed_until=datetime.now(timezone.utc) + timedelta(days=15),
+        dismissed_until=datetime.now(UTC) + timedelta(days=15),
     )
 
     assert _prompts(client, member_headers) == []
@@ -1588,13 +1498,17 @@ def test_a_second_dismissal_extends_rather_than_colliding(
 
     assert _dismiss(client, member_headers, occasion).status_code == 204
 
-    rows = db.execute(
-        sqlalchemy.select(OccasionArchivePrompt).where(
-            OccasionArchivePrompt.occasion_id == occasion.id
+    rows = (
+        db.execute(
+            sqlalchemy.select(OccasionArchivePrompt).where(
+                OccasionArchivePrompt.occasion_id == occasion.id
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(rows) == 1
-    assert rows[0].dismissed_until > datetime.now(timezone.utc).replace(tzinfo=None)
+    assert rows[0].dismissed_until > datetime.now(UTC).replace(tzinfo=None)
     assert _prompts(client, member_headers) == []
 
 
@@ -1625,18 +1539,14 @@ def test_a_member_outside_the_audience_cannot_dismiss(
     assert _dismiss(client, plain_member_headers, occasion).status_code == 403
 
 
-def test_an_outsider_cannot_dismiss(
-    client, db, family, member_user, outsider_headers
-):
+def test_an_outsider_cannot_dismiss(client, db, family, member_user, outsider_headers):
     occasion = _stale_occasion(db, family, member_user)
 
     assert _dismiss(client, outsider_headers, occasion).status_code == 403
 
 
 def test_dismissing_an_unknown_occasion_is_404(client, member_headers):
-    response = client.post(
-        "/occasions/999999/archive-prompt/dismiss", headers=member_headers
-    )
+    response = client.post("/occasions/999999/archive-prompt/dismiss", headers=member_headers)
 
     assert response.status_code == 404
 
@@ -1645,10 +1555,7 @@ def test_the_nudge_endpoints_require_authentication(client, db, family, member_u
     occasion = _stale_occasion(db, family, member_user)
 
     assert client.get("/occasions/archive-prompts").status_code == 401
-    assert (
-        client.post(f"/occasions/{occasion.id}/archive-prompt/dismiss").status_code
-        == 401
-    )
+    assert client.post(f"/occasions/{occasion.id}/archive-prompt/dismiss").status_code == 401
 
 
 # --- Archiving widens to the creator (NEU-1294 Decision 4) ------------------
@@ -1672,9 +1579,7 @@ def test_the_creator_archives_the_occasion_they_created(
     assert occasion.is_archived is True
 
 
-def test_the_creator_unarchives_it_too(
-    client, db, family, plain_member, plain_member_headers
-):
+def test_the_creator_unarchives_it_too(client, db, family, plain_member, plain_member_headers):
     """The gate is on the field, not the direction."""
     occasion = _seed_occasion(db, family, plain_member, is_archived=True)
 
@@ -1689,9 +1594,7 @@ def test_the_creator_unarchives_it_too(
     assert occasion.is_archived is False
 
 
-def test_the_creator_still_cannot_rename_it(
-    client, db, family, plain_member, plain_member_headers
-):
+def test_the_creator_still_cannot_rename_it(client, db, family, plain_member, plain_member_headers):
     """A rename changes a label everyone sees and every budget is filed under."""
     occasion = _seed_occasion(db, family, plain_member)
 
@@ -1738,15 +1641,13 @@ def test_deleting_a_family_with_prompt_rows_succeeds(
         db,
         member_user,
         occasion,
-        dismissed_until=datetime.now(timezone.utc) + timedelta(days=30),
+        dismissed_until=datetime.now(UTC) + timedelta(days=30),
     )
 
     response = client.delete(f"/families/{family.id}", headers=organizer_headers)
 
     assert response.status_code == 204
-    assert (
-        db.execute(sqlalchemy.select(OccasionArchivePrompt)).first() is None
-    )
+    assert db.execute(sqlalchemy.select(OccasionArchivePrompt)).first() is None
 
 
 def test_purging_a_user_takes_their_prompt_rows_with_them(
@@ -1765,18 +1666,12 @@ def test_purging_a_user_takes_their_prompt_rows_with_them(
         db,
         plain_member,
         occasion,
-        dismissed_until=datetime.now(timezone.utc) + timedelta(days=30),
+        dismissed_until=datetime.now(UTC) + timedelta(days=30),
     )
-    db.execute(
-        sqlalchemy.delete(FamilyMember).where(
-            FamilyMember.user_id == plain_member.id
-        )
-    )
+    db.execute(sqlalchemy.delete(FamilyMember).where(FamilyMember.user_id == plain_member.id))
     db.flush()
 
-    response = client.delete(
-        f"/users/{plain_member.id}?purge=true", headers=admin_headers
-    )
+    response = client.delete(f"/users/{plain_member.id}?purge=true", headers=admin_headers)
 
     assert response.status_code == 204
     assert db.execute(sqlalchemy.select(OccasionArchivePrompt)).first() is None
@@ -1795,9 +1690,7 @@ def test_a_member_may_no_op_an_occasion_they_can_see(
     """
     occasion = _seed_occasion(db, family, member_user)
 
-    response = client.put(
-        f"/occasions/{occasion.id}", json={}, headers=plain_member_headers
-    )
+    response = client.put(f"/occasions/{occasion.id}", json={}, headers=plain_member_headers)
 
     assert response.status_code == 200
     db.refresh(occasion)

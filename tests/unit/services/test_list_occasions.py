@@ -4,6 +4,7 @@ The repo layer is mocked throughout; these pin the sharing rules on create, the
 membership and archived gates on the mutations, and the claim handling on
 revoke.
 """
+
 from contextlib import ExitStack, contextmanager
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -28,9 +29,7 @@ def _list(list_id=5, owner_id=1):
 
 
 def _occasion(occasion_id=7, family_id=2, name="Christmas 2026", is_archived=False):
-    return SimpleNamespace(
-        id=occasion_id, family_id=family_id, name=name, is_archived=is_archived
-    )
+    return SimpleNamespace(id=occasion_id, family_id=family_id, name=name, is_archived=is_archived)
 
 
 @pytest.fixture
@@ -167,9 +166,7 @@ def test_list_share_targets_asks_for_every_family_s_members_at_once(
 @patch(f"{REPO}.create_share")
 @patch(f"{FAMILIES_REPO}.get_family_member", return_value=object())
 @patch(f"{OCCASIONS_REPO}.get_occasion", side_effect=lambda db, i: _occasion(i))
-def test_create_shares_exactly_the_requested_occasions(
-    mock_get, mock_member, mock_create, db
-):
+def test_create_shares_exactly_the_requested_occasions(mock_get, mock_member, mock_create, db):
     service.set_shares_on_create(db, _list(), _user(), occasion_ids=[7, 8])
 
     assert [call.args[2] for call in mock_create.call_args_list] == [7, 8]
@@ -198,9 +195,7 @@ def test_create_with_no_occasion_ids_shares_nothing(mock_get, mock_create, db):
 @patch(f"{REPO}.create_share")
 @patch(f"{FAMILIES_REPO}.get_family_member", return_value=None)
 @patch(f"{OCCASIONS_REPO}.get_occasion", side_effect=lambda db, i: _occasion(i))
-def test_create_with_a_foreign_occasion_raises_forbidden(
-    mock_get, mock_member, mock_create, db
-):
+def test_create_with_a_foreign_occasion_raises_forbidden(mock_get, mock_member, mock_create, db):
     with pytest.raises(ForbiddenError):
         service.set_shares_on_create(db, _list(), _user(), occasion_ids=[99])
     mock_create.assert_not_called()
@@ -273,9 +268,7 @@ def test_create_share_on_an_archived_occasion_raises_conflict(
 
 @patch(f"{FAMILIES_REPO}.get_family_member", return_value=None)
 @patch(f"{OCCASIONS_REPO}.get_occasion", return_value=_occasion(is_archived=True))
-def test_create_share_checks_membership_before_revealing_archived_state(
-    mock_get, mock_member, db
-):
+def test_create_share_checks_membership_before_revealing_archived_state(mock_get, mock_member, db):
     """A non-member gets the same 403 whatever the occasion's state — they learn
     nothing about a family they do not belong to."""
     with pytest.raises(ForbiddenError):
@@ -303,9 +296,7 @@ def _revoking(losing_ids, has_claims, occasion=None):
         yield SimpleNamespace(
             delete_share=stack.enter_context(patch(f"{REPO}.delete_share")),
             unclaim=stack.enter_context(patch(f"{CLAIMS_REPO}.unclaim_for_users")),
-            delete_items=stack.enter_context(
-                patch(f"{REPO}.delete_folder_items_for_users")
-            ),
+            delete_items=stack.enter_context(patch(f"{REPO}.delete_folder_items_for_users")),
         )
 
 
@@ -354,8 +345,6 @@ def test_revoke_works_on_an_archived_occasion(db):
 @patch(f"{REPO}.find_share", return_value=None)
 @patch(f"{FAMILIES_REPO}.get_family_member", return_value=object())
 @patch(f"{OCCASIONS_REPO}.get_occasion", return_value=_occasion())
-def test_revoke_a_missing_share_is_a_noop(
-    mock_get, mock_member, mock_find, mock_delete, db
-):
+def test_revoke_a_missing_share_is_a_noop(mock_get, mock_member, mock_find, mock_delete, db):
     service.revoke_share(db, _list(), 7, _user())
     mock_delete.assert_not_called()

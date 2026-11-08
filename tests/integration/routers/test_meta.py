@@ -1,4 +1,4 @@
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import httpx
 
@@ -59,13 +59,15 @@ OG_PRICE_HTML = """
 
 
 def test_meta_with_og_tags(client, member_headers):
-    with patch("app.meta.service._resolve_and_validate_url"):
-        with patch("app.meta.service._fetch_url", return_value=_mock_html_response(OG_HTML)):
-            response = client.get(
-                "/meta",
-                params={"url": "https://example.com/product"},
-                headers=member_headers,
-            )
+    with (
+        patch("app.meta.service._resolve_and_validate_url"),
+        patch("app.meta.service._fetch_url", return_value=_mock_html_response(OG_HTML)),
+    ):
+        response = client.get(
+            "/meta",
+            params={"url": "https://example.com/product"},
+            headers=member_headers,
+        )
     assert response.status_code == 200
     data = response.json()
     assert data["title"] == "Cool Gadget"
@@ -75,13 +77,15 @@ def test_meta_with_og_tags(client, member_headers):
 
 
 def test_meta_with_basic_html_tags(client, member_headers):
-    with patch("app.meta.service._resolve_and_validate_url"):
-        with patch("app.meta.service._fetch_url", return_value=_mock_html_response(BASIC_HTML)):
-            response = client.get(
-                "/meta",
-                params={"url": "https://example.com/page"},
-                headers=member_headers,
-            )
+    with (
+        patch("app.meta.service._resolve_and_validate_url"),
+        patch("app.meta.service._fetch_url", return_value=_mock_html_response(BASIC_HTML)),
+    ):
+        response = client.get(
+            "/meta",
+            params={"url": "https://example.com/page"},
+            headers=member_headers,
+        )
     assert response.status_code == 200
     data = response.json()
     assert data["title"] == "Basic Page Title"
@@ -91,13 +95,15 @@ def test_meta_with_basic_html_tags(client, member_headers):
 
 
 def test_meta_with_no_relevant_tags(client, member_headers):
-    with patch("app.meta.service._resolve_and_validate_url"):
-        with patch("app.meta.service._fetch_url", return_value=_mock_html_response(EMPTY_HTML)):
-            response = client.get(
-                "/meta",
-                params={"url": "https://example.com/empty"},
-                headers=member_headers,
-            )
+    with (
+        patch("app.meta.service._resolve_and_validate_url"),
+        patch("app.meta.service._fetch_url", return_value=_mock_html_response(EMPTY_HTML)),
+    ):
+        response = client.get(
+            "/meta",
+            params={"url": "https://example.com/empty"},
+            headers=member_headers,
+        )
     assert response.status_code == 200
     data = response.json()
     assert data["title"] is None
@@ -107,26 +113,33 @@ def test_meta_with_no_relevant_tags(client, member_headers):
 
 
 def test_meta_og_price_fallback(client, member_headers):
-    with patch("app.meta.service._resolve_and_validate_url"):
-        with patch("app.meta.service._fetch_url", return_value=_mock_html_response(OG_PRICE_HTML)):
-            response = client.get(
-                "/meta",
-                params={"url": "https://example.com/widget"},
-                headers=member_headers,
-            )
+    with (
+        patch("app.meta.service._resolve_and_validate_url"),
+        patch("app.meta.service._fetch_url", return_value=_mock_html_response(OG_PRICE_HTML)),
+    ):
+        response = client.get(
+            "/meta",
+            params={"url": "https://example.com/widget"},
+            headers=member_headers,
+        )
     assert response.status_code == 200
     data = response.json()
     assert data["price"] == "9.99"
 
 
 def test_meta_non_html_content_type(client, member_headers):
-    with patch("app.meta.service._resolve_and_validate_url"):
-        with patch("app.meta.service._fetch_url", return_value=_mock_html_response('{"key": "value"}', "application/json")):
-            response = client.get(
-                "/meta",
-                params={"url": "https://example.com/api.json"},
-                headers=member_headers,
-            )
+    with (
+        patch("app.meta.service._resolve_and_validate_url"),
+        patch(
+            "app.meta.service._fetch_url",
+            return_value=_mock_html_response('{"key": "value"}', "application/json"),
+        ),
+    ):
+        response = client.get(
+            "/meta",
+            params={"url": "https://example.com/api.json"},
+            headers=member_headers,
+        )
     assert response.status_code == 200
     data = response.json()
     assert data["title"] is None
@@ -159,13 +172,15 @@ def test_meta_unauthenticated(client):
 
 
 def test_meta_fetch_failure(client, member_headers):
-    with patch("app.meta.service._resolve_and_validate_url"):
-        with patch("app.meta.service._fetch_url", side_effect=Exception("Connection failed")):
-            response = client.get(
-                "/meta",
-                params={"url": "https://example.com/down"},
-                headers=member_headers,
-            )
+    with (
+        patch("app.meta.service._resolve_and_validate_url"),
+        patch("app.meta.service._fetch_url", side_effect=Exception("Connection failed")),
+    ):
+        response = client.get(
+            "/meta",
+            params={"url": "https://example.com/down"},
+            headers=member_headers,
+        )
     assert response.status_code == 200
     data = response.json()
     assert data["title"] is None

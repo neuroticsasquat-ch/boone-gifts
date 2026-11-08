@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
@@ -27,18 +27,14 @@ class TestForgotPassword:
     def test_unknown_email_returns_200_and_sends_nothing(
         self, client, captured_emails, small_forgot_limit
     ):
-        response = client.post(
-            "/auth/forgot-password", json={"email": "nobody@test.com"}
-        )
+        response = client.post("/auth/forgot-password", json={"email": "nobody@test.com"})
         assert response.status_code == 200
         assert captured_emails == []
 
     def test_known_email_returns_200_and_sends_reset_email(
         self, client, db, member_user, captured_emails, small_forgot_limit
     ):
-        response = client.post(
-            "/auth/forgot-password", json={"email": "member@test.com"}
-        )
+        response = client.post("/auth/forgot-password", json={"email": "member@test.com"})
         assert response.status_code == 200
         assert len(captured_emails) == 1
         sent = captured_emails[0]
@@ -55,8 +51,8 @@ class TestForgotPassword:
         assert tokens[0].token_hash
         expires_at = tokens[0].expires_at
         if expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=timezone.utc)
-        assert expires_at > datetime.now(timezone.utc)
+            expires_at = expires_at.replace(tzinfo=UTC)
+        assert expires_at > datetime.now(UTC)
 
 
 class TestResetPassword:
@@ -92,9 +88,7 @@ class TestResetPassword:
         )
         assert response.status_code == 400
 
-    def test_expired_token_returns_400(
-        self, client, db, member_user, small_forgot_limit
-    ):
+    def test_expired_token_returns_400(self, client, db, member_user, small_forgot_limit):
         from app.auth.service import _hash_reset_token
 
         raw = "expired-raw-token"
@@ -102,7 +96,7 @@ class TestResetPassword:
             PasswordResetToken(
                 user_id=member_user.id,
                 token_hash=_hash_reset_token(raw),
-                expires_at=datetime.now(timezone.utc) - timedelta(minutes=1),
+                expires_at=datetime.now(UTC) - timedelta(minutes=1),
             )
         )
         db.flush()
@@ -156,13 +150,9 @@ class TestForgotPasswordRateLimit:
         monkeypatch.setattr(settings, "rate_limit_forgot_password", "2/minute")
 
         for _ in range(2):
-            response = client.post(
-                "/auth/forgot-password", json={"email": "nobody@test.com"}
-            )
+            response = client.post("/auth/forgot-password", json={"email": "nobody@test.com"})
             assert response.status_code == 200
 
-        response = client.post(
-            "/auth/forgot-password", json={"email": "nobody@test.com"}
-        )
+        response = client.post("/auth/forgot-password", json={"email": "nobody@test.com"})
         assert response.status_code == 429
         assert "Retry-After" in response.headers

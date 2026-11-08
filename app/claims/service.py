@@ -5,6 +5,7 @@ A claim is a global fact — the gift is taken, and nobody else should buy it.
 of their own spend, so it lands in exactly one budget. Where the two conflict
 the claim wins, which is what `resolve_filing` turns on (NEU-1269 §3.2).
 """
+
 from sqlalchemy.orm import Session
 
 from app.claims import repository as repo
@@ -121,7 +122,9 @@ def update_claim(db: Session, claim_id: int, user: User, updates: dict) -> Claim
 
     if "occasion_id" in updates and updates["occasion_id"] is not None:
         gift = db.get(Gift, claim.gift_id)
+        assert gift is not None  # claims.gift_id is a foreign key
         gift_list = db.get(GiftList, gift.list_id)
+        assert gift_list is not None  # gifts.list_id is a foreign key
         allowed, _ = occasion_sets(db, gift_list, user)
         if not any(c.id == updates["occasion_id"] for c in allowed):
             raise ForbiddenError("That occasion is not available for this claim.")

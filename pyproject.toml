@@ -43,3 +43,40 @@ dev = [
     "pytest>=9.2.0",
     "ruff>=0.17.3",
 ]
+
+# An app, not a library: uv installs the dependencies only, never the project itself.
+[tool.uv]
+package = false
+
+# The fleet's ruff config (mlb-today, closinglineup). CI runs `ruff check` and
+# `ruff format --check` through the shared python.yml.
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+extend-exclude = [".claude", "frontend", "docs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+# Set notation and typographic dashes the budget docstrings and comments use on purpose.
+allowed-confusables = ["∪", "−", "–"]
+
+# CI runs pyright through the shared python.yml, in its default (standard) mode: the
+# codebase was never type-checked before the shared workflows, so strict is a follow-up.
+[tool.pyright]
+include = ["app", "alembic", "scripts", "tests", "main.py"]
+exclude = ["**/__pycache__"]
+pythonVersion = "3.14"
+venvPath = "."
+venv = ".venv"
+
+# The unit tests stand SimpleNamespace and None doubles in for models and sessions,
+# and pass pydantic-settings' `_env_file`, which pyright can't see. Those two rules
+# are off for tests/ only; the app code keeps them.
+[[tool.pyright.executionEnvironments]]
+root = "tests"
+extraPaths = ["."]
+reportArgumentType = false
+reportCallIssue = false
+
+[[tool.pyright.executionEnvironments]]
+root = "."

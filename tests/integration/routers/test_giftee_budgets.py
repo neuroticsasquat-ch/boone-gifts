@@ -6,10 +6,12 @@ caller's claims, the caller's own budget rows), and the tests that matter most
 are the ones proving nothing that counts toward `allocated` can be invisible,
 and nothing on `giftees[]` reveals another account's claim, spend or budget.
 """
-from datetime import datetime, timezone
+
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
+from sqlalchemy import delete
 
 from app.budgets.giftees import key_for
 from app.dependencies import create_access_token
@@ -17,7 +19,6 @@ from app.models.account_person import AccountPerson
 from app.models.claim import Claim
 from app.models.family import Family
 from app.models.family_member import FamilyMember
-from app.models.folder import Folder
 from app.models.folder_item import FolderItem
 from app.models.gift import Gift
 from app.models.gift_list import GiftList
@@ -27,7 +28,7 @@ from app.models.list_share import ListShare
 from app.models.occasion import Occasion
 from app.models.user import User
 
-BOUGHT = datetime(2026, 5, 24, 12, 0, tzinfo=timezone.utc)
+BOUGHT = datetime(2026, 5, 24, 12, 0, tzinfo=UTC)
 
 
 @pytest.fixture
@@ -42,9 +43,7 @@ def family(db, member_user):
 
 @pytest.fixture
 def occasion(db, family, member_user):
-    occ = Occasion(
-        family_id=family.id, name="Christmas 2026", created_by_id=member_user.id
-    )
+    occ = Occasion(family_id=family.id, name="Christmas 2026", created_by_id=member_user.id)
     db.add(occ)
     db.flush()
     return occ
@@ -84,9 +83,7 @@ def jane_headers(jane):
     return _headers(jane)
 
 
-def _list(
-    db, owner, name, occasion=None, recipient_name=None, account_person_id=None
-) -> GiftList:
+def _list(db, owner, name, occasion=None, recipient_name=None, account_person_id=None) -> GiftList:
     gl = GiftList(
         name=name,
         owner_id=owner.id,
@@ -102,9 +99,7 @@ def _list(
     return gl
 
 
-def _claim(
-    db, gift_list, claimer, name, occasion=None, purchased_at=None, amount_paid=None
-):
+def _claim(db, gift_list, claimer, name, occasion=None, purchased_at=None, amount_paid=None):
     gift = Gift(list_id=gift_list.id, name=name)
     db.add(gift)
     db.flush()
@@ -112,7 +107,7 @@ def _claim(
         gift_id=gift.id,
         user_id=claimer.id,
         occasion_id=occasion.id if occasion is not None else None,
-        claimed_at=datetime.now(timezone.utc),
+        claimed_at=datetime.now(UTC),
         purchased_at=purchased_at,
         amount_paid=amount_paid,
     )
@@ -162,9 +157,7 @@ def test_shopping_carries_giftees_and_every_item_names_one(
 
         assert set(payload) == {"budget", "giftees", "items"}
         assert [item["giftee_key"] for item in payload["items"]] == [key_for(gl)]
-        assert {item["giftee_key"] for item in payload["items"]} <= set(
-            _keys(payload)
-        )
+        assert {item["giftee_key"] for item in payload["items"]} <= set(_keys(payload))
         assert _giftee(payload, key_for(gl)) == {
             "key": f"owner:{other.id}",
             "kind": "owner",
@@ -200,9 +193,9 @@ def test_giftees_are_the_union_of_three_sources(
     # Unshare both: the claim keeps its group by source 2, the budget by source 3.
     for gl in (claimed, budgeted):
         db.execute(
-            ListOccasionShare.__table__.delete().where(
-                ListOccasionShare.list_id == gl.id
-            )
+            delete(ListOccasionShare)
+            .where(ListOccasionShare.list_id == gl.id)
+            .execution_options(synchronize_session=False)
         )
     db.flush()
 
@@ -231,10 +224,7 @@ def test_the_callers_own_list_and_an_unviewable_list_contribute_nothing(
     db.flush()
 
     assert _keys(_shopping(client, member_headers, occasion)) == []
-    assert (
-        _keys(client.get(f"/folders/{folder.id}/shopping", headers=member_headers).json())
-        == []
-    )
+    assert _keys(client.get(f"/folders/{folder.id}/shopping", headers=member_headers).json()) == []
 
 
 def test_lists_agreeing_on_the_triple_are_one_giftee(
@@ -395,10 +385,7 @@ def test_a_well_formed_key_for_a_giftee_not_in_scope_is_404(
     means the list has since gone."""
     elsewhere = _list(db, other, "Not shared here")
 
-    assert (
-        _put(client, member_headers, occasion, key_for(elsewhere), "10.00").status_code
-        == 404
-    )
+    assert _put(client, member_headers, occasion, key_for(elsewhere), "10.00").status_code == 404
     assert _put(client, member_headers, occasion, "owner:999999", "10.00").status_code == 404
 
 
@@ -433,8 +420,9 @@ def test_giftee_endpoints_gate_like_the_overalls(
         == 403
     )
     assert (
-        client.put(f"/occasions/{occasion.id}/giftees/{key}/budget", json={"amount": "10.00"})
-        .status_code
+        client.put(
+            f"/occasions/{occasion.id}/giftees/{key}/budget", json={"amount": "10.00"}
+        ).status_code
         == 401
     )
 
@@ -445,9 +433,7 @@ def test_a_negative_giftee_budget_is_refused(client, db, member_headers, occasio
     assert _put(client, member_headers, occasion, key_for(gl), "-1.00").status_code == 422
 
 
-def test_folder_scope_hits_the_folder_path(
-    client, db, member_user, member_headers, folder, other
-):
+def test_folder_scope_hits_the_folder_path(client, db, member_user, member_headers, folder, other):
     gl = _list(db, other, "Other's List")
     db.add(ListShare(list_id=gl.id, user_id=member_user.id))
     db.add(FolderItem(folder_id=folder.id, list_id=gl.id))
@@ -487,19 +473,50 @@ def test_per_giftee_spend_counts_that_giftees_lists_alone_and_sums_to_the_overal
     because the aggregates are shared, not copied."""
     others = _list(db, other, "Other's List", occasion=occasion)
     janes = _list(db, jane, "Jane's List", occasion=occasion)
-    _claim(db, others, member_user, "Shoes", occasion=occasion, purchased_at=BOUGHT, amount_paid=Decimal("85.00"))
+    _claim(
+        db,
+        others,
+        member_user,
+        "Shoes",
+        occasion=occasion,
+        purchased_at=BOUGHT,
+        amount_paid=Decimal("85.00"),
+    )
     _claim(db, others, member_user, "Socks", occasion=occasion, purchased_at=BOUGHT)
     _claim(db, others, member_user, "Skillet", occasion=occasion, amount_paid=Decimal("20.00"))
-    _claim(db, janes, member_user, "Puzzle", occasion=occasion, purchased_at=BOUGHT, amount_paid=Decimal("18.00"))
+    _claim(
+        db,
+        janes,
+        member_user,
+        "Puzzle",
+        occasion=occasion,
+        purchased_at=BOUGHT,
+        amount_paid=Decimal("18.00"),
+    )
 
     payload = _shopping(client, member_headers, occasion)
 
     other_budget = _giftee(payload, key_for(others))["budget"]
     jane_budget = _giftee(payload, key_for(janes))["budget"]
-    assert (other_budget["spent"], other_budget["bought_count"], other_budget["total_count"], other_budget["unpriced_count"]) == ("85.00", 2, 3, 1)
-    assert (jane_budget["spent"], jane_budget["bought_count"], jane_budget["total_count"], jane_budget["unpriced_count"]) == ("18.00", 1, 1, 0)
+    assert (
+        other_budget["spent"],
+        other_budget["bought_count"],
+        other_budget["total_count"],
+        other_budget["unpriced_count"],
+    ) == ("85.00", 2, 3, 1)
+    assert (
+        jane_budget["spent"],
+        jane_budget["bought_count"],
+        jane_budget["total_count"],
+        jane_budget["unpriced_count"],
+    ) == ("18.00", 1, 1, 0)
     overall = payload["budget"]
-    assert (overall["spent"], overall["bought_count"], overall["total_count"], overall["unpriced_count"]) == ("103.00", 3, 4, 1)
+    assert (
+        overall["spent"],
+        overall["bought_count"],
+        overall["total_count"],
+        overall["unpriced_count"],
+    ) == ("103.00", 3, 4, 1)
 
 
 def test_the_overall_and_the_giftee_rows_never_write_each_other(
@@ -508,12 +525,16 @@ def test_the_overall_and_the_giftee_rows_never_write_each_other(
     gl = _list(db, other, "Other's List", occasion=occasion)
     _put(client, member_headers, occasion, key_for(gl), "150.00")
 
-    client.put(f"/occasions/{occasion.id}/budget", json={"amount": "200.00"}, headers=member_headers)
+    client.put(
+        f"/occasions/{occasion.id}/budget", json={"amount": "200.00"}, headers=member_headers
+    )
     client.delete(f"/occasions/{occasion.id}/budget", headers=member_headers)
     rows = db.query(GifteeBudget).filter(GifteeBudget.user_id == member_user.id).all()
     assert [(r.giftee_key, r.amount) for r in rows] == [(key_for(gl), Decimal("150.00"))]
 
-    client.put(f"/occasions/{occasion.id}/budget", json={"amount": "200.00"}, headers=member_headers)
+    client.put(
+        f"/occasions/{occasion.id}/budget", json={"amount": "200.00"}, headers=member_headers
+    )
     _put(client, member_headers, occasion, key_for(gl), "175.00")
     client.delete(f"/occasions/{occasion.id}/giftees/{key_for(gl)}/budget", headers=member_headers)
     assert _shopping(client, member_headers, occasion)["budget"]["amount"] == "200.00"
@@ -534,10 +555,20 @@ def test_an_orphaned_giftee_budget_still_shows_and_counts(
     db.add(FolderItem(folder_id=folder.id, list_id=gl.id))
     db.flush()
     _put(client, member_headers, occasion, key_for(gl), "150.00")
-    client.put(f"/folders/{folder.id}/giftees/{key_for(gl)}/budget", json={"amount": "60.00"}, headers=member_headers)
+    client.put(
+        f"/folders/{folder.id}/giftees/{key_for(gl)}/budget",
+        json={"amount": "60.00"},
+        headers=member_headers,
+    )
 
-    assert client.delete(f"/lists/{gl.id}/occasions/{occasion.id}", headers=other_headers).status_code == 204
-    assert client.delete(f"/folders/{folder.id}/items/{gl.id}", headers=member_headers).status_code == 204
+    assert (
+        client.delete(f"/lists/{gl.id}/occasions/{occasion.id}", headers=other_headers).status_code
+        == 204
+    )
+    assert (
+        client.delete(f"/folders/{folder.id}/items/{gl.id}", headers=member_headers).status_code
+        == 204
+    )
 
     occasion_payload = _shopping(client, member_headers, occasion)
     folder_payload = client.get(f"/folders/{folder.id}/shopping", headers=member_headers).json()
@@ -567,7 +598,12 @@ def test_renaming_a_recipient_leaves_the_old_giftee_budget_behind(
     payload = _shopping(client, member_headers, occasion)
     old = _giftee(payload, old_key)
     new = _giftee(payload, new_key)
-    assert (old["name"], old["keeper"], old["list_count"], old["budget"]["amount"]) == ("Beth", "Other", 0, "75.00")
+    assert (old["name"], old["keeper"], old["list_count"], old["budget"]["amount"]) == (
+        "Beth",
+        "Other",
+        0,
+        "75.00",
+    )
     assert (new["name"], new["list_count"], new["budget"]["amount"]) == ("Bethany", 1, None)
     assert payload["budget"]["allocated"] == "75.00"
 
@@ -592,7 +628,14 @@ def test_deleting_an_account_person_takes_every_giftee_budget_keyed_on_it(
     db.flush()
     assert _put(client, member_headers, occasion, f"person:{gran.id}", "100.00").status_code == 200
     assert _put(client, jane_headers, occasion, f"person:{gran.id}", "90.00").status_code == 200
-    assert client.put(f"/folders/{folder.id}/giftees/person:{gran.id}/budget", json={"amount": "80.00"}, headers=member_headers).status_code == 200
+    assert (
+        client.put(
+            f"/folders/{folder.id}/giftees/person:{gran.id}/budget",
+            json={"amount": "80.00"},
+            headers=member_headers,
+        ).status_code
+        == 200
+    )
 
     response = client.put(
         "/account?confirm=true",
@@ -614,7 +657,11 @@ def test_deleting_a_folder_takes_its_giftee_budgets(
     db.add(ListShare(list_id=gl.id, user_id=member_user.id))
     db.add(FolderItem(folder_id=folder.id, list_id=gl.id))
     db.flush()
-    client.put(f"/folders/{folder.id}/giftees/{key_for(gl)}/budget", json={"amount": "60.00"}, headers=member_headers)
+    client.put(
+        f"/folders/{folder.id}/giftees/{key_for(gl)}/budget",
+        json={"amount": "60.00"},
+        headers=member_headers,
+    )
 
     assert client.delete(f"/folders/{folder.id}", headers=member_headers).status_code == 204
     assert db.query(GifteeBudget).filter(GifteeBudget.folder_id == folder.id).count() == 0
@@ -649,9 +696,19 @@ def test_purging_a_user_takes_the_giftee_budgets_they_set(
     db.add(ListShare(list_id=gl.id, user_id=member_user.id))
     db.add(FolderItem(folder_id=folder.id, list_id=gl.id))
     db.flush()
-    assert client.put(f"/folders/{folder.id}/giftees/{key_for(gl)}/budget", json={"amount": "60.00"}, headers=member_headers).status_code == 200
+    assert (
+        client.put(
+            f"/folders/{folder.id}/giftees/{key_for(gl)}/budget",
+            json={"amount": "60.00"},
+            headers=member_headers,
+        ).status_code
+        == 200
+    )
 
-    assert client.delete(f"/users/{member_user.id}?purge=true", headers=admin_headers).status_code == 204
+    assert (
+        client.delete(f"/users/{member_user.id}?purge=true", headers=admin_headers).status_code
+        == 204
+    )
     assert db.query(GifteeBudget).filter(GifteeBudget.user_id == member_user.id).count() == 0
 
 
@@ -665,9 +722,18 @@ def test_purging_a_user_takes_the_giftee_budgets_resolving_through_their_lists(
     db.add(ListShare(list_id=gl.id, user_id=member_user.id))
     db.add(FolderItem(folder_id=folder.id, list_id=gl.id))
     db.flush()
-    assert client.put(f"/folders/{folder.id}/giftees/{key_for(gl)}/budget", json={"amount": "60.00"}, headers=member_headers).status_code == 200
+    assert (
+        client.put(
+            f"/folders/{folder.id}/giftees/{key_for(gl)}/budget",
+            json={"amount": "60.00"},
+            headers=member_headers,
+        ).status_code
+        == 200
+    )
 
-    assert client.delete(f"/users/{stranger.id}?purge=true", headers=admin_headers).status_code == 204
+    assert (
+        client.delete(f"/users/{stranger.id}?purge=true", headers=admin_headers).status_code == 204
+    )
 
     assert db.query(GifteeBudget).filter(GifteeBudget.owner_id == stranger.id).count() == 0
     payload = client.get(f"/folders/{folder.id}/shopping", headers=member_headers).json()
@@ -699,7 +765,10 @@ def test_an_orphaned_giftee_budget_can_still_be_edited(
     it reveals nothing the caller could not already see."""
     gl = _list(db, other, "Other's List", occasion=occasion)
     _put(client, member_headers, occasion, key_for(gl), "150.00")
-    assert client.delete(f"/lists/{gl.id}/occasions/{occasion.id}", headers=other_headers).status_code == 204
+    assert (
+        client.delete(f"/lists/{gl.id}/occasions/{occasion.id}", headers=other_headers).status_code
+        == 204
+    )
 
     response = _put(client, member_headers, occasion, key_for(gl), "175.00")
 
