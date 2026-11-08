@@ -2,19 +2,58 @@ version: 2
 updates:
   - package-ecosystem: uv
     directory: /
+    target-branch: updates/dependencies
     schedule:
       interval: weekly
       day: saturday
       time: "09:00"
       timezone: America/New_York
-    target-branch: updates/dependencies
-    groups:
-      minor-and-patch:
-        update-types:
-          - minor
-          - patch
+    commit-message:
+      prefix: build
+      prefix-development: build
     ignore:
       # Held below 2.1 until opentelemetry-instrumentation-sqlalchemy supports it (see
       # pyproject.toml); drop with the cap.
       - dependency-name: sqlalchemy
         versions: [">=2.1"]
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  # The npm ecosystem reads pnpm-lock.yaml.
+  - package-ecosystem: npm
+    directory: /frontend
+    target-branch: updates/dependencies
+    schedule:
+      interval: weekly
+      day: saturday
+      time: "09:00"
+      timezone: America/New_York
+    commit-message:
+      prefix: build
+      prefix-development: build
+    ignore:
+      # msw 3 is a breaking migration, and @vitest/mocker still peers msw ^2.
+      # Remove once vitest supports msw 3 and the migration (NEU-1531) is done.
+      - dependency-name: msw
+        update-types: [version-update:semver-major]
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: updates/dependencies
+    schedule:
+      interval: weekly
+      day: saturday
+      time: "09:00"
+      timezone: America/New_York
+    commit-message:
+      prefix: ci
+    # The shared workflows float on @v1; bumping them is the workflows repo's job.
+    ignore:
+      - dependency-name: neuroticsasquat-ch/workflows
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]

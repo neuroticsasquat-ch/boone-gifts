@@ -2,15 +2,19 @@
 
 FastAPI backend for Boone Gifts. Python 3.14, SQLite, SQLAlchemy 2.0, Pydantic v2, uv.
 
+This repo is the `boone-gifts` monorepo: the backend at the root, the React frontend under
+`frontend/` with its own guide in [`frontend/AGENTS.md`](frontend/AGENTS.md) (NEU-2237). One
+compose file, Taskfile and pre-commit config cover both; the frontend's tasks are `fe:*`.
+
 ## Quick start
 ```bash
 cp .env.example .env              # then set APP_JWT_SECRET (openssl rand -hex 32)
-task up                           # shared infra (Traefik, Mailpit), then the backend container
+task up                           # shared infra (Traefik, Mailpit), then the backend and frontend containers
 task migrate                      # alembic upgrade head
 task create-admin                 # interactive prompts
-pre-commit install                # once: the hook runs `task test` in the container
+pre-commit install                # once: the hooks run ruff, pyright and pytest (and the frontend's checks) in the containers
 ```
-Dev API on `https://boone-gifts-api.localhost`, web on `https://boone-gifts.localhost` (`task up` in `../boone-gifts-frontend`), Mailpit on `https://mailpit.localhost` — all through the shared Traefik in `~/projects/tbc-localdev-infra`. The database stays SQLite under `./data`; the infra's MySQL/Postgres are not used.
+Dev API on `https://boone-gifts-api.localhost`, web on `https://boone-gifts.localhost` (the frontend container), Mailpit on `https://mailpit.localhost` — all through the shared Traefik in `~/projects/tbc-localdev-infra`. The database stays SQLite under `./data`; the infra's MySQL/Postgres are not used.
 
 ## Commands
 
@@ -29,7 +33,7 @@ The Taskfile, compose file and pre-commit hook follow the shared localdev conven
 - `task create-admin` — `python -m app.cli.create_admin`
 - `task show-telemetry` — `python -m app.cli.show_telemetry`, the release/environment errors are reported under
 - `task deps:add -- <pkg>` / `task deps:add-dev -- <pkg>` / `task deps:remove -- <pkg>` / `task deps:lock` — uv, inside the container; `task build` afterwards
-- `task lint` / `task format` / `task format:check` / `task typecheck` — ruff check, ruff format, pyright. Not clean on the existing code yet, so CI and the pre-commit hook don't run them
+- `task lint` / `task format` / `task format:check` / `task typecheck` — ruff check, ruff format, pyright. CI and the pre-commit hooks run all but `format`; config is in `pyproject.toml`
 
 ## Stack
 - **Framework**: FastAPI + Uvicorn (`--reload` in dev, so manual restarts are rarely needed)
@@ -53,10 +57,12 @@ main.py                # Thin entrypoint
 pyproject.toml         # Metadata + direct deps
 uv.lock                # Pinned deps (generated; never hand-edit)
 Dockerfile             # dev image      Dockerfile.prod + start.sh — production
-docker-compose.yml     # Dev: the boone-gifts-backend service on the shared proxy network
+docker-compose.yml     # Dev: the boone-gifts-backend and boone-gifts-frontend services on the shared proxy network
 docker-compose.prod.yml
-Taskfile.yml           # Lifecycle + repo tasks, all run in the container
-.pre-commit-config.yaml # `task test` hook, run in the container
+Taskfile.yml           # Lifecycle + repo tasks (fe:* for the frontend), all run in the containers
+.pre-commit-config.yaml # ruff, pyright, pytest and the frontend's hooks, run in the containers
+.github/               # ci.yml + dependencies.yml (the shared workflows), ci/env + ci/setup.sh, dependabot.yml
+frontend/              # the React SPA (see frontend/AGENTS.md)
 alembic.ini            # DB URL comes from env.py, not here
 scripts/
   seed_dev.py          # Dev fixtures — see "Dev fixtures" below
@@ -429,7 +435,7 @@ agreeing on `(owner_id, account_person_id, recipient_name)` are one giftee.
 - Conftest fixtures: `db`, `client`, `admin_user`, `member_user`, `admin_headers`, `member_headers`, `sample_list`, `shared_list`, `connection`, `folder`
 - `tests/integration/test_migration_*.py` run the real Alembic revisions against a throwaway SQLite file — the only place schema-level behaviour (backfills, foreign keys, downgrades) is actually exercised, since the rest of the suite builds tables from the models
 - The rate limiter is reset by an autouse fixture
-- CI runs `uv sync --frozen && pytest tests/ -v` with `APP_JWT_SECRET=ci-test-secret`
+- CI's `python` job (the shared `python.yml`) runs `uv sync --locked`, ruff check, ruff format --check, pyright, the Alembic single-head and drift checks (`alembic upgrade head && alembic check`), then pytest. Its environment is `.github/ci/env`; `.github/ci/setup.sh` creates `./data`. It is skipped on a PR that only touches `frontend/`
 
 ## Dev fixtures
 `python -m scripts.seed_dev` (add `--reset` to re-seed, `--purge` to remove) builds the visibility states a single account can't produce: a directly shared list, a list reaching you only through an occasion, a list kept for someone with no account, an archived list, a pending connection request, a shared account with two people, one claim in each of its three money states — taken but not bought, bought with an amount, and bought with the amount skipped — and a family with two archived Christmases plus one active, shared a standing list, which is the only way to see a claim file silently instead of prompting, and two occasions gone quiet past the 60-day threshold — one nudging to be archived, one snoozed — since suppression cannot be seen unless both states are on screen at once. All fixture users are `@example.com`, and purge only deletes rows reachable from them. Run it with `-m` — executing the file directly puts `scripts/` on `sys.path` instead of `/app`.
@@ -443,8 +449,8 @@ agreeing on `(owner_id, account_person_id, recipient_name)` are one giftee.
 - **Cascade cleanup on relationship loss**: when a member leaves, is removed, or a family is deleted, the service calls `unclaim_gifts_between` / `delete_folder_items_between` per affected pair — but only when the two users no longer share access by any remaining path (no accepted connection, no other common family). `list_shares` rows are never touched; family access doesn't create share rows.
 
 ## Debugging CI failures
-- **If told a CI/workflow run failed, always investigate via `gh` first** before running anything locally or claiming it's fixed: `gh run list -w CI` to find the failed run, then `gh run view <id> --log-failed`.
-- **Never report something as fixed based on local runs alone** — CI runs in a Docker container and may surface issues local runs miss. Push, then confirm a fresh CI run passes before declaring done.
+- **If told a CI/workflow run failed, always investigate via `gh` first** before running anything locally or claiming it's fixed: `gh run list -w ci` to find the failed run, then `gh run view <id> --log-failed`.
+- **Never report something as fixed based on local runs alone** — CI runs on a clean runner and may surface issues local runs miss. The one required check is `ci`, which gates `python`, `js`, `image` and the `changes` path filter. Push, then confirm a fresh CI run passes before declaring done.
 
 ## Commits and release notes
 
@@ -464,10 +470,10 @@ agreeing on `(owner_id, account_person_id, recipient_name)` are one giftee.
 
 **One ticket, at most one entry.** Work branches are squash-merged, so a ticket contributes exactly one commit. That is why the PR title has to be a well-formed Conventional Commit subject: it becomes the squash commit's subject, and thence the release-note line.
 
-**Releases are cut by hand, driven by two tasks.** `task release-branch` cuts the next `release/vX.Y.Z` off `main` — a minor bump from the latest GitHub release by default, `-- --major` or `-- --patch` to change that. `task release-notes` branches off the current release branch, regenerates `RELEASE_NOTES.md` with `git cliff --tag <version> -u --prepend`, opens a PR against the release branch, waits for CI and squash-merges it; the version comes from the release branch name, so nothing else has to track it. Both run on the host, not in the container. There is still no release *workflow*: the tag (`tag_pattern = "v[0-9].*"`) and the GitHub release are made by hand. Nothing regenerates the notes afterwards, so a subject that was wrong at merge time can only be fixed by rewriting history or editing the notes directly. `git cliff --unreleased` previews what the next release will read like.
+**Releases are cut by hand, driven by two tasks.** `task release-branch` cuts the next `release/vX.Y.Z` off `main` — a minor bump from the latest GitHub release by default, `-- --major` or `-- --patch` to change that. `task release-notes` branches off the current release branch, regenerates `RELEASE_NOTES.md` with `git cliff --tag <version> -u --prepend`, opens a PR against the release branch, waits for CI and squash-merges it; the version comes from the release branch name, so nothing else has to track it. Both run on the host, not in the container. There is still no release *workflow*: the tag (`tag_pattern = "v[0-9].*"`) and the GitHub release are made by hand. Nothing regenerates the notes afterwards, so a subject that was wrong at merge time can only be fixed by rewriting history or editing the notes directly. `git cliff --unreleased` previews what the next release will read like. `.cliffignore` lists the frontend commits imported by the monorepo merge that the old frontend repo had already released (up to its own `v0.6.0`): no backend tag reaches them, so without it they would read as unreleased. Their notes are in `RELEASE_NOTES.md`'s *Frontend release history*.
 
-## Pre-commit (planned, not yet installed)
-Pre-commit will live **on the host** (system Python), not in the container; its hooks delegate to `task` commands that run the checks inside Docker (`task lint`, `task test`). Never install pre-commit or its hooks inside the container.
+## Pre-commit
+Pre-commit lives **on the host** (system Python), not in a container; its hooks delegate to `task` commands that run the checks inside Docker (`task lint`, `task typecheck`, `task test`, and the `fe:*` ones for `frontend/`). Never install pre-commit or its hooks inside a container.
 
 ## Production
 - **Deploy**: push to `main` triggers a Coolify redeploy. `Dockerfile.prod` + `start.sh` run migrations and optionally seed an admin; Uvicorn with 2 workers, under `opentelemetry-instrument`.

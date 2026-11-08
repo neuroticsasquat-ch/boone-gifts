@@ -4,6 +4,8 @@ REST API for Boone Gifts, a gift list and wishlist platform. Users create gift l
 
 For architecture, conventions, and the visibility model, see [`AGENTS.md`](AGENTS.md).
 
+The React frontend lives in this repo under [`frontend/`](frontend/README.md), and `task up` starts both.
+
 ## Tech Stack
 
 - **Python 3.14** / **FastAPI** / **Uvicorn**
@@ -90,10 +92,10 @@ task migrate                         # Apply database migrations
 task makemigration -- 'description'  # Generate a new migration
 task db:refresh                      # Latest prod backup, anonymized, as the local DB
 task create-admin                    # Create an admin user
-task lint                            # ruff check (not yet clean)
-task format                          # ruff format (not yet clean)
+task lint                            # ruff check
+task format                          # ruff format
 task format:check                    # ruff format --check
-task typecheck                       # pyright (not yet clean)
+task typecheck                       # pyright
 ```
 
 ### Dependency Management

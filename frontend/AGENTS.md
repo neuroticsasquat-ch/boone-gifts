@@ -2,12 +2,15 @@
 
 React 19 SPA for Boone Gifts. TypeScript, Vite, Tailwind v4. Runs entirely in Docker — no host `node_modules`.
 
+The frontend lives under `frontend/` in the `boone-gifts` monorepo, with the backend at the repo
+root (NEU-2237). The compose file, Taskfile and pre-commit hooks are the root ones; the frontend's
+tasks are the `fe:*` targets. Run the commands below from the repo root.
+
 ## Quick start
 ```bash
-cp .env.example .env              # VITE_API_URL points at the backend
-task up                           # shared infra (Traefik, Mailpit), then the frontend container
-task -d ../boone-gifts-backend up # the API, from its own repo
-pre-commit install                # once: hooks run oxlint, tsc and vitest in the container
+cp frontend/.env.example frontend/.env  # VITE_API_URL points at the backend
+task up                                 # shared infra (Traefik, Mailpit), then the backend and frontend containers
+pre-commit install                      # once: hooks run oxlint, tsc and vitest in the container
 ```
 Dev web on `https://boone-gifts.localhost`, API on `https://boone-gifts-api.localhost`, Mailpit on `https://mailpit.localhost` — all through the shared Traefik in `~/projects/tbc-localdev-infra`.
 
@@ -15,19 +18,19 @@ Dev web on `https://boone-gifts.localhost`, API on `https://boone-gifts-api.loca
 
 The Taskfile, compose file and pre-commit hooks follow the shared contract in `~/projects/tbc-localdev-infra/CONVENTIONS.md`.
 
-**Lifecycle** — this repo's `docker-compose.yml` runs only the `boone-gifts-frontend` service, on the external `proxy` network. Traefik and Mailpit come from tbc-localdev-infra (`task infra:up`, included from `~/projects/tbc-localdev-infra`); the backend runs from its own repo:
+**Lifecycle** — the root `docker-compose.yml` runs the `boone-gifts-backend` and `boone-gifts-frontend` services, on the external `proxy` network. Traefik and Mailpit come from tbc-localdev-infra (`task infra:up`, included from `~/projects/tbc-localdev-infra`):
 - `task up` — `infra:up`, then `docker compose up -d` (no rebuild)
-- `task build` — rebuild the image, `npm ci` into the `node_modules` volume, recreate the container. Run it after any dependency or Dockerfile change: the volume hides the rebuilt image's packages otherwise
-- `task down` / `task restart` / `task logs` / `task shell` / `task ps`
+- `task build` — rebuild both images, `pnpm install --frozen-lockfile` into the frontend's `node_modules` volume, recreate the containers. Run it after any dependency or Dockerfile change: the volume hides the rebuilt image's packages otherwise
+- `task down` / `task ps`; `task fe:logs` / `task fe:shell` for the frontend container
 
-**Repo tasks**. Every one runs **inside the container** — never the host's node:
-- `task test` — `npx vitest run`; `task test -- <path>` runs a single test file
-- `task test:watch` — `npx vitest` in watch mode
-- `task lint` — `npx oxlint`
-- `task typecheck` — `npx tsc -b`
-- `task build:app` — `npx vite build` (production build). Not `task build`, which rebuilds the dev image
-- `task deps:add -- <pkg>` / `task deps:add-dev -- <pkg>` / `task deps:remove -- <pkg>` — npm install / install -D / uninstall
-- `task install` — `npm ci`, after pulling lockfile changes
+**Frontend tasks**. Every one runs **inside the frontend container** — never the host's node. The package manager is pnpm, at the version `packageManager` in `package.json` pins:
+- `task fe:test` — `pnpm run test` (`vitest run`); `task fe:test -- <path>` runs a single test file
+- `task fe:test:watch` — `vitest` in watch mode
+- `task fe:lint` — `pnpm run lint` (`oxlint --max-warnings 0`)
+- `task fe:typecheck` — `pnpm run typecheck` (`tsc -b`)
+- `task fe:build` — `pnpm run build` (`tsc -b && vite build`, the production build)
+- `task fe:deps:add -- <pkg>` / `task fe:deps:add-dev -- <pkg>` / `task fe:deps:remove -- <pkg>` — pnpm add / add -D / remove
+- `task fe:install` — `pnpm install --frozen-lockfile`, after pulling lockfile changes
 
 ## Stack & config
 - **React 19** / **TypeScript 7** / **Vite 8** / **Tailwind v4** (Vite plugin, no PostCSS)
@@ -49,10 +52,7 @@ The Taskfile, compose file and pre-commit hooks follow the shared contract in `~
 **Routing**: `routes.tsx` — one pathless root route mounting `NavigationDepthProvider` (see "Navigation"), then public paths, then `ProtectedRoute` → `Layout` (nav shell) for authenticated pages. Every numeric `:id` route is wrapped in `<NumericId back="…">` (`components/NumericId.tsx`), which validates the id before the page mounts and renders a bad-address arm when it doesn't parse — so pages read the id with `useNumericId()` as a plain `number` and carry no `enabled:` id guard. `family-invites/:token` is deliberately unwrapped. `routes.test.tsx` walks the array and fails on an unwrapped `:id` route. See [ADR 0006](docs/adr/0006-route-ids-are-validated-at-the-route.md).
 
 ```
-Dockerfile           # node:22-slim, npm ci, idles
-docker-compose.yml   # Dev: the boone-gifts-frontend service on the shared proxy network
-Taskfile.yml         # Lifecycle + repo tasks, all run in the container
-.pre-commit-config.yaml # oxlint, tsc and vitest hooks, run in the container
+Dockerfile           # node:22-slim, pnpm install, runs the Vite dev server (the root compose file builds it)
 index.html           # Vite entry HTML
 vite.config.ts       # Vite + Tailwind + Vitest + Sentry plugin config
 src/
@@ -690,8 +690,8 @@ section that claims to hold everything shared with the viewer.
 - **Types** in `src/types/index.ts`: `AuthUser` is decoded from the JWT payload (`role`), and `Gift` vs `GiftOwnerView` are separate because owners get responses without claim fields.
 
 ## Debugging CI failures
-- **If told a CI/workflow run failed, always investigate via `gh` first** before running anything locally or claiming it's fixed: `gh run list -w CI` to find the failed run, then `gh run view <id> --log-failed`.
-- **Never report something as fixed based on local runs alone** — CI runs `npx oxlint` and `npx vitest run` in a clean node environment and may surface issues local runs miss. Push, then confirm a fresh CI run passes before declaring done.
+- **If told a CI/workflow run failed, always investigate via `gh` first** before running anything locally or claiming it's fixed: `gh run list -w ci` to find the failed run, then `gh run view <id> --log-failed`.
+- **Never report something as fixed based on local runs alone** — CI's `js` job runs `pnpm run lint`, `typecheck`, `test` and `build` in a clean node environment and may surface issues local runs miss. Push, then confirm a fresh CI run passes before declaring done.
 
 ## Commits and release notes
 
@@ -717,7 +717,7 @@ section that claims to hold everything shared with the viewer.
 Pre-commit will live **on the host** (system Python), not in the container; its hooks delegate to `task` commands that run the checks inside Docker (`task lint`, `task test`). Never install pre-commit or its hooks inside the container.
 
 ## Production
-- **Deploy**: an assets-only Cloudflare Worker (`wrangler.jsonc`, no `main`) built by Workers Builds — build command `npm run build`, deploy command `npx wrangler deploy`. `not_found_handling: "single-page-application"` serves `index.html` for deep links; there is no `_redirects`. Build variables and local checks: README "Deployment".
+- **Deploy**: an assets-only Cloudflare Worker (`wrangler.jsonc`, no `main`) built by Workers Builds from the `boone-gifts` repo with root directory `frontend` — build command `pnpm build`, deploy command `npx wrangler deploy`. `not_found_handling: "single-page-application"` serves `index.html` for deep links; there is no `_redirects`. Build variables and local checks: README "Deployment".
 - **Domain**: `app.boone.gift`
 - **Errors → Bugsink** (Sentry protocol): `VITE_SENTRY_DSN`, initialised in `main.tsx` with `release` = the commit SHA (`__SENTRY_RELEASE__`, defined in `vite.config.ts` from `SOURCE_COMMIT`/`WORKERS_CI_COMMIT_SHA`/`CF_PAGES_COMMIT_SHA`). With `SENTRY_AUTH_TOKEN` set, the Sentry Vite plugin uploads debug-ID source maps to `SENTRY_URL` and deletes them from `dist/`; without it, no maps are built. `?test-error` on any page throws a `BugsinkTestError` through the top-level ErrorBoundary. Variables: README "Error reporting".
 

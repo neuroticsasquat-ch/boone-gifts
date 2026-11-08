@@ -12,7 +12,7 @@ The README's "Deployment" section is the reference for the Worker and its build 
 
 ## Deploy
 
-Push to `main`. Workers Builds detects the push, runs `npm run build` (`tsc -b && vite build`), then `npx wrangler deploy`, which uploads `dist/` as the Worker's static assets.
+Push to `main` of `boone-gifts`. Workers Builds detects a push touching `frontend/`, runs `pnpm build` (`tsc -b && vite build`) in `frontend/`, then `npx wrangler deploy`, which uploads `dist/` as the Worker's static assets.
 
 No manual steps required for a standard deploy.
 

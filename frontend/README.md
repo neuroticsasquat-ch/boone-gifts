@@ -4,6 +4,10 @@ React SPA for the Boone Gifts platform — a gift list and wishlist app where us
 
 For architecture, routes, and conventions, see [`AGENTS.md`](AGENTS.md).
 
+This is the `frontend/` directory of the `boone-gifts` monorepo; the backend is at the repo root
+(NEU-2237). The compose file, Taskfile and pre-commit hooks are the root ones, and the frontend's
+tasks are the `fe:*` targets. Run every command below from the repo root.
+
 ## Tech Stack
 
 - **React 19** / **TypeScript** / **Vite**
@@ -19,21 +23,20 @@ For architecture, routes, and conventions, see [`AGENTS.md`](AGENTS.md).
 - [go-task](https://taskfile.dev/)
 - [pre-commit](https://pre-commit.com) (`brew install pre-commit`)
 - [tbc-localdev-infra](https://github.com/tomboone/tbc-localdev-infra) checked out at `~/projects/tbc-localdev-infra` (Traefik, Mailpit and the `proxy` network)
-- The backend, [boone-gifts-backend](../boone-gifts-backend), checked out beside this repo and started with its own `task up`
 
 ## Setup
 
 1. Copy the environment template:
 
    ```
-   cp .env.example .env
+   cp frontend/.env.example frontend/.env
    ```
 
    `VITE_API_URL` must be a URL the **browser** can reach: `https://boone-gifts-api.localhost`, the backend's Traefik host.
 
 2. Make sure this app's origin is in the backend's `APP_CORS_ORIGINS` — `https://boone-gifts.localhost`.
 
-3. Start the shared infra and the frontend container:
+3. Start the shared infra and both containers:
 
    ```
    task up
@@ -45,36 +48,35 @@ For architecture, routes, and conventions, see [`AGENTS.md`](AGENTS.md).
    pre-commit install
    ```
 
-   They run `task lint`, `task typecheck` and `task test` inside the `boone-gifts-frontend` container, so it must be up to commit.
+   For a frontend change they run `task fe:lint`, `task fe:typecheck` and `task fe:test` inside the `boone-gifts-frontend` container, so it must be up to commit.
 
 The app is available at `https://boone-gifts.localhost`, the API at `https://boone-gifts-api.localhost`, and Mailpit at `https://mailpit.localhost`.
 
 ## Development
 
 ```
-task up                  # Start the shared infra, then the frontend container
-task down                # Stop the frontend container (the shared infra keeps running)
-task logs                # Follow the frontend container's logs
-task restart             # Restart the frontend container
-task build               # Rebuild the image, sync deps into node_modules, recreate the container
-task shell               # Shell into the frontend container
+task up                  # Start the shared infra, then the backend and frontend containers
+task down                # Stop both containers (the shared infra keeps running)
+task fe:logs             # Follow the frontend container's logs
+task build               # Rebuild both images, sync deps into node_modules, recreate the containers
+task fe:shell            # Shell into the frontend container
 task ps                  # Compose service status
 task infra:status        # Shared infra status (also infra:up / infra:down / infra:logs)
 ```
 
-Every other task runs inside the frontend container — nothing needs node on the host:
+Every `fe:*` task runs inside the frontend container — nothing needs node on the host. The package manager is pnpm, pinned by `packageManager` in `package.json`:
 
 ```
-task test                # Run test suite
-task test -- <path>      # Run a specific test file
-task test:watch          # Run tests in watch mode
-task lint                # oxlint
-task typecheck           # tsc -b
-task build:app           # Production build (vite build)
-task deps:add -- <pkg>   # Install a package
-task deps:add-dev -- <pkg> # Install a dev dependency
-task deps:remove -- <pkg>  # Remove a package
-task install             # Reinstall deps from the lock file, after pulling updates
+task fe:test                # Run test suite
+task fe:test -- <path>      # Run a specific test file
+task fe:test:watch          # Run tests in watch mode
+task fe:lint                # oxlint, failing on warnings
+task fe:typecheck           # tsc -b
+task fe:build               # Production build (tsc -b && vite build)
+task fe:deps:add -- <pkg>   # Install a package
+task fe:deps:add-dev -- <pkg> # Install a dev dependency
+task fe:deps:remove -- <pkg>  # Remove a package
+task fe:install             # Reinstall deps from the lock file, after pulling updates
 ```
 
 After a dependency change, yours or pulled, run `task build`. `node_modules` lives in a named volume, which hides a rebuilt image's packages; `task build` syncs them into it.
@@ -113,15 +115,16 @@ The app deploys as a Cloudflare Worker with static assets, built and deployed by
 
 Workers Builds settings:
 
-- **Build command:** `npm run build`
+- **Repository:** `neuroticsasquat-ch/boone-gifts`
+- **Build command:** `pnpm build`
 - **Deploy command:** `npx wrangler deploy` (the `deploy` script runs the same thing)
-- **Root directory:** the repo root
+- **Root directory:** `frontend`
+- **Build watch paths:** include `frontend/*`, so a backend-only commit doesn't rebuild the Worker
 
 Build variables the app reads — set them as **build** variables, not Worker runtime variables, because the bundle is static and every value is fixed at build time:
 
 | Variable | Purpose |
 |---|---|
-| `NODE_VERSION` | `22`, matching CI and the Dockerfile; the repo pins no version, so the build image's default applies otherwise |
 | `VITE_API_URL` | Backend base URL (`https://api.boone.gift`) |
 | `VITE_SENTRY_DSN` | Bugsink DSN; unset leaves error reporting off |
 | `VITE_SENTRY_ENVIRONMENT` | Environment tag; defaults to `production` |
@@ -129,12 +132,14 @@ Build variables the app reads — set them as **build** variables, not Worker ru
 
 The release SHA needs no variable: Workers Builds sets `WORKERS_CI_COMMIT_SHA` itself.
 
-To check the Worker locally, from `task shell`: `npm run build && npx wrangler deploy --dry-run` lists the assets it would upload, and `npx wrangler dev` serves `dist/` the way production does.
+The Node version comes from `.node-version` (22, matching CI and the Dockerfile).
+
+To check the Worker locally, from `task fe:shell`: `pnpm build && pnpm exec wrangler deploy --dry-run` lists the assets it would upload, and `pnpm exec wrangler dev` serves `dist/` the way production does.
 
 ## Testing
 
 ```
-task test
+task fe:test
 ```
 
 ~215 tests across 26 files, run in jsdom with MSW mocking the API. The mock handlers pin the API origin, so they're unaffected by whatever `VITE_API_URL` your `.env` sets.

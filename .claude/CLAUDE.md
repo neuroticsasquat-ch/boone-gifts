@@ -1,4 +1,4 @@
-# Boone Gifts Backend — Claude Code
+# Boone Gifts — Claude Code
 
 Project documentation lives in [`AGENTS.md`](../AGENTS.md) — architecture, commands, conventions,
 the visibility model, and production details. Read it first; this file holds only the settings that
@@ -13,4 +13,4 @@ specs_dir: docs
      and tickets are filed under, and the repo label loop.py filters tickets on. -->
 linear_initiative: Boone Gifts
 linear_team: Neuroticsasquatch
-linear_repo: boone-gifts-backend
+linear_repo: boone-gifts

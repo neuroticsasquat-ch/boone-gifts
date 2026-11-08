@@ -32,7 +32,7 @@ filter_commits = false
 # Turn Linear IDs and PR numbers into links before rendering.
 commit_preprocessors = [
   { pattern = '\(NEU-(\d+)\)', replace = "([NEU-${1}](https://linear.app/neuroticsasquatch/issue/NEU-${1}))" },
-  { pattern = '\(#(\d+)\)', replace = "([#${1}](https://github.com/neuroticsasquat-ch/boone-gifts-backend/pull/${1}))" },
+  { pattern = '\(#(\d+)\)', replace = "([#${1}](https://github.com/neuroticsasquat-ch/boone-gifts/pull/${1}))" },
 ]
 # First match wins. Kept types carry a default_scope so scopeless commits still
 # group cleanly under "General"; everything else is skipped.
