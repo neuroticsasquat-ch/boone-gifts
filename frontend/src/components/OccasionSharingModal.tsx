@@ -18,7 +18,7 @@ const ALREADY_SHARED = "Already shared here — change this from the list";
  *
  * Every other sharing flow in the app starts from a list — open it, open its
  * modal, find the family, pick the occasion. That left `/occasions/:id`, the
- * page ADR 0007 argued was worth reaching, saying "No lists are shared to this
+ * page ADR 0013 argued was worth reaching, saying "No lists are shared to this
  * occasion yet." and offering nothing. This is the second mode, and it is the
  * reverse of the first: the viewer's own lists are the rows, and one fixed
  * occasion is the target.

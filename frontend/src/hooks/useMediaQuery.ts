@@ -6,7 +6,7 @@ import { useCallback, useSyncExternalStore } from "react";
  *
  * CSS is still the default way this app answers a width question — every `md:`
  * class in the tree is that answer — and this hook is the documented exception
- * to it (ADR 0010), not a licence to convert them. It exists because `ActionBar`
+ * to it (ADR 0016), not a licence to convert them. It exists because `ActionBar`
  * must render *one* set of buttons: the two-copies-behind-`hidden`/`md:flex`
  * version puts every action name in the DOM twice, which doubles the
  * accessibility tree and breaks the `getByRole` uniqueness queries that

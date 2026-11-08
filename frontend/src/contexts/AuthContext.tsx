@@ -52,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const queryClient = useQueryClient();
 
-  // The cache is keyed by resource, never by viewer (ADR 0004), so one person's entries
+  // The cache is keyed by resource, never by viewer (ADR 0010), so one person's entries
   // would otherwise be served to the next. Keyed on the id and not the user object:
   // updateProfile renaming someone is not a change of viewer.
   //

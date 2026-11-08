@@ -12,13 +12,13 @@ open is listed under **Open questions** with instructions to resolve it in that 
 One ADR carries the load-bearing reasoning and ships alongside this spec, in the frontend. Read it
 first:
 
-- **frontend** `docs/adr/0007-occasions-are-a-destination.md` — amends **frontend**
-  `docs/adr/0005-grouping-returns-as-an-opt-in.md`
+- **frontend** `docs/adr/0013-occasions-are-a-destination.md` — amends **frontend**
+  `docs/adr/0011-grouping-returns-as-an-opt-in.md`
 
 Two existing decisions are **not** reopened and should be read before planning anything here:
 
 - **backend** `docs/adr/0002-family-shares-target-an-occasion.md` — occasions carry no dates
-- **frontend** `docs/adr/0001-one-place-for-every-list-shared-with-me.md` — one shared scope
+- **frontend** `docs/adr/0007-one-place-for-every-list-shared-with-me.md` — one shared scope
 
 ---
 
@@ -28,7 +28,7 @@ v0.5.0 made an occasion the unit a list is shared to. It never gave the user a w
 
 - **`/occasions/:id` has exactly one entry point, three levels deep.** People → a family → its
   Occasions section. Nothing on the landing page links to an occasion, the nav has two tabs, and
-  ADR 0005 deliberately made the Group-by-Occasion headings dead (`A source is still not a
+  ADR 0011 deliberately made the Group-by-Occasion headings dead (`A source is still not a
   destination`). The page holding your budget and your shopping list is the hardest page to find.
 - **Sharing to an occasion also has exactly one entry point**, and it runs the other way: open a
   list, open its panel, find the family, pick the occasion. There is no way to start from the
@@ -45,7 +45,7 @@ v0.5.0 made an occasion the unit a list is shared to. It never gave the user a w
 - **`shared_via` cannot describe a list that arrived twice.** It is a single nullable field
   (`app/schemas/gift_list.py:181`), and the repo query behind it collapses multiple routes to one
   row. A list shared both directly and through an occasion reports `shared_via: null`, so Group by
-  Occasion files it under **"Not in an occasion"** — the leftover bucket ADR 0005 introduced
+  Occasion files it under **"Not in an occasion"** — the leftover bucket ADR 0011 introduced
   specifically so that nothing shared with the viewer could silently vanish from a section claiming
   to be complete.
 - **Two pages disagree about the same list.** `/lists` labels Gran's List "Boone Family"; the folder
@@ -79,7 +79,7 @@ including by bookmarking it or pressing the browser's Back button.
   one. §8 makes the flag trustworthy instead of dressing it up.
 - **Pagination, or any bounded collection endpoint.** Designed for ~50 connections and ~8 families;
   every collection endpoint stays unbounded. Revisit when a real user passes ~15 connections.
-- **A third nav tab, or any change to the two-tab bar.** Frontend ADR 0001 stands.
+- **A third nav tab, or any change to the two-tab bar.** Frontend ADR 0007 stands.
 - **Aggregate spend, or reconciling an occasion budget against a folder budget.** A purchase counted
   by both is two independent targets, working as specified in the shopping-lists project. Named here
   only so nobody treats it as a bug (§14 open question 2).
@@ -161,7 +161,7 @@ power, so putting a write control on a card any member can see is consistent.
 Group by Occasion on `/lists` renders headings that link to `/occasions/:id`. Group by Person
 headings still link nowhere — a person is a source, an occasion is now a place.
 
-This amends ADR 0005; the reasoning is in frontend ADR 0007.
+This amends ADR 0011; the reasoning is in frontend ADR 0013.
 
 ### 5.6 The family page stops being the way in
 
@@ -389,7 +389,7 @@ ShareRoute = { kind: "direct", person: {id, name} }
 - **The label rule is direct-wins**: when both routes exist, the row reads "from Carol Boone". A
   direct share is the durable grant — it survives the viewer leaving the family or the occasion share
   being revoked — and it is what `/lists` already shows.
-- **Grouping uses every route.** A list shared to two occasions appears under both headings. ADR 0005
+- **Grouping uses every route.** A list shared to two occasions appears under both headings. ADR 0011
   already accepted this duplication for folders as "the honest rendering of a many-to-many
   membership"; the scalar was the only reason occasions could not do the same.
 - `ListAttribution` becomes the one component rendering this, used by `/lists` **and** the folder
@@ -410,7 +410,7 @@ GET /occasions?archived=false  →  OccasionSummary[]
 Every occasion in every family the caller belongs to. **It takes no parameter naming another user**,
 and the two `my_*` counts are the caller's own by construction — `CONTEXT.md` rule 2.
 
-ADR 0005 chose a client-side fan-out for folder grouping because the client already held the data and
+ADR 0011 chose a client-side fan-out for folder grouping because the client already held the data and
 nothing was fetched until the viewer opted in. Neither holds here: the strip is on by default on the
 landing page, and the counts exist nowhere client-side. A fan-out would be eight requests before
 first paint and eight more for counts.
@@ -478,7 +478,7 @@ gh pr create --base release/v0.6.0
 
 Keep work branches current by merging `release/v0.6.0` in, never `main`.
 
-**This spec and frontend ADR 0007 live on the release branch**, or ticket branches never see them.
+**This spec and frontend ADR 0013 live on the release branch**, or ticket branches never see them.
 
 ### 12.2 Milestones
 

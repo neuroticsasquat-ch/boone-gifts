@@ -48,7 +48,7 @@ function alreadyActiveWarning(familyName: string, active: Occasion[]): string {
  *
  * This is no longer the way *in* to an occasion; the strip on /lists is
  * (NEU-1298). The name still links, because an occasion is a destination
- * (ADR 0007) — but nobody has to come here to find one. What stays here is
+ * (ADR 0013) — but nobody has to come here to find one. What stays here is
  * what only belongs here: create, rename, archive, view archive.
  *
  * The family's **active** occasions and nothing else. Archived ones live behind

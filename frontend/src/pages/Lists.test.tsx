@@ -218,7 +218,7 @@ describe("Lists", () => {
   });
 
   // The way in to the occasions the viewer is shopping for, on the page the app
-  // opens on (ADR 0007). Its own behaviour is covered in OccasionStrip.test.tsx;
+  // opens on (ADR 0013). Its own behaviour is covered in OccasionStrip.test.tsx;
   // what this page owns is where it sits and that it never holds the lists up.
   it("renders the occasion strip between the banner and My Lists", async () => {
     noLists();
@@ -547,7 +547,7 @@ describe("Lists — group by", () => {
     expect(screen.getByText("Dave's Wishlist")).toBeInTheDocument();
   });
 
-  // ADR 0007: the occasion name leads to the occasion, and the family name in
+  // ADR 0013: the occasion name leads to the occasion, and the family name in
   // front of it does not — it names a family, and `/people/families/:id` carries
   // less than this grouping does. This is the assertion that fails if the
   // heading is ever wrapped in one link again.

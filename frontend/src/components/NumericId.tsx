@@ -44,7 +44,7 @@ function sectionName(back: string): string {
 
 /**
  * Validates a route's numeric `:id` before its page is allowed to mount
- * (`docs/adr/0006-route-ids-are-validated-at-the-route.md`).
+ * (`docs/adr/0012-route-ids-are-validated-at-the-route.md`).
  *
  * A malformed id is not a slow read and not a 404 the server was ever asked
  * about — it is a wrong address, and it says so, with a way back and no retry,

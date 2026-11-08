@@ -149,7 +149,7 @@ describe("ActionBar", () => {
 });
 
 /**
- * The width exception (ADR 0010): a header carrying a *group* of actions may
+ * The width exception (ADR 0016): a header carrying a *group* of actions may
  * collapse them behind a labelled disclosure below `md`. Which call sites are
  * allowed to is `action-policy.test.tsx`'s business — this block is only about
  * what the prop does when it is passed.
@@ -192,7 +192,7 @@ describe("ActionBar — collapseOnMobile", () => {
     for (const name of ["Sharing…", "Edit", "Delete"]) {
       expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
     }
-    // The finding ADR 0009 keeps, narrowed by ADR 0011: a word *and* a glyph,
+    // The finding ADR 0015 keeps, narrowed by ADR 0017: a word *and* a glyph,
     // never a glyph alone. Still an exact match, so a future trigger that lost
     // the word — or grew a second one — fails here rather than sliding past a
     // substring.
@@ -216,7 +216,7 @@ describe("ActionBar — collapseOnMobile", () => {
 
   // Not a preference: `ConfirmDialog` captures the focused element as what to
   // return focus to, so a panel that closed on click would unmount the button
-  // it has to restore to — the exact bug ADR 0009 deleted the focus dance to
+  // it has to restore to — the exact bug ADR 0015 deleted the focus dance to
   // avoid. The panel closes on its trigger and on nothing else.
   it("stays open when an action inside it is triggered", async () => {
     mockViewport("mobile");
@@ -242,7 +242,7 @@ describe("ActionBar — collapseOnMobile", () => {
     expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
   });
 
-  // ADR 0011. The trigger says two things the buttons do not: that it opens, and
+  // ADR 0017. The trigger says two things the buttons do not: that it opens, and
   // that it is not one of them.
   it("names itself with the word alone — the chevron is decoration", () => {
     mockViewport("mobile");

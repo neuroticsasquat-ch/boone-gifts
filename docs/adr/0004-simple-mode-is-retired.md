@@ -54,7 +54,7 @@ Its one real job is replaced by a **default**, not a mode:
   a simple-mode test. This is the decisive argument: **keeping simple mode costs more than removing
   it**, and the cost is paid per ticket, forever.
 - An entire class of divergence bug disappears — a surface reachable in one mode and orphaned in the
-  other, which is what frontend ADR 0001 (`docs/adr/0001-one-place-for-every-list-shared-with-me.md` in the frontend repo)
+  other, which is what frontend ADR 0007 (`docs/adr/0007-one-place-for-every-list-shared-with-me.md`)
   was already fighting.
 - Every user gets folders, the archive view, and grouping, rather than having them hidden on their
   behalf.

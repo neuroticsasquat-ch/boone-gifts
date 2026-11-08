@@ -14,7 +14,7 @@ Four ADRs carry the reasoning behind the load-bearing decisions and should be re
 - **backend** `docs/adr/0002-family-shares-target-an-occasion.md`
 - **backend** `docs/adr/0003-claims-are-their-own-table.md`
 - **backend** `docs/adr/0004-simple-mode-is-retired.md`
-- **frontend** `docs/adr/0002-occasion-and-folder.md`
+- **frontend** `docs/adr/0008-occasion-and-folder.md`
 
 ---
 
@@ -54,14 +54,14 @@ Getting there requires no mode, no curation, and no understanding of how sharing
 - Reminders, notifications, or anything time-triggered. Occasions carry no dates at all.
 - Reworking the claim/unclaim interaction itself, beyond adding the amount prompt.
 - Re-litigating shared accounts (backend ADR 0001, shared accounts are one identity)
-  or the two-tab navigation (frontend ADR 0001, one place for every list shared with me).
+  or the two-tab navigation (frontend ADR 0007, one place for every list shared with me).
 
 ---
 
 ## 4. Vocabulary
 
 The single most important section for anyone implementing a ticket here. Two concepts share the word
-"occasion" today and are being split; see frontend ADR 0002 (`docs/adr/0002-occasion-and-folder.md` in the frontend repo).
+"occasion" today and are being split; see frontend ADR 0008 (`docs/adr/0008-occasion-and-folder.md`).
 
 | Term | Means | Where it lives |
 |---|---|---|
@@ -95,7 +95,7 @@ other occasion. Nothing about the filing is visible to anyone but the claimer.
 
 ## 5. Sharing goes through an occasion
 
-The central change. Full reasoning in backend ADR 0002 (`docs/adr/0002-family-shares-target-an-occasion.md` in the backend repo).
+The central change. Full reasoning in backend ADR 0002 (`docs/adr/0002-family-shares-target-an-occasion.md`).
 
 ### 5.1 The rule
 
@@ -181,7 +181,7 @@ them being archived.
 
 ## 6. Claims and money
 
-Full reasoning in backend ADR 0003 (`docs/adr/0003-claims-are-their-own-table.md` in the backend repo).
+Full reasoning in backend ADR 0003 (`docs/adr/0003-claims-are-their-own-table.md`).
 
 ### 6.1 The claim moves off the gift
 
@@ -196,7 +196,7 @@ viewer-facing rows. It is currently returned for lists the caller owns.
 
 Resolved when the claim is made, from **two** derived sets — not one. Conflating them produces
 either permanent nagging or unfixable misfilings. Full reasoning in
-`docs/specs/NEU-1269-claim-filing-and-candidates.md` §2 (backend repo).
+`docs/specs/NEU-1269-claim-filing-and-candidates.md` §2.
 
 - **`allowed`** — the occasions the list is shared to, intersected with the families the claimer
   belongs to, **archived included**. Validates an explicitly supplied `occasion_id`.
@@ -272,7 +272,7 @@ refused, and neither is ever written from the other.
 
 ## 8. Simple mode is retired
 
-Full reasoning in backend ADR 0004 (`docs/adr/0004-simple-mode-is-retired.md` in the backend repo). This **supersedes
+Full reasoning in backend ADR 0004 (`docs/adr/0004-simple-mode-is-retired.md`). This **supersedes
 `CONTEXT.md` invariant 9**, which must be deleted in the same ticket that removes the behaviour.
 
 Deleted: `users.simple_mode`, `family_invites.simple_mode`, the JWT claim
@@ -636,4 +636,4 @@ Resolve these in the owning ticket's `/planit`, not by guessing:
 2. ~~**Where claim candidates are exposed.**~~ **Resolved 2026-09-08** in NEU-1269's `/planit`:
    `claim_candidates` and `claim_options` ride on the viewer list-detail payload (§10.4), and the
    `allowed`/`suggested` split is settled in §6.2. See
-   `docs/specs/NEU-1269-claim-filing-and-candidates.md` in the backend repo.
+   `docs/specs/NEU-1269-claim-filing-and-candidates.md`.

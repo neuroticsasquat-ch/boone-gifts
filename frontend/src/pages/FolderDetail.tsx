@@ -202,7 +202,7 @@ function FolderHeader({
         </div>
         {/* Archive was painted `bg-red-600` here — the app's danger colour,
             identical to the Delete beside it — on an action rule 11 holds to be
-            so benign it needn't confirm. It is neutral now (ADR 0009). */}
+            so benign it needn't confirm. It is neutral now (ADR 0015). */}
         <div className="shrink-0">
           <ActionBar
             items={[

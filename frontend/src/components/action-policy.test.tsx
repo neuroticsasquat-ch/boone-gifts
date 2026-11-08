@@ -49,7 +49,7 @@ import { mockViewport } from "../test/viewport";
  *
  * ## The width exception, and why the set is still the assertion
  *
- * Rule 12 now has one exception (ADR 0010): below `md`, a header carrying a
+ * Rule 12 now has one exception (ADR 0016): below `md`, a header carrying a
  * *group* of actions may put them behind a labelled disclosure, because a
  * header holding a heading *and* a group of buttons has no room for either on a
  * phone. Two call sites are granted it — the occasion header and a list
@@ -374,7 +374,7 @@ describe("the action policy — the two headers the width exception is granted t
    * "Not in the document" rather than "not visible" on purpose: jsdom computes
    * no layout, so a case written against visibility would pass just as happily
    * over a bar that had rendered all five buttons and hidden them in CSS — the
-   * two-copies arm ADR 0010 rejected for doubling the accessibility tree.
+   * two-copies arm ADR 0016 rejected for doubling the accessibility tree.
    */
   async function expectOnePressFromEverything(names: string[]) {
     const trigger = screen.getByRole("button", { name: "Actions" });
@@ -418,9 +418,9 @@ describe("the action policy — every other site is untouched at a phone's width
    *
    * The two headers in this list are the limiting principle rather than an
    * oversight. A list viewer's header holds `Add to a folder…` and nothing
-   * else — one of the two single-item menus ADR 0009 was filed against by name
+   * else — one of the two single-item menus ADR 0015 was filed against by name
    * — and a header with one action has nothing to group. `FolderDetail`'s is
-   * the header ADR 0009 held up as the model. Rows never collapse at any width:
+   * the header ADR 0015 held up as the model. Rows never collapse at any width:
    * a row has no heading competing for the width in the first place.
    */
 

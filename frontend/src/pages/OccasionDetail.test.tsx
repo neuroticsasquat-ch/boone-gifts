@@ -442,10 +442,10 @@ describe("OccasionDetail", () => {
 
   /**
    * The constraint behind "triggering an action does not close the disclosure"
-   * (ADR 0010), asserted end to end rather than taken on trust: `Modal` captures
+   * (ADR 0016), asserted end to end rather than taken on trust: `Modal` captures
    * `document.activeElement` when it opens and focuses it again on close, so a
    * panel that unmounted the button it was opened from would have nothing to
-   * return to — the exact bug ADR 0009 deleted `HeaderMenu`'s focus dance to be
+   * return to — the exact bug ADR 0015 deleted `HeaderMenu`'s focus dance to be
    * rid of. On a phone the archive confirmation is now opened from inside the
    * panel, which is the only place in the app where that risk is live.
    */

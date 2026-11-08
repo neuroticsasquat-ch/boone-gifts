@@ -2,7 +2,7 @@
  * The suite's viewport, and the one place `window.matchMedia` is stubbed.
  *
  * jsdom has no layout and no `matchMedia`, so every query has to be answered by
- * hand. Before `ActionBar` gained `collapseOnMobile` (ADR 0010) the stub
+ * hand. Before `ActionBar` gained `collapseOnMobile` (ADR 0016) the stub
  * answered `false` to everything, which was harmless while the only caller was
  * `react-hot-toast` asking about `prefers-reduced-motion`. It stopped being
  * harmless the moment a component branched on width: the whole suite would have

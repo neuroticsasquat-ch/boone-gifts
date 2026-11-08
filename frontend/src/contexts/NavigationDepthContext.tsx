@@ -67,7 +67,7 @@ export function NavigationDepthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  // The same boundary that drops the query cache (`AuthContext.tsx`, ADR 0004).
+  // The same boundary that drops the query cache (`AuthContext.tsx`, ADR 0010).
   // Without it, a logout and a login on a shared device leave the counter above
   // zero and Back walks into the previous session's address. The backend is
   // always the gate, so that is an error arm rather than a leak — but it

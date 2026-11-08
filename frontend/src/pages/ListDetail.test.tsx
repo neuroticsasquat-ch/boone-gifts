@@ -548,7 +548,7 @@ describe("ListDetail — header actions", () => {
     );
   }
 
-  // They stood behind a `⋯` until NEU-1322 (`CONTEXT.md` rule 12, ADR 0009).
+  // They stood behind a `⋯` until NEU-1322 (`CONTEXT.md` rule 12, ADR 0015).
   it("shows edit, archive and delete on the header, with nothing to open first", async () => {
     serveOwnerList();
     renderListDetail(ownerToken);
@@ -605,7 +605,7 @@ describe("ListDetail — header actions", () => {
   // the `⋯` *before* running an action, because choosing a menu item unmounted
   // the trigger and the dialog captured whatever was focused at that moment.
   // A visible button is already focused when clicked, so `Modal` restores to it
-  // with no help — which is worth asserting rather than assuming (ADR 0009).
+  // with no help — which is worth asserting rather than assuming (ADR 0015).
   it("returns focus to the Delete button when the confirmation is dismissed", async () => {
     serveOwnerList();
 

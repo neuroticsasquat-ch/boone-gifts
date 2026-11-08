@@ -44,7 +44,7 @@ occasion the same way, and all three say why:
 - `list-detail/SharingSummary.tsx` prints `Boone Family · Christmas 2026`.
 
 And both domain models already assert the canonical rendering as settled vocabulary:
-`backend/CONTEXT.md:22` — ***Occasion** | A family's shared gifting occasion — "Boone Family ·
+`CONTEXT.md:23` — ***Occasion** | A family's shared gifting occasion — "Boone Family ·
 Christmas 2026"* — as does `backend/app/models/occasion.py`'s own docstring. The frontend
 `OccasionDetail` docstring even claims the page shows `A family occasion — "Boone Family · Christmas
 2026"`. It never has.
@@ -85,7 +85,7 @@ prefix."* The rule was written for the Group-by heading, whose link's destinatio
 so the heading the viewer clicked and the heading they land on now read identically, which is the
 whole point of a qualifier that identifies one occasion among several with the same name.
 
-Unlinked, specifically, for the reason ADR 0007 gives: the link on an occasion heading goes to the
+Unlinked, specifically, for the reason ADR 0013 gives: the link on an occasion heading goes to the
 occasion, and the family is a *label* there, not a destination. The family already has its
 destination on this page — the `BackControl` directly above the heading — and a second link to the
 same place two lines apart is the redundancy rule 3 avoids.
@@ -246,9 +246,9 @@ order is `Boone Family · Christmas 2026  [Archived]`.
 
 ## `CONTEXT.md` edits
 
-**Already applied** to `frontend/CONTEXT.md` during this session:
+**Already applied** to `CONTEXT.md` during this session:
 
-1. The **Occasion** vocabulary row now names the family, matching `backend/CONTEXT.md:22`, which
+1. The **Occasion** vocabulary row now names the family, matching `CONTEXT.md:23`, which
    already said `"Boone Family · Christmas 2026"` while the frontend's copy said `"Christmas 2026"`:
 
    > | **Occasion** | A family's shared gifting occasion — "Boone Family · Christmas 2026". The unit
@@ -262,12 +262,12 @@ order is `Boone Family · Christmas 2026  [Archived]`.
    > the same way and from the same rule — the family qualifies it, unlinked, and only the occasion
    > half is editable (NEU-1321).
 
-`backend/CONTEXT.md` needs **no** edit. Invariant 9 already governs occasion ownership and the
+`CONTEXT.md` needs **no** edit. Invariant 9 already governs occasion ownership and the
 vocabulary row already asserts the canonical rendering; this ticket makes the API match a statement
 the domain model had already made.
 
-**No ADR.** This decides nothing new — it applies rule 3 and ADR 0007 to the one page that was
-missing them. ADR 0002 and ADR 0007 are unaffected.
+**No ADR.** This decides nothing new — it applies rule 3 and ADR 0013 to the one page that was
+missing them. ADR 0008 and ADR 0013 are unaffected.
 
 ## Acceptance criteria
 

@@ -25,7 +25,7 @@ import { isAxiosError } from "axios";
  * Leave button wedged in the middle of it.
  *
  * This page is **not** the way in to an occasion. The strip on /lists is
- * (NEU-1298, ADR 0007); what is left here is managing one.
+ * (NEU-1298, ADR 0013); what is left here is managing one.
  */
 export function FamilyDetail() {
   const familyId = useNumericId();

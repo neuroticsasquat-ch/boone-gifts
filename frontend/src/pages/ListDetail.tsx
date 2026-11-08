@@ -236,7 +236,7 @@ function OwnerHeader({
             items={[
               // First, ahead of the folder action: it is the most-reached thing
               // an owner does to a list, and this is the surface that just
-              // pushed it furthest away (ADR 0010). Danger stays last whatever
+              // pushed it furthest away (ADR 0016). Danger stays last whatever
               // order this array is in — `ActionBar` sees to that.
               { label: SHARING, onClick: onChangeSharing },
               { label: ADD_TO_FOLDER, onClick: onAddToFolder },

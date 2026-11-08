@@ -158,7 +158,7 @@ describe("groupLists — by occasion", () => {
     ]);
   });
 
-  // ADR 0007: the occasion page carries the viewer's budget and My shopping tab,
+  // ADR 0013: the occasion page carries the viewer's budget and My shopping tab,
   // neither of which the grouping shows, so the heading is the way there.
   // Asserted alongside the leftover bucket, whose heading names no occasion and
   // still leads nowhere — a test reading only the leftover bucket would pass
@@ -255,7 +255,7 @@ describe("groupLists — by folder", () => {
     expect(groups[0].qualifier).toBeNull();
   });
 
-  // ADR 0007's holdout: `/people/:id` shows the same lists this grouping just
+  // ADR 0013's holdout: `/people/:id` shows the same lists this grouping just
   // showed, filtered the same way, so a person heading leads nowhere — and
   // neither does a leftover bucket.
   it("gives a person heading no destination", () => {

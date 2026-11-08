@@ -281,7 +281,7 @@ describe("BudgetLine", () => {
 
     // The wire carries whatever the arithmetic produced, not whatever the
     // column's scale happened to round-trip — a subtraction landing on `58.5`
-    // is the case `lib/money.ts` exists for (ADR 0003).
+    // is the case `lib/money.ts` exists for (ADR 0009).
     it("pads a wire value that arrived short of two decimals", () => {
       renderBudget({ budget: rollup({ amount: "200", spent: "141.5", remaining: "58.5" }) });
 
