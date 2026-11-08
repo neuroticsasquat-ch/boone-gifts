@@ -3,3 +3,5 @@
 .idea
 __pycache__
 *.pyc
+# The frontend has its own image (frontend/Dockerfile); keep it out of the backend's.
+frontend

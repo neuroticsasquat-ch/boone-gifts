@@ -3,10 +3,13 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "packageManager": "pnpm@12.18.0",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "oxlint",
+    "lint": "oxlint --max-warnings 0",
+    "typecheck": "tsc -b",
+    "test": "vitest run",
     "preview": "vite preview",
     "deploy": "wrangler deploy"
   },
