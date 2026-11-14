@@ -3,7 +3,7 @@ name = "boone-gifts-backend"
 version = "0.1.0"
 requires-python = ">=3.14"
 dependencies = [
-    "fastapi>=0.162.0",
+    "fastapi>=0.162.4",
     "uvicorn>=0.54.0",
     # Below 2.1 until opentelemetry-instrumentation-sqlalchemy supports it: the 0.66b1
     # release caps sqlalchemy<2.1 and skips itself on 2.1, so no SQL spans reach SigNoz.
